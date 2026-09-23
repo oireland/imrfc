@@ -4,6 +4,8 @@ import { validateLocation, type NewLocation } from "./rules";
 
 export { validateLocation } from "./rules";
 export type { NewLocation } from "./rules";
+// Other features' schema.ts files reference this table for foreign keys.
+export { location } from "./schema";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;

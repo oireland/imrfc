@@ -15,6 +15,13 @@
       "when": 1790165140787,
       "tag": "0001_overrated_daimon_hellstrom",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790165694407,
+      "tag": "0002_rainy_the_initiative",
+      "breakpoints": true
     }
   ]
 }

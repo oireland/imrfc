@@ -10,6 +10,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       <nav className="flex items-center gap-4">
         <Link href="/">Home</Link>
         {isCommitteeOrAbove(user.role) && <Link href="/locations">Locations</Link>}
+        {isCommitteeOrAbove(user.role) && <Link href="/kit">Kit</Link>}
         <PendingBadge />
       </nav>
       {children}
