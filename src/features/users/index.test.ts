@@ -2,8 +2,15 @@ import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
-import { user } from "./schema";
-import { approveUser, blockUser, listPendingUsers, unblockUser } from "./index";
+import { session, user } from "./schema";
+import {
+  approveUser,
+  blockUser,
+  listApprovedUsers,
+  listPendingUsers,
+  setRole,
+  unblockUser,
+} from "./index";
 
 async function seedUser(
   db: Awaited<ReturnType<typeof createTestDb>>,
@@ -61,5 +68,52 @@ describe("blockUser / unblockUser", () => {
     await unblockUser(db, alex.id);
     const [unblocked] = await db.select().from(user).where(eq(user.id, alex.id));
     expect(unblocked.accessState).toBe("approved");
+  });
+
+  it("revokes the User's sessions", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const alex = await seedUser(db, { accessState: "approved" });
+    await db.insert(session).values({
+      id: crypto.randomUUID(),
+      userId: alex.id,
+      token: crypto.randomUUID(),
+      expiresAt: new Date(Date.now() + 1000 * 60 * 60),
+    });
+
+    await blockUser(db, alex.id);
+
+    const remaining = await db.select().from(session).where(eq(session.userId, alex.id));
+    expect(remaining).toEqual([]);
+  });
+});
+
+describe("listApprovedUsers", () => {
+  it("returns Approved and Blocked Users, excluding Pending", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    await seedUser(db, { accessState: "pending", name: "Pending Pat" });
+    await seedUser(db, { accessState: "approved", name: "Approved Alex" });
+    await seedUser(db, { accessState: "blocked", name: "Blocked Bo" });
+
+    const users = await listApprovedUsers(db);
+
+    expect(users.map((u: { name: string }) => u.name).sort()).toEqual([
+      "Approved Alex",
+      "Blocked Bo",
+    ]);
+  });
+});
+
+describe("setRole", () => {
+  it("changes a User's Role", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const alex = await seedUser(db, { role: "member" });
+
+    await setRole(db, alex.id, "committee");
+
+    const [updated] = await db.select().from(user).where(eq(user.id, alex.id));
+    expect(updated.role).toBe("committee");
   });
 });
