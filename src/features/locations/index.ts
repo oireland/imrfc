@@ -37,3 +37,8 @@ export async function createLocation(
 export async function archiveLocation(db: Db, id: string) {
   await db.update(location).set({ archived: true }).where(eq(location.id, id));
 }
+
+export async function getLocation(db: Db, id: string): Promise<Location | undefined> {
+  const [row] = await db.select().from(location).where(eq(location.id, id));
+  return row;
+}
