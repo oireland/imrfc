@@ -17,6 +17,7 @@ Vertical slices, built in order, each test-first (red → green → refactor). A
 - [ ] **12. Clashes** — the four warnings on Event and Kit Unit views.
 - [ ] **13. Duty Summary** — WhatsApp copy button.
 - [ ] **14. Calendar Feed** — Feed Token, ICS with my Duties, reset, dead for Blocked Users.
-- [ ] **15. PWA** — manifest, icons, iOS home-screen meta.
+- [ ] **15. Design pass** — sweep every screen: replace raw HTML controls with shadcn/ui components, apply the crest palette theme tokens (SPEC → Look and feel), consistent mobile-first layout, light/dark check.
+- [ ] **16. PWA** — manifest, icons, iOS home-screen meta.
 
 After v1: deploy to Vercel + Neon, choose production mail sender, then Availability/RSVP as the first extension.
