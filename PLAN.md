@@ -2,7 +2,7 @@
 
 Vertical slices, built in order, each test-first (red → green → refactor). A slice is done when its tests pass, it works end-to-end in `pnpm dev`, and the user has reviewed it. Spec: [SPEC.md](SPEC.md).
 
-- [ ] **0. Scaffold** — Next.js (App Router, TS, pnpm); Tailwind + shadcn with the crest palette theme file (SPEC → Look and feel); Drizzle; Vitest with a PGlite test-database helper; Playwright; `docker-compose.yml` (Postgres + Mailpit); feature folder layout; one passing test of each kind.
+- [x] **0. Scaffold** — Next.js (App Router, TS, pnpm); Tailwind + shadcn with the crest palette theme file (SPEC → Look and feel); Drizzle; Vitest with a PGlite test-database helper; Playwright; `docker-compose.yml` (Postgres + Mailpit); feature folder layout; one passing test of each kind.
 - [ ] **1. Sign-in & approval** — Better Auth (Google + magic link via pluggable mail sender); Pending → Approved; `ADMIN_EMAILS` bootstrap; Roles; route guards; Admin pending list + badge.
 - [ ] **2. Users admin** — change Roles; block/unblock (sessions revoked). Duty/kit side-effects come in slice 10.
 - [ ] **3. Locations** — Committee CRUD, Venue/Store flags, archive.

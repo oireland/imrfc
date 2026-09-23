@@ -1,0 +1,113 @@
+/*
+ * The theme file: every colour in the app comes from the tokens below.
+ * Palette sampled from the club crest — see SPEC.md → Look and feel.
+ */
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* Follow the system light/dark setting. */
+@custom-variant dark (@media (prefers-color-scheme: dark));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-geist-sans);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-accent-text: var(--accent-text);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-tile: var(--tile);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --navy: #1f2f55;
+  --gold: #f2c400;
+  --deep-gold: #8a6d00;
+  --red: #de2029;
+
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  /* Navy: buttons, header. */
+  --primary: var(--navy);
+  --primary-foreground: #ffffff;
+  --secondary: #f4f5f8;
+  --secondary-foreground: var(--navy);
+  --muted: #f4f5f8;
+  --muted-foreground: #525c72;
+  /* Gold: highlights, "your Duty", active tab — always with navy text. */
+  --accent: var(--gold);
+  --accent-foreground: var(--navy);
+  /* Gold-toned text on the background (gold itself fails contrast on white). */
+  --accent-text: var(--deep-gold);
+  /* Red: destructive, Clash warnings, unassigned Duties. */
+  --destructive: var(--red);
+  --border: #e2e5ec;
+  --input: #e2e5ec;
+  --ring: var(--navy);
+  /* The crest has a white background, so it always sits on a white tile. */
+  --tile: #ffffff;
+  --radius: 0.625rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0f1729;
+    --foreground: #f4f5f8;
+    --card: #1a2544;
+    --card-foreground: #f4f5f8;
+    --popover: #1a2544;
+    --popover-foreground: #f4f5f8;
+    --primary: var(--gold);
+    --primary-foreground: var(--navy);
+    --secondary: #1a2544;
+    --secondary-foreground: #f4f5f8;
+    --muted: #1a2544;
+    --muted-foreground: #a3adc2;
+    --accent: var(--gold);
+    --accent-foreground: var(--navy);
+    --accent-text: var(--gold);
+    --destructive: #f0474e;
+    --border: #2a3658;
+    --input: #2a3658;
+    --ring: var(--gold);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}

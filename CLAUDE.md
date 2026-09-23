@@ -21,3 +21,5 @@ Events and kit-tracking app for Imperial Medicals RFC. Read before working:
 
 - WSL2, Node 24, pnpm.
 - Tests need no Docker (PGlite). `pnpm dev` needs Docker Postgres + Mailpit via `docker compose up`; if `docker` is missing in WSL, the user must enable Docker Desktop → Settings → Resources → WSL integration.
+
+@AGENTS.md
