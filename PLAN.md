@@ -7,7 +7,7 @@ Vertical slices, built in order, each test-first (red → green → refactor). A
 - [x] **2. Users admin** — change Roles; block/unblock (sessions revoked). Duty/kit side-effects come in slice 10.
 - [x] **3. Locations** — Committee CRUD, Venue/Store flags, archive.
 - [x] **4. Kit Units** — Committee CRUD, Home, Kit Status, Condition Note.
-- [ ] **5. Whereabouts & Moves** — ad-hoc Moves, Movement Log, Kit view grouped by Whereabouts, Kit Unit detail.
+- [x] **5. Whereabouts & Moves** — ad-hoc Moves, Movement Log, Kit view grouped by Whereabouts, Kit Unit detail.
 - [ ] **6. Events** — Training/Match/Social with type-specific details, Teams (seeded), Upcoming/Past, Event detail with maps link, Cancel.
 - [ ] **7. Series** — create with end date → Occurrences; edit "this one" / "this and future"; extend; cancel an Occurrence.
 - [ ] **8. Checklists** — Default Checklist per Event Type, Series and Event overrides, resolution order.

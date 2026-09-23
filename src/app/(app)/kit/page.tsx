@@ -1,109 +1,112 @@
-import { redirect } from "next/navigation";
+import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
-import { createKitUnit, listKitUnits, setConditionNote, setKitStatus, type KitStatus, type KitUnit } from "@/features/kit";
+import { groupByWhereabouts, listKitUnits, recordMove, type KitUnit } from "@/features/kit";
 import { listLocations, type Location } from "@/features/locations";
-import { isCommitteeOrAbove } from "@/features/users";
-import { getCurrentUser } from "@/lib/session";
+import { requireApprovedUser } from "@/lib/session";
 
-const STATUSES: KitStatus[] = ["active", "missing", "retired"];
+export default async function KitViewPage() {
+  const user = await requireApprovedUser();
 
-export default async function KitUnitsPage() {
-  const user = await getCurrentUser();
-  if (!user || !isCommitteeOrAbove(user.role)) redirect("/");
-
-  const [units, stores] = await Promise.all([
+  const [allUnits, locations] = await Promise.all([
     listKitUnits(db, { includeRetired: true }),
-    listLocations(db).then((ls: Location[]) => ls.filter((l) => l.isStore)),
+    listLocations(db),
   ]);
+  const locationsById = new Map(locations.map((l: Location) => [l.id, l]));
+  const activeUnits = allUnits.filter((u: KitUnit) => u.status === "active");
+  const inactiveUnits = allUnits.filter((u: KitUnit) => u.status !== "active");
+  const groups = groupByWhereabouts(activeUnits);
+  const stores = locations.filter((l: Location) => l.isStore);
 
-  async function create(formData: FormData) {
+  async function iveGotIt(formData: FormData) {
     "use server";
-    await createKitUnit(db, {
-      name: String(formData.get("name")),
-      homeId: String(formData.get("homeId")),
+    const { id: userId } = await requireApprovedUser();
+    await recordMove(db, String(formData.get("kitUnitId")), userId, {
+      type: "holder",
+      holderId: userId,
     });
     revalidatePath("/kit");
   }
 
-  async function changeStatus(formData: FormData) {
+  async function putInStore(formData: FormData) {
     "use server";
-    await setKitStatus(db, String(formData.get("kitUnitId")), formData.get("status") as KitStatus);
+    const { id: userId } = await requireApprovedUser();
+    await recordMove(db, String(formData.get("kitUnitId")), userId, {
+      type: "store",
+      storeId: String(formData.get("storeId")),
+    });
     revalidatePath("/kit");
   }
 
-  async function changeNote(formData: FormData) {
-    "use server";
-    await setConditionNote(
-      db,
-      String(formData.get("kitUnitId")),
-      String(formData.get("conditionNote")),
+  function KitRow({ unit }: { unit: KitUnit }) {
+    return (
+      <li className="flex flex-col gap-2 rounded-md border border-border p-3">
+        <Link href={`/kit/${unit.id}`} className="font-medium underline">
+          {unit.name}
+        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <form action={iveGotIt}>
+            <input type="hidden" name="kitUnitId" value={unit.id} />
+            <button className="rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground">
+              I&apos;ve got it
+            </button>
+          </form>
+          <form action={putInStore} className="flex items-center gap-1">
+            <input type="hidden" name="kitUnitId" value={unit.id} />
+            <select name="storeId" className="rounded-md border border-border bg-background px-1 py-1 text-xs">
+              {stores.map((s: Location) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+            <button className="rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground">
+              Put in store
+            </button>
+          </form>
+        </div>
+      </li>
     );
-    revalidatePath("/kit");
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <h2 className="text-xl font-semibold">Kit Units</h2>
+      <h2 className="text-xl font-semibold">Kit</h2>
 
-      <ul className="flex flex-col gap-2">
-        {units.length === 0 && <p className="text-muted-foreground">No Kit Units yet.</p>}
-        {units.map((k: KitUnit) => (
-          <li key={k.id} className="flex flex-col gap-2 rounded-md border border-border p-3">
-            <div className="flex items-center justify-between">
-              <p className="font-medium">{k.name}</p>
-              <form action={changeStatus} className="flex items-center gap-2">
-                <input type="hidden" name="kitUnitId" value={k.id} />
-                <select name="status" defaultValue={k.status} className="rounded-md border border-border bg-background px-2 py-1 text-sm">
-                  {STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-                <button className="rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground">
-                  Save
-                </button>
-              </form>
-            </div>
-            <form action={changeNote} className="flex items-center gap-2">
-              <input type="hidden" name="kitUnitId" value={k.id} />
-              <input
-                name="conditionNote"
-                defaultValue={k.conditionNote}
-                placeholder="Condition Note"
-                className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm"
-              />
-              <button className="rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground">
-                Save
-              </button>
-            </form>
-          </li>
-        ))}
-      </ul>
+      {groups.length === 0 && <p className="text-muted-foreground">No Kit Units yet.</p>}
 
-      <form action={create} className="flex flex-col gap-3 rounded-md border border-border p-3">
-        <h3 className="font-medium">Add a Kit Unit</h3>
-        <input
-          name="name"
-          placeholder="Name"
-          required
-          className="rounded-md border border-border bg-background px-2 py-1"
-        />
-        <select
-          name="homeId"
-          required
-          className="rounded-md border border-border bg-background px-2 py-1"
-        >
-          <option value="">Home...</option>
-          {stores.map((s: Location) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-        <button className="rounded-md bg-primary px-3 py-1 text-primary-foreground">Add</button>
-      </form>
+      {groups.map((group) => (
+        <div key={group.type === "store" ? group.storeId : group.holderId} className="flex flex-col gap-2">
+          <h3 className="font-medium text-muted-foreground">
+            {group.type === "store"
+              ? (locationsById.get(group.storeId)?.name ?? "Store")
+              : group.holderId === user.id
+                ? "You"
+                : "Held"}
+          </h3>
+          <ul className="flex flex-col gap-2">
+            {group.units.map((unit: KitUnit) => (
+              <KitRow key={unit.id} unit={unit} />
+            ))}
+          </ul>
+        </div>
+      ))}
+
+      {inactiveUnits.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <h3 className="font-medium text-muted-foreground">Missing / Retired</h3>
+          <ul className="flex flex-col gap-2">
+            {inactiveUnits.map((unit: KitUnit) => (
+              <li key={unit.id} className="rounded-md border border-border p-3">
+                <Link href={`/kit/${unit.id}`} className="font-medium underline">
+                  {unit.name}
+                </Link>
+                <span className="ml-2 text-xs text-muted-foreground">{unit.status}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

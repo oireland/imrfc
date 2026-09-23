@@ -1,5 +1,6 @@
-import { pgTable, text } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { location } from "@/features/locations";
+import { user } from "@/features/users";
 
 export const kitUnit = pgTable("kit_unit", {
   id: text("id").primaryKey(),
@@ -12,4 +13,29 @@ export const kitUnit = pgTable("kit_unit", {
     .notNull()
     .default("active"),
   conditionNote: text("condition_note").notNull().default(""),
+  // Whereabouts is exactly one of a Store or a Holder; Unconfirmed arrives with Duties (slice 10).
+  whereaboutsType: text("whereabouts_type", { enum: ["store", "holder"] })
+    .notNull()
+    .default("store"),
+  storeId: text("store_id").references(() => location.id),
+  holderId: text("holder_id").references(() => user.id),
+});
+
+export const movementLogEntry = pgTable("movement_log_entry", {
+  id: text("id").primaryKey(),
+  kitUnitId: text("kit_unit_id")
+    .notNull()
+    .references(() => kitUnit.id),
+  kind: text("kind", { enum: ["move", "condition_note"] }).notNull(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id),
+  // Move fields (kind = "move")
+  reason: text("reason", { enum: ["ad_hoc", "duty"] }),
+  toType: text("to_type", { enum: ["store", "holder"] }),
+  toStoreId: text("to_store_id").references(() => location.id),
+  toHolderId: text("to_holder_id").references(() => user.id),
+  // Condition Note fields (kind = "condition_note")
+  conditionNote: text("condition_note"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });

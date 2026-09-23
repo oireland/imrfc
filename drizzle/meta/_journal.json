@@ -22,6 +22,13 @@
       "when": 1790165694407,
       "tag": "0002_rainy_the_initiative",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790165921929,
+      "tag": "0003_tiresome_hex",
+      "breakpoints": true
     }
   ]
 }

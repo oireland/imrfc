@@ -2,7 +2,15 @@ import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { location } from "@/features/locations";
-import { createKitUnit, listKitUnits, setConditionNote, setKitStatus } from "./index";
+import { user } from "@/features/users";
+import {
+  createKitUnit,
+  listKitUnits,
+  listMovementLog,
+  recordMove,
+  setConditionNote,
+  setKitStatus,
+} from "./index";
 
 async function seedHome(db: Awaited<ReturnType<typeof createTestDb>>) {
   const [row] = await db
@@ -18,6 +26,18 @@ async function seedHome(db: Awaited<ReturnType<typeof createTestDb>>) {
   return row;
 }
 
+async function seedUser(db: Awaited<ReturnType<typeof createTestDb>>) {
+  const [row] = await db
+    .insert(user)
+    .values({
+      id: crypto.randomUUID(),
+      name: "Alex",
+      email: `${crypto.randomUUID()}@example.com`,
+    })
+    .returning();
+  return row;
+}
+
 describe("createKitUnit", () => {
   it("creates an Active Kit Unit with a Home", async () => {
     const db = await createTestDb();
@@ -28,7 +48,15 @@ describe("createKitUnit", () => {
 
     expect(result.ok).toBe(true);
     const units = await listKitUnits(db);
-    expect(units).toMatchObject([{ name: "Ball bag A", status: "active", homeId: home.id }]);
+    expect(units).toMatchObject([
+      {
+        name: "Ball bag A",
+        status: "active",
+        homeId: home.id,
+        whereaboutsType: "store",
+        storeId: home.id,
+      },
+    ]);
   });
 
   it("rejects a Kit Unit without a name", async () => {
@@ -88,16 +116,66 @@ describe("setKitStatus", () => {
 });
 
 describe("setConditionNote", () => {
-  it("updates a Kit Unit's Condition Note", async () => {
+  it("updates a Kit Unit's Condition Note and logs the change", async () => {
     const db = await createTestDb();
     await migrate(db);
     const home = await seedHome(db);
+    const alex = await seedUser(db);
     const created = await createKitUnit(db, { name: "Ball bag A", homeId: home.id });
     if (!created.ok) throw new Error("expected Kit Unit to be created");
 
-    await setConditionNote(db, created.kitUnit.id, "2 balls need pumping");
+    await setConditionNote(db, created.kitUnit.id, alex.id, "2 balls need pumping");
 
     const [unit] = await listKitUnits(db);
     expect(unit.conditionNote).toBe("2 balls need pumping");
+
+    const log = await listMovementLog(db, created.kitUnit.id);
+    expect(log).toMatchObject([
+      { kind: "condition_note", userId: alex.id, conditionNote: "2 balls need pumping" },
+    ]);
+  });
+});
+
+describe("recordMove", () => {
+  it("records 'I've got it': Whereabouts becomes the Holder", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const alex = await seedUser(db);
+    const created = await createKitUnit(db, { name: "Ball bag A", homeId: home.id });
+    if (!created.ok) throw new Error("expected Kit Unit to be created");
+
+    await recordMove(db, created.kitUnit.id, alex.id, { type: "holder", holderId: alex.id });
+
+    const [unit] = await listKitUnits(db);
+    expect(unit).toMatchObject({ whereaboutsType: "holder", holderId: alex.id, storeId: null });
+
+    const log = await listMovementLog(db, created.kitUnit.id);
+    expect(log).toMatchObject([
+      { kind: "move", reason: "ad_hoc", toType: "holder", toHolderId: alex.id },
+    ]);
+  });
+
+  it("records 'put it in [Store]': Whereabouts becomes the Store", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const otherStore = await seedHome(db);
+    const alex = await seedUser(db);
+    const created = await createKitUnit(db, { name: "Ball bag A", homeId: home.id });
+    if (!created.ok) throw new Error("expected Kit Unit to be created");
+    await recordMove(db, created.kitUnit.id, alex.id, { type: "holder", holderId: alex.id });
+
+    await recordMove(db, created.kitUnit.id, alex.id, {
+      type: "store",
+      storeId: otherStore.id,
+    });
+
+    const [unit] = await listKitUnits(db);
+    expect(unit).toMatchObject({
+      whereaboutsType: "store",
+      storeId: otherStore.id,
+      holderId: null,
+    });
   });
 });

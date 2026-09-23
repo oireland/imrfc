@@ -1,15 +1,19 @@
-import { eq, ne } from "drizzle-orm";
-import { kitUnit } from "./schema";
+import { desc, eq, ne } from "drizzle-orm";
+import { kitUnit, movementLogEntry } from "./schema";
 import { validateKitUnit, type NewKitUnit } from "./rules";
 
 export { validateKitUnit } from "./rules";
 export type { NewKitUnit } from "./rules";
+export { groupByWhereabouts } from "./whereabouts";
+export type { WhereaboutsGroup } from "./whereabouts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
 
 export type KitUnit = typeof kitUnit.$inferSelect;
 export type KitStatus = KitUnit["status"];
+export type MovementLogEntry = typeof movementLogEntry.$inferSelect;
+export type MoveTarget = { type: "store"; storeId: string } | { type: "holder"; holderId: string };
 
 export async function listKitUnits(
   db: Db,
@@ -28,7 +32,12 @@ export async function createKitUnit(
 
   const [row] = await db
     .insert(kitUnit)
-    .values({ id: crypto.randomUUID(), ...input })
+    .values({
+      id: crypto.randomUUID(),
+      ...input,
+      whereaboutsType: "store",
+      storeId: input.homeId,
+    })
     .returning();
   return { ok: true, kitUnit: row };
 }
@@ -37,6 +46,54 @@ export async function setKitStatus(db: Db, id: string, status: KitStatus) {
   await db.update(kitUnit).set({ status }).where(eq(kitUnit.id, id));
 }
 
-export async function setConditionNote(db: Db, id: string, conditionNote: string) {
+export async function setConditionNote(
+  db: Db,
+  id: string,
+  userId: string,
+  conditionNote: string,
+) {
   await db.update(kitUnit).set({ conditionNote }).where(eq(kitUnit.id, id));
+  await db.insert(movementLogEntry).values({
+    id: crypto.randomUUID(),
+    kitUnitId: id,
+    kind: "condition_note",
+    userId,
+    conditionNote,
+  });
+}
+
+/** Records an ad-hoc Move: "I've got it" (Holder) or "put it in [Store]". */
+export async function recordMove(db: Db, kitUnitId: string, userId: string, target: MoveTarget) {
+  await db
+    .update(kitUnit)
+    .set(
+      target.type === "store"
+        ? { whereaboutsType: "store", storeId: target.storeId, holderId: null }
+        : { whereaboutsType: "holder", holderId: target.holderId, storeId: null },
+    )
+    .where(eq(kitUnit.id, kitUnitId));
+
+  await db.insert(movementLogEntry).values({
+    id: crypto.randomUUID(),
+    kitUnitId,
+    kind: "move",
+    userId,
+    reason: "ad_hoc",
+    toType: target.type,
+    toStoreId: target.type === "store" ? target.storeId : null,
+    toHolderId: target.type === "holder" ? target.holderId : null,
+  });
+}
+
+export async function getKitUnit(db: Db, id: string): Promise<KitUnit | undefined> {
+  const [row] = await db.select().from(kitUnit).where(eq(kitUnit.id, id));
+  return row;
+}
+
+export async function listMovementLog(db: Db, kitUnitId: string): Promise<MovementLogEntry[]> {
+  return db
+    .select()
+    .from(movementLogEntry)
+    .where(eq(movementLogEntry.kitUnitId, kitUnitId))
+    .orderBy(desc(movementLogEntry.createdAt));
 }
