@@ -1,0 +1,73 @@
+import { eq } from "drizzle-orm";
+import { listUpcomingDutiesForUser } from "@/features/duties";
+import { listEvents } from "@/features/events";
+import { listKitUnits } from "@/features/kit";
+import { listLocations } from "@/features/locations";
+import { user } from "@/features/users";
+import { buildCalendar, type FeedEvent } from "./ics-rules";
+import { feedToken } from "./schema";
+
+export { feedToken } from "./schema";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Db = any;
+
+export type FeedResult = { status: 200; body: string } | { status: 404 | 410 };
+
+const newToken = () => `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll("-", "");
+
+/** The User's Feed Token, created on first use. */
+export async function getFeedToken(db: Db, userId: string): Promise<string> {
+  await db.insert(feedToken).values({ userId, token: newToken() }).onConflictDoNothing();
+  const [row] = await db.select().from(feedToken).where(eq(feedToken.userId, userId));
+  return row.token;
+}
+
+/** Replaces the User's Feed Token; the old URL stops working. */
+export async function resetFeedToken(db: Db, userId: string): Promise<string> {
+  const token = newToken();
+  await db
+    .insert(feedToken)
+    .values({ userId, token })
+    .onConflictDoUpdate({ target: feedToken.userId, set: { token, createdAt: new Date() } });
+  return token;
+}
+
+/** The ICS for a Feed Token: all Events, with the token owner's own Duties in each description. */
+export async function renderFeed(db: Db, token: string, now: Date = new Date()): Promise<FeedResult> {
+  const [owner] = await db
+    .select({ id: user.id, accessState: user.accessState })
+    .from(feedToken)
+    .innerJoin(user, eq(feedToken.userId, user.id))
+    .where(eq(feedToken.token, token));
+  if (!owner) return { status: 404 };
+  if (owner.accessState === "blocked") return { status: 410 };
+
+  const [upcoming, past, venues, kit, duties] = await Promise.all([
+    listEvents(db, { when: "upcoming" }),
+    listEvents(db, { when: "past" }),
+    listLocations(db, { includeArchived: true }),
+    listKitUnits(db, { includeRetired: true }),
+    listUpcomingDutiesForUser(db, owner.id),
+  ]);
+  const venueName = new Map(venues.map((v) => [v.id, v.name]));
+  const kitName = new Map(kit.map((k) => [k.id, k.name]));
+
+  const events: FeedEvent[] = [...past, ...upcoming].map((e) => ({
+    id: e.id,
+    title: e.title,
+    start: e.start,
+    end: e.end,
+    venue: venueName.get(e.venueId) ?? "",
+    cancelled: e.cancelled,
+    description: duties
+      .filter((d) => d.event.id === e.id)
+      .map(({ duty }) =>
+        duty.direction === "to"
+          ? `You're bringing: ${kitName.get(duty.kitUnitId)}`
+          : `You're taking back: ${kitName.get(duty.kitUnitId)}`,
+      )
+      .join("\n"),
+  }));
+  return { status: 200, body: buildCalendar(events, now) };
+}
