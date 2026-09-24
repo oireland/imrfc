@@ -2,6 +2,7 @@ import { desc, eq, ne } from "drizzle-orm";
 import { kitUnit, movementLogEntry } from "./schema";
 import { validateKitUnit, type NewKitUnit } from "./rules";
 
+export { kitUnit } from "./schema";
 export { validateKitUnit } from "./rules";
 export type { NewKitUnit } from "./rules";
 export { groupByWhereabouts } from "./whereabouts";

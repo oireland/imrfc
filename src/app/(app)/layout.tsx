@@ -15,6 +15,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         {isCommitteeOrAbove(user.role) && <Link href="/admin/kit">Kit Units</Link>}
         {isCommitteeOrAbove(user.role) && <Link href="/admin/events">Events Admin</Link>}
         {isCommitteeOrAbove(user.role) && <Link href="/admin/series">Series</Link>}
+        {isCommitteeOrAbove(user.role) && <Link href="/admin/checklists">Checklists</Link>}
         <PendingBadge />
       </nav>
       {children}

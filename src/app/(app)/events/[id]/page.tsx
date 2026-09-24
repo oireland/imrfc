@@ -1,6 +1,9 @@
 import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
+import { ChecklistEditor } from "@/components/checklist-editor";
+import { resolveEventChecklist } from "@/features/checklists";
+import { listKitUnits } from "@/features/kit";
 import { cancelEvent, editOccurrence, getEvent, londonParts } from "@/features/events";
 import { getLocation, listLocations, type Location } from "@/features/locations";
 import { isCommitteeOrAbove } from "@/features/users";
@@ -45,6 +48,19 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     revalidatePath(`/events/${id}`);
     revalidatePath("/events");
   }
+
+  const [resolved, kitUnits] = await Promise.all([
+    resolveEventChecklist(db, {
+      eventId: id,
+      seriesId: eventDetails.seriesId,
+      eventType: eventDetails.eventType,
+    }),
+    listKitUnits(db),
+  ]);
+  const kitNames = new Map(kitUnits.map((u) => [u.id, u.name]));
+  const sourceLabel = { event: "this Event", series: "its Series", default: "the Default Checklist", none: "" }[
+    resolved.source
+  ];
 
   const venues = eventDetails.seriesId ? (await listLocations(db)).filter((l: Location) => l.isVenue) : [];
 
@@ -98,6 +114,27 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
                 ` at ${eventDetails.matchDetails.travelMeetPoint}`}
             </p>
           )}
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2 rounded-md border border-border p-3 text-sm">
+        <h3 className="font-medium">Checklist{sourceLabel && ` (from ${sourceLabel})`}</h3>
+        <ul>
+          {resolved.kitUnitIds.map((kid) => (
+            <li key={kid}>{kitNames.get(kid) ?? kid}</li>
+          ))}
+          {resolved.kitUnitIds.length === 0 && <li className="text-muted-foreground">No Kit Units needed.</li>}
+        </ul>
+      </div>
+
+      {isCommitteeOrAbove(user.role) && (
+        <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+          <h3 className="font-medium">Override Checklist for this Event</h3>
+          <ChecklistEditor
+            target={{ scope: "event", scopeId: id }}
+            path={`/events/${id}`}
+            inheritedFrom={sourceLabel ? `Checklist from ${sourceLabel}` : undefined}
+          />
         </div>
       )}
 
