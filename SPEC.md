@@ -132,7 +132,8 @@ When a User is Blocked:
 | Navy (fleur-de-lis) | `#1F2F55` | primary (buttons, header), text on gold | background base: `#0F1729` bg, `#1A2544` cards |
 | Gold (phoenix) | `#F2C400` | accent: highlights, "your Duty" markers, active tab — always with navy text, never gold text on white | primary, with navy text |
 | Deep gold | `#8A6D00` | gold-toned text/links on white (passes contrast) | — |
-| Red (cross) | `#DE2029` | destructive + Clash warnings, unassigned Duties | `#F0474E` for contrast on navy |
+| Red (cross) | `#DE2029` | destructive + Clash warnings, unassigned Duties | `#FF6B70` for contrast on navy cards |
+| Deep red | `#B3151D` | red text on a red tint (destructive buttons, badges) | `#FF8A8E` |
 | Neutrals | slate greys | background `#FFFFFF`, muted `#F4F5F8`, border `#E2E5EC`, text `#0F172A` | text `#F4F5F8`, muted text `#A3ADC2` |
 
 Contrast check: navy on white ≈ 13:1, navy on gold ≈ 8:1, red on white ≈ 4.7:1.

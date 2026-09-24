@@ -1,11 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { authClient } from "@/lib/auth-client";
 
 export function SignInForm() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [pending, setPending] = useState(false);
 
   if (sent) {
     return <p className="text-sm text-muted-foreground">Check your email for a sign-in link.</p>;
@@ -13,36 +18,44 @@ export function SignInForm() {
 
   return (
     <div className="flex flex-col gap-4">
-      <button
+      <Button
         type="button"
-        className="rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground"
+        variant="outline"
+        className="w-full"
         onClick={() => authClient.signIn.social({ provider: "google", callbackURL: "/" })}
       >
         Continue with Google
-      </button>
+      </Button>
+
+      <div className="flex items-center gap-2">
+        <Separator className="flex-1" />
+        <span className="text-xs text-muted-foreground">or</span>
+        <Separator className="flex-1" />
+      </div>
 
       <form
-        className="flex flex-col gap-2"
+        className="flex flex-col gap-3"
         onSubmit={async (event) => {
           event.preventDefault();
+          setPending(true);
           await authClient.signIn.magicLink({ email, callbackURL: "/" });
           setSent(true);
         }}
       >
-        <input
-          type="email"
-          required
-          placeholder="you@example.com"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          className="rounded-md border border-border px-3 py-2"
-        />
-        <button
-          type="submit"
-          className="rounded-md border border-primary px-4 py-2 font-medium text-primary"
-        >
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            required
+            placeholder="you@example.com"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
+        </div>
+        <Button type="submit" className="w-full" disabled={pending}>
           Email me a sign-in link
-        </button>
+        </Button>
       </form>
     </div>
   );

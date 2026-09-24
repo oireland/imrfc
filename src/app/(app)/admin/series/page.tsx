@@ -1,13 +1,19 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { createSeries, extendSeries, listSeries, listTeams } from "@/features/events";
 import { listLocations, type Location } from "@/features/locations";
 import { isCommitteeOrAbove } from "@/features/users";
 import { getCurrentUser } from "@/lib/session";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Textarea } from "@/components/ui/textarea";
+import { SubmitButton } from "@/components/submit-button";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const field = "rounded-md border border-border bg-background px-2 py-1";
 
 export default async function AdminSeriesPage() {
   const user = await getCurrentUser();
@@ -44,74 +50,106 @@ export default async function AdminSeriesPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <h2 className="text-xl font-semibold">Add a Series</h2>
-      <form action={create} className="flex flex-col gap-3 rounded-md border border-border p-3">
-        <input name="title" placeholder="Title" required className={field} />
-        <fieldset className="flex flex-wrap gap-3 text-sm">
-          <legend>Weekdays</legend>
-          {WEEKDAYS.map((name, i) => (
-            <label key={name} className="flex items-center gap-1">
-              <input type="checkbox" name="weekdays" value={i} /> {name}
-            </label>
-          ))}
-        </fieldset>
-        <div className="flex gap-2">
-          <label className="flex flex-col text-sm">
-            Start time
-            <input type="time" name="startTime" required className={field} />
-          </label>
-          <label className="flex flex-col text-sm">
-            End time
-            <input type="time" name="endTime" required className={field} />
-          </label>
-        </div>
-        <div className="flex gap-2">
-          <label className="flex flex-col text-sm">
-            First date
-            <input type="date" name="startDate" required className={field} />
-          </label>
-          <label className="flex flex-col text-sm">
-            End date
-            <input type="date" name="endDate" required className={field} />
-          </label>
-        </div>
-        <select name="venueId" required className={field}>
-          <option value="">Venue...</option>
-          {venues.map((v: Location) => (
-            <option key={v.id} value={v.id}>
-              {v.name}
-            </option>
-          ))}
-        </select>
-        <fieldset className="flex flex-col gap-1 text-sm">
-          <legend>Teams (none = whole club)</legend>
-          {teams.map((t) => (
-            <label key={t.id} className="flex items-center gap-2">
-              <input type="checkbox" name="teamIds" value={t.id} /> {t.name}
-            </label>
-          ))}
-        </fieldset>
-        <textarea name="notes" placeholder="Notes" className={field} />
-        <button className="rounded-md bg-primary px-3 py-1 text-primary-foreground">Create Series</button>
-      </form>
+    <div className="flex flex-col gap-6 p-4">
+      <div className="flex flex-col gap-1">
+        <Link href="/admin" className="text-sm text-muted-foreground hover:underline">
+          ← Admin
+        </Link>
+        <h2 className="text-xl font-semibold">Series</h2>
+      </div>
 
-      <h2 className="text-xl font-semibold">Series</h2>
-      <ul className="flex flex-col gap-3">
-        {allSeries.map((s) => (
-          <li key={s.id} className="flex flex-col gap-2 rounded-md border border-border p-3 text-sm">
-            <p className="font-medium">{s.title}</p>
-            <p className="text-muted-foreground">
-              {s.weekdays.map((d) => WEEKDAYS[d]).join(", ")} {s.startTime}–{s.endTime}, {s.startDate} to {s.endDate}
-            </p>
-            <form action={extend} className="flex gap-2">
-              <input type="hidden" name="seriesId" value={s.id} />
-              <input type="date" name="endDate" required className={field} />
-              <button className="rounded-md bg-primary px-3 py-1 text-primary-foreground">Extend</button>
-            </form>
-          </li>
-        ))}
-      </ul>
+      <Card>
+        <CardHeader>
+          <CardTitle>New Series</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form action={create} className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="series-title">Title</Label>
+              <Input id="series-title" name="title" required />
+            </div>
+            <fieldset className="flex flex-wrap gap-3 text-sm">
+              <legend className="mb-1 font-medium">Weekdays</legend>
+              {WEEKDAYS.map((name, i) => (
+                <label key={name} className="flex items-center gap-1">
+                  <input type="checkbox" name="weekdays" value={i} className="size-4" /> {name}
+                </label>
+              ))}
+            </fieldset>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="series-start-time">Start time</Label>
+              <Input id="series-start-time" type="time" name="startTime" required />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="series-end-time">End time</Label>
+              <Input id="series-end-time" type="time" name="endTime" required />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="series-start-date">First date</Label>
+              <Input id="series-start-date" type="date" name="startDate" required />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="series-end-date">End date</Label>
+              <Input id="series-end-date" type="date" name="endDate" required />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="series-venue">Venue</Label>
+              <NativeSelect id="series-venue" name="venueId" required>
+                <NativeSelectOption value="">Venue...</NativeSelectOption>
+                {venues.map((v: Location) => (
+                  <NativeSelectOption key={v.id} value={v.id}>
+                    {v.name}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </div>
+            <fieldset className="flex flex-col gap-1 text-sm">
+              <legend className="mb-1 font-medium">Teams (none = whole club)</legend>
+              {teams.map((t) => (
+                <label key={t.id} className="flex items-center gap-2">
+                  <input type="checkbox" name="teamIds" value={t.id} className="size-4" /> {t.name}
+                </label>
+              ))}
+            </fieldset>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="series-notes">Notes</Label>
+              <Textarea id="series-notes" name="notes" />
+            </div>
+            <SubmitButton>Create Series</SubmitButton>
+          </form>
+        </CardContent>
+      </Card>
+
+      <div className="flex flex-col gap-3">
+        <h3 className="text-sm font-medium text-muted-foreground">Existing Series</h3>
+        <Card className="py-0">
+          <div className="divide-y divide-border">
+            {allSeries.length === 0 && <p className="p-4 text-muted-foreground">No Series yet.</p>}
+            {allSeries.map((s) => {
+              const extendFormId = `extend-date-${s.id}`;
+              return (
+                <div key={s.id} className="flex flex-col gap-2 p-4 text-sm">
+                  <p className="font-medium">{s.title}</p>
+                  <p className="text-muted-foreground">
+                    {s.weekdays.map((d) => WEEKDAYS[d]).join(", ")} {s.startTime}–{s.endTime},{" "}
+                    {s.startDate} to {s.endDate}
+                  </p>
+                  <form action={extend} className="flex items-end gap-2">
+                    <input type="hidden" name="seriesId" value={s.id} />
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor={extendFormId}>Extend to</Label>
+                      <Input id={extendFormId} type="date" name="endDate" required />
+                    </div>
+                    <SubmitButton size="sm" variant="outline">
+                      Extend
+                    </SubmitButton>
+                  </form>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }

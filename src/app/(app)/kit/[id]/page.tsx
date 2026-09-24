@@ -1,11 +1,17 @@
 import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { NativeSelect } from "@/components/ui/native-select";
+import { SubmitButton } from "@/components/submit-button";
 import { ClashList } from "@/components/clash-list";
+import { formatWhen } from "@/lib/format-time";
 import { listClashes } from "@/features/duties";
 import { getKitUnit, listMovementLog, recordMove, type MovementLogEntry } from "@/features/kit";
 import { listLocations, type Location } from "@/features/locations";
 import { requireApprovedUser } from "@/lib/session";
+
+const CARD_TITLE_CLASS = "font-heading text-base leading-snug font-medium";
 
 export default async function KitUnitDetailPage({ params }: PageProps<"/kit/[id]">) {
   const { id } = await params;
@@ -40,7 +46,7 @@ export default async function KitUnitDetailPage({ params }: PageProps<"/kit/[id]
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div>
         <h2 className="text-xl font-semibold">{unit.name}</h2>
         <p className="text-sm text-muted-foreground">Whereabouts: {whereaboutsLabel}</p>
@@ -53,46 +59,50 @@ export default async function KitUnitDetailPage({ params }: PageProps<"/kit/[id]
 
       <div className="flex flex-wrap items-center gap-2">
         <form action={iveGotIt}>
-          <button className="rounded-md bg-primary px-3 py-1 text-primary-foreground">
-            I&apos;ve got it
-          </button>
+          <SubmitButton variant="secondary">I&apos;ve got it</SubmitButton>
         </form>
         <form action={putInStore} className="flex items-center gap-2">
-          <select
-            name="storeId"
-            className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-          >
+          <NativeSelect name="storeId" aria-label={`Put ${unit.name} in store`}>
             {stores.map((s: Location) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
             ))}
-          </select>
-          <button className="rounded-md bg-primary px-3 py-1 text-primary-foreground">
-            Put in store
-          </button>
+          </NativeSelect>
+          <SubmitButton variant="secondary">Put in store</SubmitButton>
         </form>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <h3 className="font-medium">Movement Log</h3>
-        <ul className="flex flex-col gap-1">
-          {log.length === 0 && <p className="text-muted-foreground">No history yet.</p>}
-          {log.map((entry: MovementLogEntry) => (
-            <li key={entry.id} className="text-sm text-muted-foreground">
-              {entry.kind === "move"
-                ? `Moved to ${
-                    entry.toType === "store"
-                      ? (locationsById.get(entry.toStoreId!)?.name ?? "a Store")
-                      : "a Holder"
-                  } (${entry.reason})`
-                : `Condition Note: ${entry.conditionNote}`}
-              {" — "}
-              {entry.createdAt.toLocaleString?.() ?? String(entry.createdAt)}
-            </li>
-          ))}
-        </ul>
-      </div>
+      <section aria-labelledby="movement-log">
+        <Card>
+          <CardHeader>
+            <h3 id="movement-log" className={CARD_TITLE_CLASS}>
+              Movement Log
+            </h3>
+          </CardHeader>
+          <CardContent className="p-0">
+            {log.length === 0 ? (
+              <p className="px-4 pb-4 text-sm text-muted-foreground">No history yet.</p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {log.map((entry: MovementLogEntry) => (
+                  <li key={entry.id} className="px-4 py-3 text-sm text-muted-foreground">
+                    {entry.kind === "move"
+                      ? `Moved to ${
+                          entry.toType === "store"
+                            ? (locationsById.get(entry.toStoreId!)?.name ?? "a Store")
+                            : "a Holder"
+                        } (${entry.reason})`
+                      : `Condition Note: ${entry.conditionNote}`}
+                    {" — "}
+                    {formatWhen(entry.createdAt)}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </section>
     </div>
   );
 }

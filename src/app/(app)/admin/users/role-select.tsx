@@ -1,25 +1,35 @@
 "use client";
 
 import type { Role } from "@/features/users";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 
 const ROLES: Role[] = ["member", "committee", "admin"];
 
-export function RoleSelect({ userId, role }: { userId: string; role: Role }) {
+export function RoleSelect({
+  userId,
+  userName,
+  role,
+}: {
+  userId: string;
+  userName: string;
+  role: Role;
+}) {
   return (
     <>
       <input type="hidden" name="userId" value={userId} />
-      <select
+      <NativeSelect
         name="role"
         defaultValue={role}
+        size="sm"
+        aria-label={`Role for ${userName}`}
         onChange={(e) => e.currentTarget.form?.requestSubmit()}
-        className="rounded-md border border-border bg-background px-2 py-1 text-sm"
       >
         {ROLES.map((r) => (
-          <option key={r} value={r}>
+          <NativeSelectOption key={r} value={r}>
             {r}
-          </option>
+          </NativeSelectOption>
         ))}
-      </select>
+      </NativeSelect>
     </>
   );
 }

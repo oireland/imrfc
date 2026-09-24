@@ -1,10 +1,17 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { createEvent, listTeams, type Competition, type EventType, type HomeAway } from "@/features/events";
 import { listLocations, type Location } from "@/features/locations";
 import { isCommitteeOrAbove } from "@/features/users";
 import { getCurrentUser } from "@/lib/session";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Textarea } from "@/components/ui/textarea";
+import { SubmitButton } from "@/components/submit-button";
 
 export default async function AdminEventsPage() {
   const user = await getCurrentUser();
@@ -51,101 +58,96 @@ export default async function AdminEventsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <h2 className="text-xl font-semibold">Add an Event</h2>
+    <div className="flex flex-col gap-6 p-4">
+      <div className="flex flex-col gap-1">
+        <Link href="/admin" className="text-sm text-muted-foreground hover:underline">
+          ← Admin
+        </Link>
+        <h2 className="text-xl font-semibold">Events Admin</h2>
+      </div>
 
-      <form action={create} className="flex flex-col gap-3 rounded-md border border-border p-3">
-        <input
-          name="title"
-          placeholder="Title"
-          required
-          className="rounded-md border border-border bg-background px-2 py-1"
-        />
-        <select
-          name="eventType"
-          required
-          className="rounded-md border border-border bg-background px-2 py-1"
-        >
-          <option value="training">Training</option>
-          <option value="match">Match</option>
-          <option value="social">Social</option>
-        </select>
-        <label className="flex flex-col text-sm">
-          Start
-          <input
-            type="datetime-local"
-            name="start"
-            required
-            className="rounded-md border border-border bg-background px-2 py-1"
-          />
-        </label>
-        <label className="flex flex-col text-sm">
-          End
-          <input
-            type="datetime-local"
-            name="end"
-            required
-            className="rounded-md border border-border bg-background px-2 py-1"
-          />
-        </label>
-        <select
-          name="venueId"
-          required
-          className="rounded-md border border-border bg-background px-2 py-1"
-        >
-          <option value="">Venue...</option>
-          {venues.map((v: Location) => (
-            <option key={v.id} value={v.id}>
-              {v.name}
-            </option>
-          ))}
-        </select>
-        <fieldset className="flex flex-col gap-1 text-sm">
-          <legend>Teams (none = whole club)</legend>
-          {teams.map((t) => (
-            <label key={t.id} className="flex items-center gap-2">
-              <input type="checkbox" name="teamIds" value={t.id} /> {t.name}
-            </label>
-          ))}
-        </fieldset>
-        <textarea
-          name="notes"
-          placeholder="Notes"
-          className="rounded-md border border-border bg-background px-2 py-1"
-        />
+      <Card>
+        <CardHeader>
+          <CardTitle>New Event</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form action={create} className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="event-title">Title</Label>
+              <Input id="event-title" name="title" required />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="event-type">Event Type</Label>
+              <NativeSelect id="event-type" name="eventType" required>
+                <NativeSelectOption value="training">Training</NativeSelectOption>
+                <NativeSelectOption value="match">Match</NativeSelectOption>
+                <NativeSelectOption value="social">Social</NativeSelectOption>
+              </NativeSelect>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="event-start">Start</Label>
+              <Input id="event-start" type="datetime-local" name="start" required />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="event-end">End</Label>
+              <Input id="event-end" type="datetime-local" name="end" required />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="event-venue">Venue</Label>
+              <NativeSelect id="event-venue" name="venueId" required>
+                <NativeSelectOption value="">Venue...</NativeSelectOption>
+                {venues.map((v: Location) => (
+                  <NativeSelectOption key={v.id} value={v.id}>
+                    {v.name}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </div>
+            <fieldset className="flex flex-col gap-1 text-sm">
+              <legend className="mb-1 font-medium">Teams (none = whole club)</legend>
+              {teams.map((t) => (
+                <label key={t.id} className="flex items-center gap-2">
+                  <input type="checkbox" name="teamIds" value={t.id} className="size-4" /> {t.name}
+                </label>
+              ))}
+            </fieldset>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="event-notes">Notes</Label>
+              <Textarea id="event-notes" name="notes" />
+            </div>
 
-        <fieldset className="flex flex-col gap-2 rounded-md border border-border p-2 text-sm">
-          <legend>Match details (if Match)</legend>
-          <input
-            name="opponent"
-            placeholder="Opponent"
-            className="rounded-md border border-border bg-background px-2 py-1"
-          />
-          <select name="homeAway" className="rounded-md border border-border bg-background px-2 py-1">
-            <option value="home">Home</option>
-            <option value="away">Away</option>
-          </select>
-          <select
-            name="competition"
-            className="rounded-md border border-border bg-background px-2 py-1"
-          >
-            <option value="bucs">BUCS</option>
-            <option value="lusl">LUSL</option>
-            <option value="friendly">Friendly</option>
-            <option value="other">Other</option>
-          </select>
-          <label className="flex flex-col">
-            Meet time
-            <input
-              type="datetime-local"
-              name="meetTime"
-              className="rounded-md border border-border bg-background px-2 py-1"
-            />
-          </label>
-        </fieldset>
+            <fieldset className="flex flex-col gap-3 rounded-md border border-border p-3 text-sm">
+              <legend className="px-1 font-medium">Match details (if Match)</legend>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="event-opponent">Opponent</Label>
+                <Input id="event-opponent" name="opponent" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="event-home-away">Home / Away</Label>
+                <NativeSelect id="event-home-away" name="homeAway">
+                  <NativeSelectOption value="home">Home</NativeSelectOption>
+                  <NativeSelectOption value="away">Away</NativeSelectOption>
+                </NativeSelect>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="event-competition">Competition</Label>
+                <NativeSelect id="event-competition" name="competition">
+                  <NativeSelectOption value="bucs">BUCS</NativeSelectOption>
+                  <NativeSelectOption value="lusl">LUSL</NativeSelectOption>
+                  <NativeSelectOption value="friendly">Friendly</NativeSelectOption>
+                  <NativeSelectOption value="other">Other</NativeSelectOption>
+                </NativeSelect>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="event-meet-time">Meet time</Label>
+                <Input id="event-meet-time" type="datetime-local" name="meetTime" />
+              </div>
+            </fieldset>
 
-        <button className="rounded-md bg-primary px-3 py-1 text-primary-foreground">Add</button>
-      </form>
+            <SubmitButton>Add</SubmitButton>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

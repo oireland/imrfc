@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { db } from "@/db/client";
 import { ChecklistEditor } from "@/components/checklist-editor";
 import { listSeries } from "@/features/events";
 import { isCommitteeOrAbove } from "@/features/users";
 import { getCurrentUser } from "@/lib/session";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const EVENT_TYPES = ["training", "match", "social"] as const;
 
@@ -13,28 +15,48 @@ export default async function AdminChecklistsPage() {
   const allSeries = await listSeries(db);
 
   return (
-    <div className="flex flex-col gap-6">
-      <h2 className="text-xl font-semibold">Default Checklists</h2>
-      {EVENT_TYPES.map((type) => (
-        <section key={type} className="flex flex-col gap-2 rounded-md border border-border p-3">
-          <h3 className="font-medium capitalize">{type}</h3>
-          <ChecklistEditor
-            target={{ scope: "event_type", scopeId: type }}
-            path="/admin/checklists"
-          />
-        </section>
-      ))}
-      <h2 className="text-xl font-semibold">Series Checklists</h2>
-      {allSeries.map((s) => (
-        <section key={s.id} className="flex flex-col gap-2 rounded-md border border-border p-3">
-          <h3 className="font-medium">{s.title}</h3>
-          <ChecklistEditor
-            target={{ scope: "series", scopeId: s.id }}
-            path="/admin/checklists"
-            inheritedFrom="Default Checklist"
-          />
-        </section>
-      ))}
+    <div className="flex flex-col gap-6 p-4">
+      <div className="flex flex-col gap-1">
+        <Link href="/admin" className="text-sm text-muted-foreground hover:underline">
+          ← Admin
+        </Link>
+        <h2 className="text-xl font-semibold">Checklists</h2>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <h3 className="text-sm font-medium text-muted-foreground">Default Checklists</h3>
+        {EVENT_TYPES.map((type) => (
+          <Card key={type}>
+            <CardHeader>
+              <CardTitle className="capitalize">{type}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ChecklistEditor
+                target={{ scope: "event_type", scopeId: type }}
+                path="/admin/checklists"
+              />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <h3 className="text-sm font-medium text-muted-foreground">Series Checklists</h3>
+        {allSeries.map((s) => (
+          <Card key={s.id}>
+            <CardHeader>
+              <CardTitle>{s.title}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ChecklistEditor
+                target={{ scope: "series", scopeId: s.id }}
+                path="/admin/checklists"
+                inheritedFrom="Default Checklist"
+              />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 }

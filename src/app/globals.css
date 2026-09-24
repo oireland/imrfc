@@ -19,6 +19,7 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-destructive-text: var(--destructive-text);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-accent-text: var(--accent-text);
@@ -47,6 +48,7 @@
   --gold: #f2c400;
   --deep-gold: #8a6d00;
   --red: #de2029;
+  --deep-red: #b3151d;
 
   --background: #ffffff;
   --foreground: #0f172a;
@@ -68,6 +70,8 @@
   --accent-text: var(--deep-gold);
   /* Red: destructive, Clash warnings, unassigned Duties. */
   --destructive: var(--red);
+  /* Red text on a red tint (plain red fails contrast there). */
+  --destructive-text: var(--deep-red);
   --border: #e2e5ec;
   --input: #e2e5ec;
   --ring: var(--navy);
@@ -93,7 +97,8 @@
     --accent: var(--gold);
     --accent-foreground: var(--navy);
     --accent-text: var(--gold);
-    --destructive: #f0474e;
+    --destructive: #ff6b70;
+    --destructive-text: #ff8a8e;
     --border: #2a3658;
     --input: #2a3658;
     --ring: var(--gold);

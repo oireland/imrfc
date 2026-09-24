@@ -1,5 +1,8 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
+import { SubmitButton } from "@/components/submit-button";
+import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import {
   addToChecklist,
   clearChecklist,
@@ -10,8 +13,6 @@ import {
 import { listKitUnits } from "@/features/kit";
 import { isCommitteeOrAbove } from "@/features/users";
 import { requireApprovedUser } from "@/lib/session";
-
-const field = "rounded-md border border-border bg-background px-2 py-1";
 
 /** Edits one level's own Checklist; `inheritedFrom` says what applies while it has none. */
 export async function ChecklistEditor({
@@ -50,42 +51,49 @@ export async function ChecklistEditor({
   }
 
   return (
-    <div className="flex flex-col gap-2 text-sm">
+    <div className="flex flex-col gap-3 text-sm">
       {own === undefined ? (
         <p className="text-muted-foreground">
           No Checklist of its own{inheritedFrom ? ` — uses the ${inheritedFrom}` : ""}.
         </p>
       ) : (
         <>
-          <ul className="flex flex-col gap-1">
+          <ul className="flex flex-col divide-y divide-border">
             {own.map((id) => (
-              <li key={id} className="flex items-center justify-between">
+              <li key={id} className="flex items-center justify-between gap-2 py-1.5 first:pt-0">
                 {names.get(id) ?? id}
                 <form action={remove}>
                   <input type="hidden" name="kitUnitId" value={id} />
-                  <button className="text-destructive underline">Remove</button>
+                  <SubmitButton variant="link" size="sm" className="text-destructive">
+                    Remove
+                  </SubmitButton>
                 </form>
               </li>
             ))}
-            {own.length === 0 && <li className="text-muted-foreground">Empty Checklist.</li>}
+            {own.length === 0 && <li className="py-1.5 text-muted-foreground">No Kit Units yet.</li>}
           </ul>
           <form action={clear}>
-            <button className="underline">Stop overriding</button>
+            <SubmitButton variant="link" size="sm">
+              Stop overriding
+            </SubmitButton>
           </form>
         </>
       )}
-      <form action={add} className="flex gap-2">
-        <select name="kitUnitId" required className={field}>
-          <option value="">Add Kit Unit...</option>
-          {active
-            .filter((u) => !own?.includes(u.id))
-            .map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
-              </option>
-            ))}
-        </select>
-        <button className="rounded-md bg-primary px-3 py-1 text-primary-foreground">Add</button>
+      <form action={add} className="flex flex-wrap items-end gap-2">
+        <div className="flex flex-col gap-1">
+          <Label htmlFor={`add-kit-unit-${target.scopeId}`}>Add Kit Unit</Label>
+          <NativeSelect id={`add-kit-unit-${target.scopeId}`} name="kitUnitId" required>
+            <option value="">Choose a Kit Unit…</option>
+            {active
+              .filter((u) => !own?.includes(u.id))
+              .map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+          </NativeSelect>
+        </div>
+        <SubmitButton>Add</SubmitButton>
       </form>
     </div>
   );

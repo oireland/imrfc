@@ -1,5 +1,6 @@
-import { getCurrentUser } from "@/lib/session";
 import { redirect } from "next/navigation";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { getCurrentUser } from "@/lib/session";
 
 export default async function WaitingForApprovalPage() {
   const user = await getCurrentUser();
@@ -7,11 +8,17 @@ export default async function WaitingForApprovalPage() {
   if (user.accessState !== "pending") redirect("/");
 
   return (
-    <div className="mx-auto max-w-sm text-center">
-      <h2 className="text-xl font-semibold">Waiting for approval</h2>
-      <p className="mt-2 text-muted-foreground">
-        Your account is pending approval from a club Admin. Check back soon.
-      </p>
+    <div className="flex min-h-[70vh] items-center justify-center">
+      <Card className="w-full max-w-sm">
+        <CardHeader>
+          <h2 className="text-center text-xl font-semibold">Waiting for approval</h2>
+        </CardHeader>
+        <CardContent>
+          <p className="text-center text-sm text-muted-foreground">
+            Your account is Pending approval from a club Admin. Check back soon.
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }

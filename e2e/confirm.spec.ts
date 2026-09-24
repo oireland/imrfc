@@ -45,7 +45,7 @@ test("Committee claims and Confirms Duties, and the Kit Unit follows", async ({ 
   await page.goto(`/events/${event}`);
   await page.getByRole("button", { name: "Claim" }).first().click(); // To Duty; From follows
   await page.getByRole("button", { name: "Confirm" }).first().click();
-  await expect(page.getByText("✓ Confirmed")).toHaveCount(1);
+  await expect(page.getByText("Confirmed", { exact: true })).toHaveCount(1);
 
   await page.goto("/kit");
   const held = page.locator("div", { has: page.getByRole("heading", { name: "You" }) }).filter({ hasText: kitName });
@@ -53,7 +53,7 @@ test("Committee claims and Confirms Duties, and the Kit Unit follows", async ({ 
 
   await page.goto(`/events/${event}`);
   await page.getByRole("button", { name: "Confirm" }).click(); // From Duty, Destination Home
-  await expect(page.getByText("✓ Confirmed")).toHaveCount(2);
+  await expect(page.getByText("Confirmed", { exact: true })).toHaveCount(2);
 
   await page.goto("/kit");
   const home = page.locator("div", { has: page.getByRole("heading", { name: storeName }) }).filter({ hasText: kitName });

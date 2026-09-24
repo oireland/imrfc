@@ -43,7 +43,7 @@ test("Home shows my Duties, the next Events and the Kit I Hold", async ({ page, 
   await page.goto(`/events/${event}`);
   await page.getByRole("button", { name: "Claim" }).first().click();
   await page.getByRole("button", { name: "Confirm" }).first().click();
-  await expect(page.getByText("✓ Confirmed")).toHaveCount(1);
+  await expect(page.getByText("Confirmed", { exact: true })).toHaveCount(1);
 
   await page.goto("/");
   const duties = page.getByRole("region", { name: "My Duties" });

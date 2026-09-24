@@ -1,8 +1,10 @@
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { CopyFeedUrl } from "@/components/copy-feed-url";
 import { SignOutButton } from "@/components/sign-out-button";
+import { ConfirmSubmit } from "@/components/confirm-submit";
 import { getFeedToken, resetFeedToken } from "@/features/calendar-feed";
 import { requireApprovedUser } from "@/lib/session";
 
@@ -21,22 +23,34 @@ export default async function ProfilePage() {
   }
 
   return (
-    <main className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold">{user.name}</h1>
-      <section className="flex flex-col gap-2">
-        <h2 className="font-medium">Calendar Feed</h2>
-        <p className="text-sm text-muted-foreground">
-          Subscribe to this URL in your calendar app to see every Event, with your own Duties in the description.
-          Keep it private: anyone with the URL can see your feed.
-        </p>
-        <CopyFeedUrl url={feedUrl} />
-        <form action={reset}>
-          <button type="submit" className="rounded-md border border-border px-3 py-1 text-sm">
-            Reset feed URL
-          </button>
-        </form>
-      </section>
+    <div className="flex flex-col gap-4">
+      <h2 className="text-xl font-semibold">{user.name}</h2>
+
+      <Card>
+        <CardHeader>
+          <h3 className="font-heading text-base leading-snug font-medium">Calendar Feed</h3>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            Subscribe to this URL in your calendar app to see every Event, with your own Duties in the
+            description. Keep it private: anyone with the URL can see your feed.
+          </p>
+          <CopyFeedUrl url={feedUrl} />
+          <form id="reset-feed-url" action={reset}>
+            <ConfirmSubmit
+              formId="reset-feed-url"
+              triggerLabel="Reset feed URL"
+              title="Reset feed URL?"
+              description="The old Calendar Feed URL will stop working immediately. You'll need to re-subscribe with the new one."
+              confirmLabel="Yes, reset"
+              triggerVariant="outline"
+              triggerSize="sm"
+            />
+          </form>
+        </CardContent>
+      </Card>
+
       <SignOutButton />
-    </main>
+    </div>
   );
 }

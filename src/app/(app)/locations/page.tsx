@@ -1,9 +1,15 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { archiveLocation, createLocation, listLocations, type Location } from "@/features/locations";
 import { isCommitteeOrAbove } from "@/features/users";
 import { getCurrentUser } from "@/lib/session";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { SubmitButton } from "@/components/submit-button";
 
 export default async function LocationsPage() {
   const user = await getCurrentUser();
@@ -29,55 +35,64 @@ export default async function LocationsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <h2 className="text-xl font-semibold">Locations</h2>
+    <div className="flex flex-col gap-6 p-4">
+      <div className="flex flex-col gap-1">
+        <Link href="/admin" className="text-sm text-muted-foreground hover:underline">
+          ← Admin
+        </Link>
+        <h2 className="text-xl font-semibold">Locations</h2>
+      </div>
 
-      <ul className="flex flex-col gap-2">
-        {locations.length === 0 && <p className="text-muted-foreground">No Locations yet.</p>}
-        {locations.map((l: Location) => (
-          <li
-            key={l.id}
-            className="flex items-center justify-between rounded-md border border-border p-3"
-          >
-            <div>
-              <p className="font-medium">{l.name}</p>
-              <p className="text-sm text-muted-foreground">{l.address}</p>
-              <p className="text-xs text-muted-foreground">
-                {[l.isVenue && "Venue", l.isStore && "Store"].filter(Boolean).join(" · ")}
-              </p>
+      <Card className="py-0">
+        <div className="divide-y divide-border">
+          {locations.length === 0 && <p className="p-4 text-muted-foreground">No Locations yet.</p>}
+          {locations.map((l: Location) => (
+            <div key={l.id} className="flex items-center justify-between gap-3 p-4">
+              <div className="flex flex-col gap-1">
+                <p className="font-medium">{l.name}</p>
+                <p className="text-sm text-muted-foreground">{l.address}</p>
+                <div className="flex gap-1">
+                  {l.isVenue && <Badge variant="outline">Venue</Badge>}
+                  {l.isStore && <Badge variant="outline">Store</Badge>}
+                </div>
+              </div>
+              <form action={archive}>
+                <input type="hidden" name="locationId" value={l.id} />
+                <SubmitButton variant="outline" size="sm">
+                  Archive
+                </SubmitButton>
+              </form>
             </div>
-            <form action={archive}>
-              <input type="hidden" name="locationId" value={l.id} />
-              <button className="rounded-md bg-destructive px-3 py-1 text-destructive-foreground">
-                Archive
-              </button>
-            </form>
-          </li>
-        ))}
-      </ul>
+          ))}
+        </div>
+      </Card>
 
-      <form action={create} className="flex flex-col gap-3 rounded-md border border-border p-3">
-        <h3 className="font-medium">Add a Location</h3>
-        <input
-          name="name"
-          placeholder="Name"
-          required
-          className="rounded-md border border-border bg-background px-2 py-1"
-        />
-        <input
-          name="address"
-          placeholder="Address"
-          required
-          className="rounded-md border border-border bg-background px-2 py-1"
-        />
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" name="isVenue" /> Venue
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" name="isStore" /> Store
-        </label>
-        <button className="rounded-md bg-primary px-3 py-1 text-primary-foreground">Add</button>
-      </form>
+      <Card>
+        <CardHeader>
+          <CardTitle>New Location</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form action={create} className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="location-name">Name</Label>
+              <Input id="location-name" name="name" required />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="location-address">Address</Label>
+              <Input id="location-address" name="address" required />
+            </div>
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="location-venue" name="isVenue" className="size-4" />
+              <Label htmlFor="location-venue">Venue</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="location-store" name="isStore" className="size-4" />
+              <Label htmlFor="location-store">Store</Label>
+            </div>
+            <SubmitButton>Add</SubmitButton>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

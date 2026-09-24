@@ -1,23 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 
 /** Calendar Feed URL with a copy button. */
 export function CopyFeedUrl({ url }: { url: string }) {
-  const [copied, setCopied] = useState(false);
   return (
     <div className="flex flex-col gap-2 text-sm">
-      <code className="break-all rounded-md border border-border p-2">{url}</code>
-      <button
+      <code className="break-all rounded-md border border-border bg-muted p-2">{url}</code>
+      <Button
         type="button"
+        variant="secondary"
+        size="sm"
+        className="self-start"
         onClick={async () => {
           await navigator.clipboard.writeText(url);
-          setCopied(true);
+          toast("Copied");
         }}
-        className="self-start rounded-md bg-primary px-3 py-1 text-primary-foreground"
       >
-        {copied ? "Copied" : "Copy feed URL"}
-      </button>
+        Copy feed URL
+      </Button>
     </div>
   );
 }

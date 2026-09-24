@@ -3,7 +3,21 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { ChecklistEditor } from "@/components/checklist-editor";
 import { ClashList } from "@/components/clash-list";
+import { ConfirmSubmit } from "@/components/confirm-submit";
 import { CopySummary } from "@/components/copy-summary";
+import { SubmitButton } from "@/components/submit-button";
+import { ConfirmedBadge, UnassignedBadge, YourDutyBadge } from "@/components/duty-badges";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
+import { formatWhen } from "@/lib/format-time";
 import { resolveEventChecklist } from "@/features/checklists";
 import { listKitUnits } from "@/features/kit";
 import {
@@ -25,10 +39,7 @@ import { cancelEvent, editOccurrence, getEvent, londonParts } from "@/features/e
 import { getLocation, listLocations, type Location } from "@/features/locations";
 import { isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
 import { requireApprovedUser } from "@/lib/session";
-
-function formatTime(d: Date) {
-  return d.toLocaleString?.("en-GB", { timeZone: "Europe/London" }) ?? String(d);
-}
+import { ChevronRight } from "lucide-react";
 
 export default async function EventDetailPage({ params }: PageProps<"/events/[id]">) {
   const { id } = await params;
@@ -66,8 +77,6 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     revalidatePath(`/events/${id}`);
     revalidatePath("/events");
   }
-
-  const field = "rounded-md border border-border bg-background px-2 py-1";
 
   async function duty(formData: FormData) {
     "use server";
@@ -130,67 +139,86 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     const mine = d.userId === user.id;
     const label = d.direction === "to" ? "To" : "From";
     return (
-      <div className="flex flex-col gap-1 border-t border-border pt-2 first:border-t-0 first:pt-0">
-        <p>
-          <span className="font-medium">{label}:</span>{" "}
+      <div className="flex flex-col gap-1.5 border-t border-border pt-2 first:border-t-0 first:pt-0">
+        <div className="flex flex-wrap items-center gap-1.5 text-sm">
+          <span className="font-medium">{label}:</span>
           {d.userId ? (
-            <span className={mine ? "rounded-md bg-accent px-1 text-accent-foreground" : undefined}>
-              {mine ? "You" : (personName.get(d.userId) ?? d.userId)}
-            </span>
+            <span>{mine ? "You" : (personName.get(d.userId) ?? d.userId)}</span>
           ) : (
-            <span className="text-destructive">❗unassigned</span>
+            <UnassignedBadge />
           )}
-          {d.voidedAt && <span className="ml-2 text-muted-foreground">Voided</span>}
-          {d.confirmedAt && <span className="ml-2 text-muted-foreground">✓ Confirmed</span>}
-        </p>
+          {mine && !d.voidedAt && <YourDutyBadge />}
+          {d.voidedAt && <Badge variant="outline">Voided</Badge>}
+          {d.confirmedAt && <ConfirmedBadge />}
+        </div>
         {d.userId && !d.confirmedAt && !d.voidedAt && (mine || committee) && (
           <form action={duty}>
             <input type="hidden" name="dutyId" value={d.id} />
-            <button name="action" value="confirm" className="rounded-md bg-primary px-3 py-1 text-primary-foreground">
+            <SubmitButton name="action" value="confirm" size="sm">
               Confirm
-            </button>
+            </SubmitButton>
           </form>
         )}
         <form action={duty} className="flex flex-wrap items-center gap-2">
           <input type="hidden" name="dutyId" value={d.id} />
           {!d.userId && (
-            <button name="action" value="claim" className="rounded-md bg-primary px-3 py-1 text-primary-foreground">
+            <SubmitButton name="action" value="claim" size="sm">
               Claim
-            </button>
+            </SubmitButton>
           )}
           {(mine || committee) && (
             <>
-              <select name="userId" aria-label={`${label} Duty person`} className={field}>
+              <NativeSelect
+                name="userId"
+                aria-label={`${label} Duty person`}
+                size="sm"
+                defaultValue=""
+              >
+                <option value="" disabled>
+                  Choose a person…
+                </option>
                 {approved.map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
-              </select>
-              {mine && <button name="action" value="handOn" className={field}>Hand on</button>}
-              {committee && <button name="action" value="assign" className={field}>Assign</button>}
-              {committee && d.userId && <button name="action" value="unassign" className={field}>Unassign</button>}
+              </NativeSelect>
+              {mine && (
+                <SubmitButton name="action" value="handOn" variant="outline" size="sm">
+                  Hand on
+                </SubmitButton>
+              )}
+              {committee && (
+                <SubmitButton name="action" value="assign" variant="outline" size="sm">
+                  Assign
+                </SubmitButton>
+              )}
+              {committee && d.userId && (
+                <SubmitButton name="action" value="unassign" variant="outline" size="sm">
+                  Unassign
+                </SubmitButton>
+              )}
             </>
           )}
         </form>
         {d.direction === "from" && (
-          <form action={duty} className="flex flex-wrap items-center gap-2">
+          <form action={duty} className="flex flex-wrap items-center gap-2 text-sm">
             <input type="hidden" name="dutyId" value={d.id} />
             <input type="hidden" name="action" value="destination" />
             <span className="text-muted-foreground">Destination:</span>
             {committee ? (
               <>
-                <select
+                <NativeSelect
                   name="destination"
                   aria-label="Destination"
+                  size="sm"
                   defaultValue={d.destination.type === "store" ? `store:${d.destination.storeId}` : d.destination.type}
-                  className={field}
                 >
                   <option value="home">Home</option>
                   {stores.map((s: Location) => (
                     <option key={s.id} value={`store:${s.id}`}>{s.name}</option>
                   ))}
                   <option value="holder">Stays with the Duty&apos;s User</option>
-                </select>
-                <button className={field}>Set</button>
+                </NativeSelect>
+                <SubmitButton size="sm">Set</SubmitButton>
               </>
             ) : (
               <span>
@@ -223,114 +251,158 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
   const venues = eventDetails.seriesId ? (await listLocations(db)).filter((l: Location) => l.isVenue) : [];
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-xl font-semibold">
-          {eventDetails.title}
-          {eventDetails.cancelled && (
-            <span className="ml-2 rounded-md bg-destructive px-1.5 py-0.5 text-xs text-destructive-foreground align-middle">
-              Cancelled
-            </span>
-          )}
-        </h2>
-        <p className="text-sm text-muted-foreground capitalize">{eventDetails.eventType}</p>
-      </div>
-
-      <div className="flex flex-col gap-1 text-sm">
-        <p>Start: {formatTime(eventDetails.start)}</p>
-        <p>End: {formatTime(eventDetails.end)}</p>
-        {venue && (
-          <p>
-            Venue:{" "}
-            {venue.mapsLink ? (
-              <a href={venue.mapsLink} target="_blank" rel="noreferrer" className="underline">
-                {venue.name}
-              </a>
-            ) : (
-              venue.name
-            )}
-          </p>
-        )}
-        {eventDetails.teams.length > 0 && (
-          <p>Teams: {eventDetails.teams.map((t) => t.name).join(", ")}</p>
-        )}
-        {eventDetails.notes && <p>Notes: {eventDetails.notes}</p>}
-      </div>
-
-      {eventDetails.matchDetails && (
-        <div className="flex flex-col gap-1 rounded-md border border-border p-3 text-sm">
-          <h3 className="font-medium">Match details</h3>
-          <p>Opponent: {eventDetails.matchDetails.opponent}</p>
-          <p>{eventDetails.matchDetails.homeAway === "home" ? "Home" : "Away"}</p>
-          <p className="uppercase">{eventDetails.matchDetails.competition}</p>
-          <p>Kick-off: {formatTime(eventDetails.start)}</p>
-          <p>Meet time: {formatTime(eventDetails.matchDetails.meetTime)}</p>
-          {eventDetails.matchDetails.travelMeetTime && (
+    <div className="flex flex-col gap-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            {eventDetails.title}
+            {eventDetails.cancelled && <Badge variant="destructive">Cancelled</Badge>}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-1 text-sm">
+          <p className="capitalize text-muted-foreground">{eventDetails.eventType}</p>
+          <p>{formatWhen(eventDetails.start)} – {formatWhen(eventDetails.end)}</p>
+          {venue && (
             <p>
-              Travel meet: {formatTime(eventDetails.matchDetails.travelMeetTime)}
-              {eventDetails.matchDetails.travelMeetPoint &&
-                ` at ${eventDetails.matchDetails.travelMeetPoint}`}
+              Venue:{" "}
+              {venue.mapsLink ? (
+                <a href={venue.mapsLink} target="_blank" rel="noreferrer" className="underline">
+                  {venue.name}
+                </a>
+              ) : (
+                venue.name
+              )}
             </p>
           )}
-        </div>
-      )}
+          {eventDetails.teams.length > 0 && (
+            <p>Teams: {eventDetails.teams.map((t) => t.name).join(", ")}</p>
+          )}
+          {eventDetails.notes && <p>Notes: {eventDetails.notes}</p>}
+
+          {eventDetails.matchDetails && (
+            <div className="mt-2 flex flex-col gap-1 rounded-md border border-border p-3">
+              <p className="font-medium">Match details</p>
+              <p>Opponent: {eventDetails.matchDetails.opponent}</p>
+              <p>{eventDetails.matchDetails.homeAway === "home" ? "Home" : "Away"}</p>
+              <p className="uppercase">{eventDetails.matchDetails.competition}</p>
+              <p>Kick-off: {formatWhen(eventDetails.start)}</p>
+              <p>Meet time: {formatWhen(eventDetails.matchDetails.meetTime)}</p>
+              {eventDetails.matchDetails.travelMeetTime && (
+                <p>
+                  Travel meet: {formatWhen(eventDetails.matchDetails.travelMeetTime)}
+                  {eventDetails.matchDetails.travelMeetPoint &&
+                    ` at ${eventDetails.matchDetails.travelMeetPoint}`}
+                </p>
+              )}
+            </div>
+          )}
+
+          {!eventDetails.cancelled && committee && (
+            <form id={`cancel-event-${id}`} action={cancel} className="mt-3 self-start">
+              <ConfirmSubmit
+                formId={`cancel-event-${id}`}
+                triggerLabel="Cancel Event"
+                title="Cancel Event?"
+                description="This voids all its Duties. The Event stays visible, marked as cancelled."
+                confirmLabel="Cancel Event"
+              />
+            </form>
+          )}
+        </CardContent>
+      </Card>
 
       <ClashList clashes={clashes} />
 
-      <div className="flex flex-col gap-2 rounded-md border border-border p-3 text-sm">
-        <h3 className="font-medium">Checklist{sourceLabel && ` (from ${sourceLabel})`}</h3>
-        <ul className="flex flex-col gap-4">
+      <Card className="py-0">
+        <CardHeader className="pt-4">
+          <CardTitle>Duties</CardTitle>
+        </CardHeader>
+        <CardContent className="divide-y divide-border pb-4">
           {resolved.kitUnitIds.map((kid) => (
-            <li key={kid} className="flex flex-col gap-2">
+            <div key={kid} className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0">
               <span className="font-medium">{kitNames.get(kid) ?? kid}</span>
               <DutyRow d={dutyFor(kid, "to")} />
               <DutyRow d={dutyFor(kid, "from")} />
-            </li>
+            </div>
           ))}
-          {resolved.kitUnitIds.length === 0 && <li className="text-muted-foreground">No Kit Units needed.</li>}
-        </ul>
-      </div>
+          {resolved.kitUnitIds.length === 0 && (
+            <p className="py-3 text-muted-foreground">No Duties yet.</p>
+          )}
+        </CardContent>
+      </Card>
 
       <CopySummary text={summary} />
 
-      {isCommitteeOrAbove(user.role) && (
-        <div className="flex flex-col gap-2 rounded-md border border-border p-3">
-          <h3 className="font-medium">Override Checklist for this Event</h3>
-          <ChecklistEditor
-            target={{ scope: "event", scopeId: id }}
-            path={`/events/${id}`}
-            inheritedFrom={sourceLabel ? `Checklist from ${sourceLabel}` : undefined}
-          />
-        </div>
+      {committee && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Checklist{sourceLabel && ` (from ${sourceLabel})`}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ChecklistEditor
+              target={{ scope: "event", scopeId: id }}
+              path={`/events/${id}`}
+              inheritedFrom={sourceLabel ? `Checklist from ${sourceLabel}` : undefined}
+            />
+          </CardContent>
+        </Card>
       )}
 
-      {eventDetails.seriesId && !eventDetails.cancelled && isCommitteeOrAbove(user.role) && (
-        <form action={edit} className="flex flex-col gap-2 rounded-md border border-border p-3 text-sm">
-          <h3 className="font-medium">Edit this Occurrence</h3>
-          <input name="title" defaultValue={eventDetails.title} required className="rounded-md border border-border bg-background px-2 py-1" />
-          <div className="flex gap-2">
-            <input type="time" name="startTime" defaultValue={londonParts(eventDetails.start).time} required className="rounded-md border border-border bg-background px-2 py-1" />
-            <input type="time" name="endTime" defaultValue={londonParts(eventDetails.end).time} required className="rounded-md border border-border bg-background px-2 py-1" />
-          </div>
-          <select name="venueId" defaultValue={eventDetails.venueId} className="rounded-md border border-border bg-background px-2 py-1">
-            {venues.map((v: Location) => (
-              <option key={v.id} value={v.id}>{v.name}</option>
-            ))}
-          </select>
-          <select name="scope" className="rounded-md border border-border bg-background px-2 py-1">
-            <option value="this">This one</option>
-            <option value="future">This and future</option>
-          </select>
-          <button className="rounded-md bg-primary px-3 py-1 text-primary-foreground">Save</button>
-        </form>
-      )}
-
-      {!eventDetails.cancelled && isCommitteeOrAbove(user.role) && (
-        <form action={cancel}>
-          <button className="rounded-md bg-destructive px-3 py-1 text-destructive-foreground">
-            Cancel Event
-          </button>
-        </form>
+      {eventDetails.seriesId && !eventDetails.cancelled && committee && (
+        <Collapsible>
+          <Card className="py-0">
+            <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left font-medium group">
+              Edit event
+              <ChevronRight className="size-4 text-muted-foreground transition-transform group-data-[panel-open]:rotate-90" aria-hidden="true" />
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <form action={edit} className="flex flex-col gap-3 border-t border-border p-4 text-sm">
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor={`edit-title-${id}`}>Title</Label>
+                  <Input id={`edit-title-${id}`} name="title" defaultValue={eventDetails.title} required />
+                </div>
+                <div className="flex gap-2">
+                  <div className="flex flex-1 flex-col gap-1">
+                    <Label htmlFor={`edit-start-${id}`}>Start time</Label>
+                    <Input
+                      id={`edit-start-${id}`}
+                      type="time"
+                      name="startTime"
+                      defaultValue={londonParts(eventDetails.start).time}
+                      required
+                    />
+                  </div>
+                  <div className="flex flex-1 flex-col gap-1">
+                    <Label htmlFor={`edit-end-${id}`}>End time</Label>
+                    <Input
+                      id={`edit-end-${id}`}
+                      type="time"
+                      name="endTime"
+                      defaultValue={londonParts(eventDetails.end).time}
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor={`edit-venue-${id}`}>Venue</Label>
+                  <NativeSelect id={`edit-venue-${id}`} name="venueId" defaultValue={eventDetails.venueId}>
+                    {venues.map((v: Location) => (
+                      <option key={v.id} value={v.id}>{v.name}</option>
+                    ))}
+                  </NativeSelect>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor={`edit-scope-${id}`}>Applies to</Label>
+                  <NativeSelect id={`edit-scope-${id}`} name="scope" defaultValue="this">
+                    <option value="this">This one</option>
+                    <option value="future">This and future</option>
+                  </NativeSelect>
+                </div>
+                <SubmitButton className="self-start">Save</SubmitButton>
+              </form>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
       )}
     </div>
   );

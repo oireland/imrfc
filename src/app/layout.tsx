@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Image from "next/image";
 import crest from "../../docs/brand/crest.png";
+import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <h1 className="font-heading text-lg font-semibold">IMRFC Club Hub</h1>
         </header>
         <main className="flex-1 px-4 py-6">{children}</main>
+        <Toaster />
       </body>
     </html>
   );
