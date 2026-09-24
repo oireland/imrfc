@@ -64,13 +64,19 @@ export async function setConditionNote(
 }
 
 /** Records an ad-hoc Move: "I've got it" (Holder) or "put it in [Store]". */
-export async function recordMove(db: Db, kitUnitId: string, userId: string, target: MoveTarget) {
+export async function recordMove(
+  db: Db,
+  kitUnitId: string,
+  userId: string,
+  target: MoveTarget,
+  reason: "ad_hoc" | "duty" = "ad_hoc",
+) {
   await db
     .update(kitUnit)
     .set(
       target.type === "store"
-        ? { whereaboutsType: "store", storeId: target.storeId, holderId: null }
-        : { whereaboutsType: "holder", holderId: target.holderId, storeId: null },
+        ? { whereaboutsType: "store", storeId: target.storeId, holderId: null, lastSeenEventId: null }
+        : { whereaboutsType: "holder", holderId: target.holderId, storeId: null, lastSeenEventId: null },
     )
     .where(eq(kitUnit.id, kitUnitId));
 
@@ -79,11 +85,19 @@ export async function recordMove(db: Db, kitUnitId: string, userId: string, targ
     kitUnitId,
     kind: "move",
     userId,
-    reason: "ad_hoc",
+    reason,
     toType: target.type,
     toStoreId: target.type === "store" ? target.storeId : null,
     toHolderId: target.type === "holder" ? target.holderId : null,
   });
+}
+
+/** The Kit Unit's Whereabouts is unknown: it was last seen at the given Event. No Move is recorded. */
+export async function setUnconfirmed(db: Db, kitUnitId: string, lastSeenEventId: string) {
+  await db
+    .update(kitUnit)
+    .set({ whereaboutsType: "unconfirmed", storeId: null, holderId: null, lastSeenEventId })
+    .where(eq(kitUnit.id, kitUnitId));
 }
 
 export async function getKitUnit(db: Db, id: string): Promise<KitUnit | undefined> {

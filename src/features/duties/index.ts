@@ -1,4 +1,7 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
+import { listEvents } from "@/features/events";
+import { getKitUnit, recordMove, setUnconfirmed } from "@/features/kit";
+import { isCommitteeOrAbove, type Role } from "@/features/users";
 import { duty } from "./schema";
 
 export { duty } from "./schema";
@@ -111,4 +114,69 @@ export async function setDestination(db: Db, dutyId: string, destination: DutyDe
     })
     .where(eq(duty.id, dutyId));
   return { ok: true };
+}
+
+/** The Duty's User, or any Committee member, Confirms a Duty: this records the Move. */
+export async function confirmDuty(db: Db, dutyId: string, actor: { id: string; role: Role }): Promise<Result> {
+  const row = await getDuty(db, dutyId);
+  if (!row) return { ok: false, error: "Duty not found." };
+  if (row.voidedAt) return { ok: false, error: "That Duty was voided when its Event was Cancelled." };
+  if (!row.userId) return { ok: false, error: "That Duty has nobody on it yet." };
+  if (row.confirmedAt) return { ok: false, error: "That Duty is already Confirmed." };
+  if (row.userId !== actor.id && !isCommitteeOrAbove(actor.role)) {
+    return { ok: false, error: "Only the Duty's User or Committee can Confirm it." };
+  }
+
+  const kit = await getKitUnit(db, row.kitUnitId);
+  if (!kit) return { ok: false, error: "Kit Unit not found." };
+
+  const holder = { type: "holder", holderId: row.userId } as const;
+  const target =
+    row.direction === "to"
+      ? holder
+      : row.destinationType === "holder"
+        ? holder
+        : row.destinationType === "store" && row.destinationStoreId
+          ? ({ type: "store", storeId: row.destinationStoreId } as const)
+          : ({ type: "store", storeId: kit.homeId } as const);
+
+  await db.update(duty).set({ confirmedAt: new Date() }).where(eq(duty.id, dutyId));
+  await recordMove(db, row.kitUnitId, actor.id, target, "duty");
+  return { ok: true };
+}
+
+/** Cancelling an Event voids all its Duties. */
+export async function voidDutiesForEvent(db: Db, eventId: string) {
+  await db.update(duty).set({ voidedAt: new Date() }).where(eq(duty.eventId, eventId));
+}
+
+/**
+ * Once an Event has ended, a Kit Unit still held from its To Duty whose From Duty
+ * wasn't Confirmed becomes Unconfirmed. The app never assumes a Move happened.
+ */
+export async function markUnconfirmed(db: Db) {
+  const ended = (await listEvents(db, { when: "past" })).filter((e) => !e.cancelled).map((e) => e.id);
+  if (ended.length === 0) return;
+  const rows: (typeof duty.$inferSelect)[] = await db
+    .select()
+    .from(duty)
+    .where(and(inArray(duty.eventId, ended), isNull(duty.voidedAt)));
+  for (const from of rows.filter((d) => d.direction === "from" && !d.confirmedAt)) {
+    const to = rows.find((d) => d.direction === "to" && d.eventId === from.eventId && d.kitUnitId === from.kitUnitId);
+    if (!to?.confirmedAt || !to.userId) continue;
+    const kit = await getKitUnit(db, from.kitUnitId);
+    if (kit?.whereaboutsType === "holder" && kit.holderId === to.userId) {
+      await setUnconfirmed(db, kit.id, from.eventId);
+    }
+  }
+}
+
+/** A Blocked User's Duties on upcoming Events are unassigned, so Committee sees them as unfilled. */
+export async function releaseDutiesOfBlockedUser(db: Db, userId: string) {
+  const upcoming = (await listEvents(db, { when: "upcoming" })).map((e) => e.id);
+  if (upcoming.length === 0) return;
+  await db
+    .update(duty)
+    .set({ userId: null })
+    .where(and(eq(duty.userId, userId), inArray(duty.eventId, upcoming), isNull(duty.confirmedAt)));
 }

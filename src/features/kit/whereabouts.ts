@@ -4,18 +4,22 @@ type KitUnit = typeof kitUnit.$inferSelect;
 
 export type WhereaboutsGroup =
   | { type: "store"; storeId: string; units: KitUnit[] }
-  | { type: "holder"; holderId: string; units: KitUnit[] };
+  | { type: "holder"; holderId: string; units: KitUnit[] }
+  | { type: "unconfirmed"; units: KitUnit[] };
 
-/** Groups Active Kit Units by Whereabouts: each Store, then each Holder. */
+/** Groups Active Kit Units by Whereabouts: each Store, each Holder, then Unconfirmed. */
 export function groupByWhereabouts(units: KitUnit[]): WhereaboutsGroup[] {
   const stores = new Map<string, KitUnit[]>();
   const holders = new Map<string, KitUnit[]>();
+  const unconfirmed: KitUnit[] = [];
 
   for (const unit of units) {
     if (unit.whereaboutsType === "store" && unit.storeId) {
       stores.set(unit.storeId, [...(stores.get(unit.storeId) ?? []), unit]);
     } else if (unit.whereaboutsType === "holder" && unit.holderId) {
       holders.set(unit.holderId, [...(holders.get(unit.holderId) ?? []), unit]);
+    } else if (unit.whereaboutsType === "unconfirmed") {
+      unconfirmed.push(unit);
     }
   }
 
@@ -30,5 +34,6 @@ export function groupByWhereabouts(units: KitUnit[]): WhereaboutsGroup[] {
       holderId,
       units: group,
     })),
+    ...(unconfirmed.length > 0 ? [{ type: "unconfirmed" as const, units: unconfirmed }] : []),
   ];
 }

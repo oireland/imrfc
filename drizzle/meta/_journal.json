@@ -57,6 +57,13 @@
       "when": 1790252624938,
       "tag": "0007_slippery_trish_tilby",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790253304684,
+      "tag": "0008_rich_christian_walker",
+      "breakpoints": true
     }
   ]
 }

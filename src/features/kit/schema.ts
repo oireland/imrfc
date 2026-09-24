@@ -13,12 +13,14 @@ export const kitUnit = pgTable("kit_unit", {
     .notNull()
     .default("active"),
   conditionNote: text("condition_note").notNull().default(""),
-  // Whereabouts is exactly one of a Store or a Holder; Unconfirmed arrives with Duties (slice 10).
-  whereaboutsType: text("whereabouts_type", { enum: ["store", "holder"] })
+  // Whereabouts is exactly one of a Store, a Holder, or Unconfirmed (last seen at an Event).
+  whereaboutsType: text("whereabouts_type", { enum: ["store", "holder", "unconfirmed"] })
     .notNull()
     .default("store"),
   storeId: text("store_id").references(() => location.id),
   holderId: text("holder_id").references(() => user.id),
+  // Plain Event id (kit never imports events); set only while Unconfirmed.
+  lastSeenEventId: text("last_seen_event_id"),
 });
 
 export const movementLogEntry = pgTable("movement_log_entry", {

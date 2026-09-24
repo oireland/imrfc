@@ -13,6 +13,7 @@ function unit(overrides: Partial<KitUnit>): KitUnit {
     whereaboutsType: "store",
     storeId: "store-1",
     holderId: null,
+    lastSeenEventId: null,
     ...overrides,
   };
 }
@@ -41,6 +42,16 @@ describe("groupByWhereabouts", () => {
     expect(groupByWhereabouts([stored, held])).toEqual([
       { type: "store", storeId: "store-1", units: [stored] },
       { type: "holder", holderId: "user-1", units: [held] },
+    ]);
+  });
+
+  it("puts Unconfirmed Kit Units in a final group", () => {
+    const stored = unit({ storeId: "store-1" });
+    const lost = unit({ whereaboutsType: "unconfirmed", storeId: null, lastSeenEventId: "e1" });
+
+    expect(groupByWhereabouts([lost, stored])).toEqual([
+      { type: "store", storeId: "store-1", units: [stored] },
+      { type: "unconfirmed", units: [lost] },
     ]);
   });
 });

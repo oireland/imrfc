@@ -12,7 +12,7 @@ Vertical slices, built in order, each test-first (red → green → refactor). A
 - [x] **7. Series** — create with end date → Occurrences; edit "this one" / "this and future"; extend; cancel an Occurrence.
 - [x] **8. Checklists** — Default Checklist per Event Type, Series and Event overrides, resolution order.
 - [x] **9. Duties** — Claim/Assign To Duty → From Duty follows; hand on; Destination defaulting to Home.
-- [ ] **10. Confirm** — Confirm → Move; Unconfirmed after Event end; Cancelled Events void Duties; Blocking side-effects on Duties and held Kit.
+- [x] **10. Confirm** — Confirm → Move; Unconfirmed after Event end; Cancelled Events void Duties; Blocking side-effects on Duties and held Kit.
 - [ ] **11. Home screen** — my Duties, next Events, Kit I Hold.
 - [ ] **12. Clashes** — the four warnings on Event and Kit Unit views.
 - [ ] **13. Duty Summary** — WhatsApp copy button.

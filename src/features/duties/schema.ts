@@ -1,4 +1,4 @@
-import { pgTable, text, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { kitUnit } from "@/features/kit";
 import { location } from "@/features/locations";
 import { user } from "@/features/users";
@@ -20,6 +20,9 @@ export const duty = pgTable(
       .notNull()
       .default("home"),
     destinationStoreId: text("destination_store_id").references(() => location.id),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    // Set when the Event is Cancelled: a voided Duty can no longer be Confirmed.
+    voidedAt: timestamp("voided_at", { withTimezone: true }),
   },
   (t) => [unique().on(t.eventId, t.kitUnitId, t.direction)],
 );

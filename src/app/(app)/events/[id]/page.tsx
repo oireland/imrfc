@@ -7,6 +7,9 @@ import { listKitUnits } from "@/features/kit";
 import {
   assignDuty,
   claimDuty,
+  confirmDuty,
+  markUnconfirmed,
+  voidDutiesForEvent,
   ensureDuties,
   handOnDuty,
   setDestination,
@@ -37,6 +40,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     const current = await requireApprovedUser();
     if (!isCommitteeOrAbove(current.role)) return;
     await cancelEvent(db, id);
+    await voidDutiesForEvent(db, id);
     revalidatePath(`/events/${id}`);
   }
 
@@ -76,6 +80,10 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
         break;
       case "assign":
         if (committee && other) await assignDuty(db, dutyId, other);
+        break;
+      case "confirm":
+        await confirmDuty(db, dutyId, current);
+        await markUnconfirmed(db);
         break;
       case "unassign":
         if (committee) await unassignDuty(db, dutyId);
@@ -127,7 +135,17 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
           ) : (
             <span className="text-destructive">❗unassigned</span>
           )}
+          {d.voidedAt && <span className="ml-2 text-muted-foreground">Voided</span>}
+          {d.confirmedAt && <span className="ml-2 text-muted-foreground">✓ Confirmed</span>}
         </p>
+        {d.userId && !d.confirmedAt && !d.voidedAt && (mine || committee) && (
+          <form action={duty}>
+            <input type="hidden" name="dutyId" value={d.id} />
+            <button name="action" value="confirm" className="rounded-md bg-primary px-3 py-1 text-primary-foreground">
+              Confirm
+            </button>
+          </form>
+        )}
         <form action={duty} className="flex flex-wrap items-center gap-2">
           <input type="hidden" name="dutyId" value={d.id} />
           {!d.userId && (

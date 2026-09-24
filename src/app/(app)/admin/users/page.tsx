@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { db } from "@/db/client";
+import { releaseDutiesOfBlockedUser } from "@/features/duties";
 import {
   approveUser,
   blockUser,
@@ -29,7 +30,9 @@ export default async function UsersAdminPage() {
 
   async function block(formData: FormData) {
     "use server";
-    await blockUser(db, String(formData.get("userId")));
+    const userId = String(formData.get("userId"));
+    await blockUser(db, userId);
+    await releaseDutiesOfBlockedUser(db, userId);
     revalidatePath("/admin/users");
   }
 

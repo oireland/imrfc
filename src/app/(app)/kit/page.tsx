@@ -2,16 +2,26 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { groupByWhereabouts, listKitUnits, recordMove, type KitUnit } from "@/features/kit";
+import { markUnconfirmed } from "@/features/duties";
+import { getEvent } from "@/features/events";
+import { listApprovedUsers } from "@/features/users";
 import { listLocations, type Location } from "@/features/locations";
 import { requireApprovedUser } from "@/lib/session";
 
 export default async function KitViewPage() {
   const user = await requireApprovedUser();
 
-  const [allUnits, locations] = await Promise.all([
+  await markUnconfirmed(db);
+  const [allUnits, locations, people] = await Promise.all([
     listKitUnits(db, { includeRetired: true }),
     listLocations(db),
+    listApprovedUsers(db),
   ]);
+  const personById = new Map(people.map((p) => [p.id, p]));
+  const lastSeen = new Map<string, string>();
+  for (const eventId of new Set(allUnits.flatMap((u: KitUnit) => (u.lastSeenEventId ? [u.lastSeenEventId] : [])))) {
+    lastSeen.set(eventId as string, (await getEvent(db, eventId as string))?.title ?? "an Event");
+  }
   const locationsById = new Map(locations.map((l: Location) => [l.id, l]));
   const activeUnits = allUnits.filter((u: KitUnit) => u.status === "active");
   const inactiveUnits = allUnits.filter((u: KitUnit) => u.status !== "active");
@@ -44,6 +54,9 @@ export default async function KitViewPage() {
         <Link href={`/kit/${unit.id}`} className="font-medium underline">
           {unit.name}
         </Link>
+        {unit.whereaboutsType === "unconfirmed" && unit.lastSeenEventId && (
+          <p className="text-xs text-muted-foreground">Last seen at {lastSeen.get(unit.lastSeenEventId)}</p>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <form action={iveGotIt}>
             <input type="hidden" name="kitUnitId" value={unit.id} />
@@ -76,13 +89,18 @@ export default async function KitViewPage() {
       {groups.length === 0 && <p className="text-muted-foreground">No Kit Units yet.</p>}
 
       {groups.map((group) => (
-        <div key={group.type === "store" ? group.storeId : group.holderId} className="flex flex-col gap-2">
+        <div key={group.type === "store" ? group.storeId : group.type === "holder" ? group.holderId : "unconfirmed"} className="flex flex-col gap-2">
           <h3 className="font-medium text-muted-foreground">
             {group.type === "store"
               ? (locationsById.get(group.storeId)?.name ?? "Store")
-              : group.holderId === user.id
-                ? "You"
-                : "Held"}
+              : group.type === "unconfirmed"
+                ? "Unconfirmed"
+                : group.holderId === user.id
+                  ? "You"
+                  : (personById.get(group.holderId)?.name ?? "Held")}
+            {group.type === "holder" && personById.get(group.holderId)?.accessState === "blocked" && (
+              <span className="ml-2 text-xs font-semibold text-destructive">with blocked user</span>
+            )}
           </h3>
           <ul className="flex flex-col gap-2">
             {group.units.map((unit: KitUnit) => (

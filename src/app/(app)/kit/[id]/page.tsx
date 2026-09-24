@@ -18,7 +18,9 @@ export default async function KitUnitDetailPage({ params }: PageProps<"/kit/[id]
   const whereaboutsLabel =
     unit.whereaboutsType === "store" && unit.storeId
       ? (locationsById.get(unit.storeId)?.name ?? "Store")
-      : "Holder";
+      : unit.whereaboutsType === "unconfirmed"
+        ? "Unconfirmed"
+        : "Holder";
 
   async function iveGotIt() {
     "use server";

@@ -2,15 +2,20 @@ import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { location } from "@/features/locations";
-import { createKitUnit } from "@/features/kit";
+import { createKitUnit, getKitUnit, listMovementLog, recordMove } from "@/features/kit";
+import { createEvent } from "@/features/events";
 import { user } from "@/features/users";
 import {
   assignDuty,
   claimDuty,
+  confirmDuty,
   ensureDuties,
   handOnDuty,
   setDestination,
   unassignDuty,
+  markUnconfirmed,
+  releaseDutiesOfBlockedUser,
+  voidDutiesForEvent,
   type Duty,
 } from "./index";
 
@@ -142,5 +147,179 @@ describe("Duties", () => {
       ok: false,
       error: "Only a From Duty has a Destination.",
     });
+  });
+
+  describe("Confirm", () => {
+    it("a Confirmed To Duty moves the Kit Unit to its Duty's User, logged as a Duty Move", async () => {
+      const { db, kit, to } = await setup();
+      await claimDuty(db, to.id, "tom");
+
+      expect(await confirmDuty(db, to.id, { id: "tom", role: "member" })).toEqual({ ok: true });
+
+      expect(await getKitUnit(db, kit.id)).toMatchObject({ whereaboutsType: "holder", holderId: "tom", storeId: null });
+      expect(await listMovementLog(db, kit.id)).toMatchObject([{ kind: "move", reason: "duty", userId: "tom", toHolderId: "tom" }]);
+    });
+
+    it("a Confirmed From Duty moves the Kit Unit to Home by default", async () => {
+      const { db, kit, shed, cupboard, to, from } = await setup();
+      await recordMove(db, kit.id, "tom", { type: "store", storeId: cupboard.id });
+      await claimDuty(db, to.id, "tom");
+
+      await confirmDuty(db, from.id, { id: "tom", role: "member" });
+
+      expect(await getKitUnit(db, kit.id)).toMatchObject({ whereaboutsType: "store", storeId: shed.id, holderId: null });
+    });
+
+    it("a Confirmed From Duty honours a Store Destination or staying with the Duty's User", async () => {
+      const { db, kit, cupboard, to, from } = await setup();
+      await claimDuty(db, to.id, "tom");
+
+      await setDestination(db, from.id, { type: "store", storeId: cupboard.id });
+      await confirmDuty(db, from.id, { id: "tom", role: "member" });
+      expect(await getKitUnit(db, kit.id)).toMatchObject({ whereaboutsType: "store", storeId: cupboard.id });
+
+      const other = await ensureDuties(db, "e2", [kit.id]);
+      const from2 = other.find((d) => d.direction === "from")!;
+      await claimDuty(db, other.find((d) => d.direction === "to")!.id, "sam");
+      await setDestination(db, from2.id, { type: "holder" });
+      await confirmDuty(db, from2.id, { id: "sam", role: "member" });
+      expect(await getKitUnit(db, kit.id)).toMatchObject({ whereaboutsType: "holder", holderId: "sam" });
+    });
+
+    it("lets Committee Confirm any Duty but not another member", async () => {
+      const { db, kit, to } = await setup();
+      await claimDuty(db, to.id, "tom");
+
+      expect(await confirmDuty(db, to.id, { id: "sam", role: "member" })).toMatchObject({ ok: false });
+      expect(await getKitUnit(db, kit.id)).toMatchObject({ whereaboutsType: "store" });
+
+      expect(await confirmDuty(db, to.id, { id: "sam", role: "committee" })).toEqual({ ok: true });
+      expect(await getKitUnit(db, kit.id)).toMatchObject({ holderId: "tom" });
+    });
+
+    it("refuses an unfilled or already Confirmed Duty", async () => {
+      const { db, kit, to } = await setup();
+
+      expect(await confirmDuty(db, to.id, { id: "sam", role: "committee" })).toMatchObject({ ok: false });
+
+      await claimDuty(db, to.id, "tom");
+      await confirmDuty(db, to.id, { id: "tom", role: "member" });
+      expect(await confirmDuty(db, to.id, { id: "tom", role: "member" })).toMatchObject({ ok: false });
+      expect(await listMovementLog(db, kit.id)).toHaveLength(1);
+    });
+  });
+
+  it("voiding an Event's Duties stops them being Confirmed", async () => {
+    const { db, kit, to } = await setup();
+    await claimDuty(db, to.id, "tom");
+
+    await voidDutiesForEvent(db, "e1");
+
+    expect(await confirmDuty(db, to.id, { id: "tom", role: "member" })).toMatchObject({ ok: false });
+    expect(await getKitUnit(db, kit.id)).toMatchObject({ whereaboutsType: "store" });
+  });
+
+  describe("Unconfirmed", () => {
+    async function pastEvent(db: Awaited<ReturnType<typeof setup>>["db"], shedId: string, hoursAgo: number) {
+      const made = await createEvent(db, {
+        title: "Training",
+        eventType: "training",
+        start: new Date(Date.now() - (hoursAgo + 2) * 3600_000),
+        end: new Date(Date.now() - hoursAgo * 3600_000),
+        venueId: shedId,
+      });
+      if (!made.ok) throw new Error(made.error);
+      return made.event;
+    }
+
+    it("shows a Kit Unit picked up for an ended Event as Unconfirmed, last seen there, when its From Duty isn't Confirmed", async () => {
+      const { db, shed, kit } = await setup();
+      const ev = await pastEvent(db, shed.id, 1);
+      const [to] = (await ensureDuties(db, ev.id, [kit.id])).filter((d) => d.direction === "to");
+      await claimDuty(db, to.id, "tom");
+      await confirmDuty(db, to.id, { id: "tom", role: "member" });
+
+      await markUnconfirmed(db);
+
+      expect(await getKitUnit(db, kit.id)).toMatchObject({
+        whereaboutsType: "unconfirmed",
+        lastSeenEventId: ev.id,
+        holderId: null,
+        storeId: null,
+      });
+      expect(await listMovementLog(db, kit.id)).toHaveLength(1);
+    });
+
+    it("leaves Kit Units alone when the From Duty was Confirmed, the Event hasn't ended, or nothing was picked up", async () => {
+      const { db, shed, kit } = await setup();
+      const done = await pastEvent(db, shed.id, 5);
+      const [to, from] = await ensureDuties(db, done.id, [kit.id]).then((d) => [
+        d.find((x) => x.direction === "to")!,
+        d.find((x) => x.direction === "from")!,
+      ]);
+      await claimDuty(db, to.id, "tom");
+      await confirmDuty(db, to.id, { id: "tom", role: "member" });
+      await confirmDuty(db, from.id, { id: "tom", role: "member" });
+      const ongoing = await createEvent(db, {
+        title: "Match",
+        eventType: "training",
+        start: new Date(Date.now() - 3600_000),
+        end: new Date(Date.now() + 3600_000),
+        venueId: shed.id,
+      });
+      if (!ongoing.ok) throw new Error(ongoing.error);
+      const [to2] = (await ensureDuties(db, ongoing.event.id, [kit.id])).filter((d) => d.direction === "to");
+      await claimDuty(db, to2.id, "sam");
+      await confirmDuty(db, to2.id, { id: "sam", role: "member" });
+      const never = await pastEvent(db, shed.id, 1);
+      await ensureDuties(db, never.id, [kit.id]);
+
+      await markUnconfirmed(db);
+
+      expect(await getKitUnit(db, kit.id)).toMatchObject({ whereaboutsType: "holder", holderId: "sam" });
+    });
+
+    it("is resolved by a later Move", async () => {
+      const { db, shed, kit } = await setup();
+      const ev = await pastEvent(db, shed.id, 1);
+      const [to] = (await ensureDuties(db, ev.id, [kit.id])).filter((d) => d.direction === "to");
+      await claimDuty(db, to.id, "tom");
+      await confirmDuty(db, to.id, { id: "tom", role: "member" });
+      await markUnconfirmed(db);
+
+      await recordMove(db, kit.id, "sam", { type: "holder", holderId: "sam" });
+      await markUnconfirmed(db);
+
+      expect(await getKitUnit(db, kit.id)).toMatchObject({ whereaboutsType: "holder", holderId: "sam", lastSeenEventId: null });
+    });
+  });
+
+  it("releases a Blocked User's unconfirmed Duties on upcoming Events, keeping past ones", async () => {
+    const { db, shed, kit } = await setup();
+    const soon = await createEvent(db, {
+      title: "Training",
+      eventType: "training",
+      start: new Date(Date.now() + 3600_000),
+      end: new Date(Date.now() + 7200_000),
+      venueId: shed.id,
+    });
+    const past = await createEvent(db, {
+      title: "Old",
+      eventType: "training",
+      start: new Date(Date.now() - 7200_000),
+      end: new Date(Date.now() - 3600_000),
+      venueId: shed.id,
+    });
+    if (!soon.ok || !past.ok) throw new Error("setup");
+    const future = await ensureDuties(db, soon.event.id, [kit.id]);
+    const old = await ensureDuties(db, past.event.id, [kit.id]);
+    for (const d of [...future, ...old]) await claimDuty(db, d.id, "tom");
+
+    await releaseDutiesOfBlockedUser(db, "tom");
+
+    const after = await ensureDuties(db, soon.event.id, [kit.id]);
+    expect(after.map((d) => d.userId)).toEqual([null, null]);
+    const afterOld = await ensureDuties(db, past.event.id, [kit.id]);
+    expect(afterOld.map((d) => d.userId)).toEqual(["tom", "tom"]);
   });
 });
