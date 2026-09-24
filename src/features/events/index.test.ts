@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { location } from "@/features/locations";
-import { cancelEvent, createEvent, getEvent, listEvents, listTeams, type NewEvent } from "./index";
+import { cancelEvent, createEvent, getEvent, listEvents, listNextEvents, listTeams, type NewEvent } from "./index";
 
 async function seedVenue(db: Awaited<ReturnType<typeof createTestDb>>) {
   const [row] = await db
@@ -154,5 +154,30 @@ describe("cancelEvent", () => {
 
     const found = await getEvent(db, created.event.id);
     expect(found?.cancelled).toBe(true);
+  });
+});
+
+describe("listNextEvents", () => {
+  it("returns the next few upcoming Events, skipping Cancelled ones", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const venue = await seedVenue(db);
+    const ids: string[] = [];
+    for (const day of [1, 2, 3, 4]) {
+      const made = await createEvent(db, {
+        title: `Day ${day}`,
+        eventType: "social",
+        start: new Date(`2999-01-0${day}T19:00:00Z`),
+        end: new Date(`2999-01-0${day}T21:00:00Z`),
+        venueId: venue.id,
+      });
+      if (!made.ok) throw new Error(made.error);
+      ids.push(made.event.id);
+    }
+    await cancelEvent(db, ids[0]);
+
+    const next = await listNextEvents(db, 2);
+
+    expect(next.map((e) => e.title)).toEqual(["Day 2", "Day 3"]);
   });
 });

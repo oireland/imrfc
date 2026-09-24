@@ -79,6 +79,12 @@ export async function listEvents(db: Db, { when }: { when: "upcoming" | "past" }
     : db.select().from(event).where(lt(event.end, now)).orderBy(desc(event.start));
 }
 
+/** The next few upcoming Events that are still happening, soonest first. */
+export async function listNextEvents(db: Db, limit: number): Promise<Event[]> {
+  const upcoming = await listEvents(db, { when: "upcoming" });
+  return upcoming.filter((e) => !e.cancelled).slice(0, limit);
+}
+
 export async function getEvent(db: Db, id: string): Promise<EventWithDetails | undefined> {
   const [row] = await db.select().from(event).where(eq(event.id, id));
   if (!row) return undefined;

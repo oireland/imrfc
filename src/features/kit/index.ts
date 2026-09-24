@@ -1,4 +1,4 @@
-import { desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { kitUnit, movementLogEntry } from "./schema";
 import { validateKitUnit, type NewKitUnit } from "./rules";
 
@@ -111,4 +111,12 @@ export async function listMovementLog(db: Db, kitUnitId: string): Promise<Moveme
     .from(movementLogEntry)
     .where(eq(movementLogEntry.kitUnitId, kitUnitId))
     .orderBy(desc(movementLogEntry.createdAt));
+}
+
+/** Kit Units currently with this User as Holder (Retired ones are out of circulation). */
+export async function listKitHeldBy(db: Db, userId: string): Promise<KitUnit[]> {
+  return db
+    .select()
+    .from(kitUnit)
+    .where(and(eq(kitUnit.whereaboutsType, "holder"), eq(kitUnit.holderId, userId), ne(kitUnit.status, "retired")));
 }

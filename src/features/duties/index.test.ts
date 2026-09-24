@@ -3,7 +3,7 @@ import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { location } from "@/features/locations";
 import { createKitUnit, getKitUnit, listMovementLog, recordMove } from "@/features/kit";
-import { createEvent } from "@/features/events";
+import { cancelEvent, createEvent } from "@/features/events";
 import { user } from "@/features/users";
 import {
   assignDuty,
@@ -11,6 +11,7 @@ import {
   confirmDuty,
   ensureDuties,
   handOnDuty,
+  listUpcomingDutiesForUser,
   setDestination,
   unassignDuty,
   markUnconfirmed,
@@ -321,5 +322,46 @@ describe("Duties", () => {
     expect(after.map((d) => d.userId)).toEqual([null, null]);
     const afterOld = await ensureDuties(db, past.event.id, [kit.id]);
     expect(afterOld.map((d) => d.userId)).toEqual(["tom", "tom"]);
+  });
+});
+
+describe("listUpcomingDutiesForUser", () => {
+  async function futureEvent(db: Awaited<ReturnType<typeof setup>>["db"], shedId: string, title: string, hours: number) {
+    const made = await createEvent(db, {
+      title,
+      eventType: "training",
+      start: new Date(Date.now() + hours * 3600_000),
+      end: new Date(Date.now() + (hours + 1) * 3600_000),
+      venueId: shedId,
+    });
+    if (!made.ok) throw new Error(made.error);
+    return made.event;
+  }
+
+  it("lists the User's unconfirmed Duties on upcoming, uncancelled Events, soonest first", async () => {
+    const { db, shed, kit } = await setup();
+    const later = await futureEvent(db, shed.id, "Later", 48);
+    const sooner = await futureEvent(db, shed.id, "Sooner", 24);
+    const cancelled = await futureEvent(db, shed.id, "Cancelled", 30);
+    const done = await futureEvent(db, shed.id, "Done", 10);
+    for (const e of [later, sooner, cancelled, done]) {
+      const [to] = (await ensureDuties(db, e.id, [kit.id])).filter((d) => d.direction === "to");
+      await claimDuty(db, to.id, "tom");
+      if (e === done) await confirmDuty(db, to.id, { id: "tom", role: "member" });
+    }
+    const [samsFrom] = (await ensureDuties(db, sooner.id, [kit.id])).filter((d) => d.direction === "from");
+    await handOnDuty(db, samsFrom.id, "tom", "sam");
+    await cancelEvent(db, cancelled.id);
+    await voidDutiesForEvent(db, cancelled.id);
+
+    const mine = await listUpcomingDutiesForUser(db, "tom");
+
+    expect(mine.map((m) => `${m.event.title} ${m.duty.direction}`)).toEqual([
+      "Done from",
+      "Sooner to",
+      "Later to",
+      "Later from",
+    ]);
+    expect(mine[1].duty).toMatchObject({ userId: "tom", direction: "to", kitUnitId: kit.id });
   });
 });

@@ -5,6 +5,7 @@ import { location } from "@/features/locations";
 import { user } from "@/features/users";
 import {
   createKitUnit,
+  listKitHeldBy,
   listKitUnits,
   listMovementLog,
   recordMove,
@@ -177,5 +178,32 @@ describe("recordMove", () => {
       storeId: otherStore.id,
       holderId: null,
     });
+  });
+});
+
+describe("listKitHeldBy", () => {
+  it("lists the non-retired Kit Units whose Holder is the User", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const me = await seedUser(db);
+    const other = await seedUser(db);
+    const make = async (name: string) => {
+      const made = await createKitUnit(db, { name, homeId: home.id });
+      if (!made.ok) throw new Error(made.error);
+      return made.kitUnit;
+    };
+    const mine = await make("Mine");
+    const retired = await make("Retired");
+    const theirs = await make("Theirs");
+    await make("In store");
+    await recordMove(db, mine.id, me.id, { type: "holder", holderId: me.id });
+    await recordMove(db, retired.id, me.id, { type: "holder", holderId: me.id });
+    await setKitStatus(db, retired.id, "retired");
+    await recordMove(db, theirs.id, other.id, { type: "holder", holderId: other.id });
+
+    const held = await listKitHeldBy(db, me.id);
+
+    expect(held.map((k) => k.name)).toEqual(["Mine"]);
   });
 });

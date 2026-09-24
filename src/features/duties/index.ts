@@ -180,3 +180,26 @@ export async function releaseDutiesOfBlockedUser(db: Db, userId: string) {
     .set({ userId: null })
     .where(and(eq(duty.userId, userId), inArray(duty.eventId, upcoming), isNull(duty.confirmedAt)));
 }
+
+/** The User's Duties still to do on upcoming, uncancelled Events, soonest Event first. */
+export async function listUpcomingDutiesForUser(db: Db, userId: string) {
+  const events = (await listEvents(db, { when: "upcoming" })).filter((e) => !e.cancelled);
+  if (events.length === 0) return [];
+  const rows: (typeof duty.$inferSelect)[] = await db
+    .select()
+    .from(duty)
+    .where(
+      and(
+        eq(duty.userId, userId),
+        inArray(
+          duty.eventId,
+          events.map((e) => e.id),
+        ),
+        isNull(duty.confirmedAt),
+        isNull(duty.voidedAt),
+      ),
+    );
+  return events.flatMap((event) =>
+    rows.filter((r) => r.eventId === event.id).map((r) => ({ duty: toDuty(r), event })),
+  );
+}
