@@ -3,6 +3,18 @@ import { event, eventTeam, matchDetails, team } from "./schema";
 import { classifyEvent, validateEvent, type NewEvent } from "./rules";
 
 export { validateEvent, classifyEvent } from "./rules";
+export {
+  createSeries,
+  editOccurrence,
+  extendSeries,
+  listOccurrences,
+  listSeries,
+  type NewSeries,
+  type Occurrence,
+  type OccurrenceChanges,
+  type Series,
+} from "./series";
+export { londonParts } from "./series-rules";
 export type { EventType, HomeAway, Competition, NewEvent, NewMatchDetails } from "./rules";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

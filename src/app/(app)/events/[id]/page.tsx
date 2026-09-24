@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
-import { cancelEvent, getEvent } from "@/features/events";
-import { getLocation } from "@/features/locations";
+import { cancelEvent, editOccurrence, getEvent, londonParts } from "@/features/events";
+import { getLocation, listLocations, type Location } from "@/features/locations";
 import { isCommitteeOrAbove } from "@/features/users";
 import { requireApprovedUser } from "@/lib/session";
 
@@ -26,6 +26,27 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     await cancelEvent(db, id);
     revalidatePath(`/events/${id}`);
   }
+
+  async function edit(formData: FormData) {
+    "use server";
+    const current = await requireApprovedUser();
+    if (!isCommitteeOrAbove(current.role)) return;
+    await editOccurrence(
+      db,
+      id,
+      {
+        title: String(formData.get("title")),
+        startTime: String(formData.get("startTime")),
+        endTime: String(formData.get("endTime")),
+        venueId: String(formData.get("venueId")),
+      },
+      formData.get("scope") === "future" ? "future" : "this",
+    );
+    revalidatePath(`/events/${id}`);
+    revalidatePath("/events");
+  }
+
+  const venues = eventDetails.seriesId ? (await listLocations(db)).filter((l: Location) => l.isVenue) : [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -78,6 +99,27 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
             </p>
           )}
         </div>
+      )}
+
+      {eventDetails.seriesId && !eventDetails.cancelled && isCommitteeOrAbove(user.role) && (
+        <form action={edit} className="flex flex-col gap-2 rounded-md border border-border p-3 text-sm">
+          <h3 className="font-medium">Edit this Occurrence</h3>
+          <input name="title" defaultValue={eventDetails.title} required className="rounded-md border border-border bg-background px-2 py-1" />
+          <div className="flex gap-2">
+            <input type="time" name="startTime" defaultValue={londonParts(eventDetails.start).time} required className="rounded-md border border-border bg-background px-2 py-1" />
+            <input type="time" name="endTime" defaultValue={londonParts(eventDetails.end).time} required className="rounded-md border border-border bg-background px-2 py-1" />
+          </div>
+          <select name="venueId" defaultValue={eventDetails.venueId} className="rounded-md border border-border bg-background px-2 py-1">
+            {venues.map((v: Location) => (
+              <option key={v.id} value={v.id}>{v.name}</option>
+            ))}
+          </select>
+          <select name="scope" className="rounded-md border border-border bg-background px-2 py-1">
+            <option value="this">This one</option>
+            <option value="future">This and future</option>
+          </select>
+          <button className="rounded-md bg-primary px-3 py-1 text-primary-foreground">Save</button>
+        </form>
       )}
 
       {!eventDetails.cancelled && isCommitteeOrAbove(user.role) && (

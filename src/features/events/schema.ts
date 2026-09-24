@@ -1,9 +1,33 @@
-import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { location } from "@/features/locations";
 
 export const team = pgTable("team", {
   id: text("id").primaryKey(),
   name: text("name").notNull().unique(),
+});
+
+export const series = pgTable("series", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  weekdays: integer("weekdays").array().notNull(),
+  startTime: text("start_time").notNull(),
+  endTime: text("end_time").notNull(),
+  venueId: text("venue_id")
+    .notNull()
+    .references(() => location.id),
+  startDate: text("start_date").notNull(),
+  endDate: text("end_date").notNull(),
+  notes: text("notes").notNull().default(""),
+});
+
+export const seriesTeam = pgTable("series_team", {
+  id: text("id").primaryKey(),
+  seriesId: text("series_id")
+    .notNull()
+    .references(() => series.id),
+  teamId: text("team_id")
+    .notNull()
+    .references(() => team.id),
 });
 
 export const event = pgTable("event", {
@@ -17,6 +41,10 @@ export const event = pgTable("event", {
     .references(() => location.id),
   notes: text("notes").notNull().default(""),
   cancelled: boolean("cancelled").notNull().default(false),
+  // Set for Occurrences; `edited` marks an Occurrence changed on its own, which
+  // "this and future" edits must not overwrite.
+  seriesId: text("series_id").references(() => series.id),
+  edited: boolean("edited").notNull().default(false),
 });
 
 export const eventTeam = pgTable("event_team", {

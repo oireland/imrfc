@@ -5,7 +5,7 @@ export default defineConfig({
   test: {
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     environment: "node",
-    // The first PGlite boot in each worker takes a few seconds.
-    testTimeout: 15_000,
+    // The first PGlite boot in each worker takes a few seconds, longer when several workers boot at once.
+    testTimeout: 60_000,
   },
 });

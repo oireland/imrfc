@@ -1,0 +1,159 @@
+import { and, asc, eq, gte } from "drizzle-orm";
+import { event, eventTeam, series, seriesTeam } from "./schema";
+import {
+  londonParts,
+  londonToUtc,
+  occurrenceDates,
+  validateSeries,
+  type SeriesPattern,
+} from "./series-rules";
+
+export type NewSeries = SeriesPattern;
+export type Series = typeof series.$inferSelect;
+export type Occurrence = typeof event.$inferSelect;
+export type OccurrenceChanges = Partial<
+  Pick<SeriesPattern, "title" | "venueId" | "notes" | "startTime" | "endTime">
+>;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Db = any;
+type Failure = { ok: false; error: string };
+
+async function insertOccurrences(db: Db, s: Series, dates: string[], teamIds: string[]) {
+  for (const date of dates) {
+    const id = crypto.randomUUID();
+    await db.insert(event).values({
+      id,
+      title: s.title,
+      eventType: "training",
+      start: londonToUtc(date, s.startTime),
+      end: londonToUtc(date, s.endTime),
+      venueId: s.venueId,
+      notes: s.notes,
+      seriesId: s.id,
+    });
+    for (const teamId of teamIds) {
+      await db.insert(eventTeam).values({ id: crypto.randomUUID(), eventId: id, teamId });
+    }
+  }
+}
+
+async function seriesTeamIds(db: Db, seriesId: string): Promise<string[]> {
+  const rows = await db.select().from(seriesTeam).where(eq(seriesTeam.seriesId, seriesId));
+  return rows.map((r: { teamId: string }) => r.teamId);
+}
+
+export async function createSeries(
+  db: Db,
+  input: NewSeries,
+): Promise<{ ok: true; series: Series } | Failure> {
+  const result = validateSeries(input);
+  if (!result.ok) return result;
+
+  const [row] = await db
+    .insert(series)
+    .values({
+      id: crypto.randomUUID(),
+      title: input.title,
+      weekdays: input.weekdays,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      venueId: input.venueId,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      notes: input.notes ?? "",
+    })
+    .returning();
+
+  const teamIds = input.teamIds ?? [];
+  for (const teamId of teamIds) {
+    await db.insert(seriesTeam).values({ id: crypto.randomUUID(), seriesId: row.id, teamId });
+  }
+  await insertOccurrences(db, row, occurrenceDates(input), teamIds);
+  return { ok: true, series: row };
+}
+
+export async function listOccurrences(db: Db, seriesId: string): Promise<Occurrence[]> {
+  return db.select().from(event).where(eq(event.seriesId, seriesId)).orderBy(asc(event.start));
+}
+
+export async function listSeries(db: Db): Promise<Series[]> {
+  return db.select().from(series).orderBy(asc(series.title));
+}
+
+export async function extendSeries(
+  db: Db,
+  seriesId: string,
+  newEndDate: string,
+): Promise<{ ok: true } | Failure> {
+  const [row]: Series[] = await db.select().from(series).where(eq(series.id, seriesId));
+  if (!row) return { ok: false, error: "Series not found." };
+  if (newEndDate <= row.endDate) {
+    return { ok: false, error: "The new end date must be later than the current end date." };
+  }
+
+  const nextDay = new Date(Date.parse(`${row.endDate}T00:00:00Z`) + 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  const dates = occurrenceDates({ weekdays: row.weekdays, startDate: nextDay, endDate: newEndDate });
+  await insertOccurrences(db, row, dates, await seriesTeamIds(db, seriesId));
+  await db.update(series).set({ endDate: newEndDate }).where(eq(series.id, seriesId));
+  return { ok: true };
+}
+
+export async function editOccurrence(
+  db: Db,
+  eventId: string,
+  changes: OccurrenceChanges,
+  scope: "this" | "future",
+): Promise<{ ok: true } | Failure> {
+  const [target]: Occurrence[] = await db.select().from(event).where(eq(event.id, eventId));
+  if (!target?.seriesId) return { ok: false, error: "That Event isn't part of a Series." };
+
+  const current = { start: londonParts(target.start).time, end: londonParts(target.end).time };
+  const startTime = changes.startTime ?? current.start;
+  const endTime = changes.endTime ?? current.end;
+  if (endTime <= startTime) return { ok: false, error: "An Event can't end before it starts (end time)." };
+  if (changes.title !== undefined && !changes.title.trim()) {
+    return { ok: false, error: "An Event needs a title." };
+  }
+
+  const apply = (row: Occurrence, edited: boolean) => {
+    const date = londonParts(row.start).date;
+    return db
+      .update(event)
+      .set({
+        ...(changes.title !== undefined && { title: changes.title }),
+        ...(changes.venueId !== undefined && { venueId: changes.venueId }),
+        ...(changes.notes !== undefined && { notes: changes.notes }),
+        start: londonToUtc(date, startTime),
+        end: londonToUtc(date, endTime),
+        ...(edited && { edited: true }),
+      })
+      .where(eq(event.id, row.id));
+  };
+
+  if (scope === "this") {
+    await apply(target, true);
+    return { ok: true };
+  }
+
+  const later: Occurrence[] = await db
+    .select()
+    .from(event)
+    .where(and(eq(event.seriesId, target.seriesId), gte(event.start, target.start)));
+  for (const row of later) {
+    if (row.id === target.id || !row.edited) await apply(row, false);
+  }
+  await db
+    .update(series)
+    .set({
+      ...(changes.title !== undefined && { title: changes.title }),
+      ...(changes.venueId !== undefined && { venueId: changes.venueId }),
+      ...(changes.notes !== undefined && { notes: changes.notes }),
+      startTime,
+      endTime,
+    })
+    .where(eq(series.id, target.seriesId));
+  return { ok: true };
+}
