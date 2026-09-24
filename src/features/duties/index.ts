@@ -1,10 +1,13 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
+import { resolveEventChecklist } from "@/features/checklists";
 import { listEvents } from "@/features/events";
-import { getKitUnit, recordMove, setUnconfirmed } from "@/features/kit";
+import { getKitUnit, listKitUnits, recordMove, setUnconfirmed } from "@/features/kit";
 import { isCommitteeOrAbove, type Role } from "@/features/users";
+import { findClashes, type Clash, type ClashEvent } from "./clashes-rules";
 import { duty } from "./schema";
 
 export { duty } from "./schema";
+export type { Clash } from "./clashes-rules";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
@@ -202,4 +205,46 @@ export async function listUpcomingDutiesForUser(db: Db, userId: string) {
   return events.flatMap((event) =>
     rows.filter((r) => r.eventId === event.id).map((r) => ({ duty: toDuty(r), event })),
   );
+}
+
+/** Clash warnings across all upcoming, uncancelled Events. Read-only: it never creates Duties. */
+export async function listClashes(db: Db, now: Date = new Date()): Promise<Clash[]> {
+  const events = (await listEvents(db, { when: "upcoming" })).filter((e) => !e.cancelled);
+  if (events.length === 0) return [];
+  const [kit, dutyRows] = await Promise.all([
+    listKitUnits(db, { includeRetired: true }),
+    db
+      .select()
+      .from(duty)
+      .where(
+        and(
+          inArray(
+            duty.eventId,
+            events.map((e) => e.id),
+          ),
+          isNull(duty.voidedAt),
+        ),
+      ) as Promise<(typeof duty.$inferSelect)[]>,
+  ]);
+  const clashEvents: ClashEvent[] = await Promise.all(
+    events.map(async (e) => ({
+      id: e.id,
+      title: e.title,
+      start: e.start,
+      end: e.end,
+      kitUnitIds: (await resolveEventChecklist(db, { eventId: e.id, seriesId: e.seriesId, eventType: e.eventType }))
+        .kitUnitIds,
+      duties: dutyRows.filter((d) => d.eventId === e.id),
+    })),
+  );
+  return findClashes({
+    now,
+    kit: kit.map((k) => ({
+      id: k.id,
+      name: k.name,
+      status: k.status,
+      holderId: k.whereaboutsType === "holder" ? k.holderId : null,
+    })),
+    events: clashEvents,
+  });
 }

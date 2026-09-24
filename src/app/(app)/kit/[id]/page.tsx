@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
+import { ClashList } from "@/components/clash-list";
+import { listClashes } from "@/features/duties";
 import { getKitUnit, listMovementLog, recordMove, type MovementLogEntry } from "@/features/kit";
 import { listLocations, type Location } from "@/features/locations";
 import { requireApprovedUser } from "@/lib/session";
@@ -12,7 +14,8 @@ export default async function KitUnitDetailPage({ params }: PageProps<"/kit/[id]
   const unit = await getKitUnit(db, id);
   if (!unit) notFound();
 
-  const [locations, log] = await Promise.all([listLocations(db), listMovementLog(db, id)]);
+  const [locations, log, allClashes] = await Promise.all([listLocations(db), listMovementLog(db, id), listClashes(db)]);
+  const clashes = allClashes.filter((c) => c.kitUnitId === id);
   const locationsById = new Map(locations.map((l: Location) => [l.id, l]));
   const stores = locations.filter((l: Location) => l.isStore);
   const whereaboutsLabel =
@@ -45,6 +48,8 @@ export default async function KitUnitDetailPage({ params }: PageProps<"/kit/[id]
           <p className="text-sm text-muted-foreground">Condition: {unit.conditionNote}</p>
         )}
       </div>
+
+      <ClashList clashes={clashes} />
 
       <div className="flex flex-wrap items-center gap-2">
         <form action={iveGotIt}>

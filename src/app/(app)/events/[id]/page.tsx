@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { ChecklistEditor } from "@/components/checklist-editor";
+import { ClashList } from "@/components/clash-list";
 import { resolveEventChecklist } from "@/features/checklists";
 import { listKitUnits } from "@/features/kit";
 import {
@@ -12,6 +13,7 @@ import {
   voidDutiesForEvent,
   ensureDuties,
   handOnDuty,
+  listClashes,
   setDestination,
   unassignDuty,
   type Duty,
@@ -114,6 +116,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     listApprovedUsers(db),
     listLocations(db),
   ]);
+  const clashes = (await listClashes(db)).filter((c) => c.eventIds.includes(id));
   const approved = people.filter((p) => p.accessState === "approved");
   const personName = new Map(people.map((p) => [p.id, p.name]));
   const stores = allLocations.filter((l: Location) => l.isStore);
@@ -259,6 +262,8 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
           )}
         </div>
       )}
+
+      <ClashList clashes={clashes} />
 
       <div className="flex flex-col gap-2 rounded-md border border-border p-3 text-sm">
         <h3 className="font-medium">Checklist{sourceLabel && ` (from ${sourceLabel})`}</h3>

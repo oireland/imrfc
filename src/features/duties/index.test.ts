@@ -11,6 +11,7 @@ import {
   confirmDuty,
   ensureDuties,
   handOnDuty,
+  listClashes,
   listUpcomingDutiesForUser,
   setDestination,
   unassignDuty,
@@ -363,5 +364,28 @@ describe("listUpcomingDutiesForUser", () => {
       "Later from",
     ]);
     expect(mine[1].duty).toMatchObject({ userId: "tom", direction: "to", kitUnitId: kit.id });
+  });
+});
+
+describe("Clashes", () => {
+  it("lists Clashes across upcoming Events from the database", async () => {
+    const { db, kit } = await setup();
+    const { addToChecklist } = await import("@/features/checklists");
+    const soon = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const made = await createEvent(db, {
+      title: "Training",
+      eventType: "training",
+      start: soon,
+      end: new Date(soon.getTime() + 2 * 60 * 60 * 1000),
+      venueId: "shed",
+    });
+    if (!made.ok) throw new Error(made.error);
+    await addToChecklist(db, { scope: "event", scopeId: made.event.id }, kit.id);
+    await ensureDuties(db, made.event.id, [kit.id]);
+
+    const clashes = await listClashes(db);
+
+    expect(clashes.map((c) => c.kind)).toEqual(["unfilled_duty", "unfilled_duty"]);
+    expect(clashes[0]).toMatchObject({ kitUnitId: kit.id, eventIds: [made.event.id] });
   });
 });
