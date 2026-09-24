@@ -8,6 +8,7 @@ import { duty } from "./schema";
 
 export { duty } from "./schema";
 export type { Clash } from "./clashes-rules";
+export { formatDutySummary } from "./duty-summary-rules";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;

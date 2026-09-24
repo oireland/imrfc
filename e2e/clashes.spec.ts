@@ -42,6 +42,9 @@ test("Clashes warn on the Event and the Kit Unit without blocking", async ({ pag
   await page.goto(`/events/${event}`);
   await expect(page.getByRole("alert").getByText(`${kitName}'s To Duty`, { exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: "Claim" }).first()).toBeVisible();
+  // Duty Summary previews the WhatsApp message with the unassigned Kit Unit flagged.
+  await expect(page.getByText(`${kitName}: ❗unassigned`)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Copy WhatsApp message" })).toBeVisible();
 
   await page.goto(`/kit/${kit}`);
   await expect(page.getByRole("alert").getByText("unfilled", { exact: false }).first()).toBeVisible();

@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { ChecklistEditor } from "@/components/checklist-editor";
 import { ClashList } from "@/components/clash-list";
+import { CopySummary } from "@/components/copy-summary";
 import { resolveEventChecklist } from "@/features/checklists";
 import { listKitUnits } from "@/features/kit";
 import {
@@ -12,6 +13,7 @@ import {
   markUnconfirmed,
   voidDutiesForEvent,
   ensureDuties,
+  formatDutySummary,
   handOnDuty,
   listClashes,
   setDestination,
@@ -204,6 +206,16 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
       </div>
     );
   }
+  const summary = formatDutySummary({
+    title: eventDetails.title,
+    start: eventDetails.start,
+    venueName: venue?.name ?? "",
+    items: resolved.kitUnitIds.map((kid) => ({
+      kitName: kitNames.get(kid) ?? kid,
+      to: dutyFor(kid, "to").userId ? (personName.get(dutyFor(kid, "to").userId!) ?? null) : null,
+      from: dutyFor(kid, "from").userId ? (personName.get(dutyFor(kid, "from").userId!) ?? null) : null,
+    })),
+  });
   const sourceLabel = { event: "this Event", series: "its Series", default: "the Default Checklist", none: "" }[
     resolved.source
   ];
@@ -278,6 +290,8 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
           {resolved.kitUnitIds.length === 0 && <li className="text-muted-foreground">No Kit Units needed.</li>}
         </ul>
       </div>
+
+      <CopySummary text={summary} />
 
       {isCommitteeOrAbove(user.role) && (
         <div className="flex flex-col gap-2 rounded-md border border-border p-3">
