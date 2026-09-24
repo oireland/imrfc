@@ -4,9 +4,19 @@ import { db } from "@/db/client";
 import { ChecklistEditor } from "@/components/checklist-editor";
 import { resolveEventChecklist } from "@/features/checklists";
 import { listKitUnits } from "@/features/kit";
+import {
+  assignDuty,
+  claimDuty,
+  ensureDuties,
+  handOnDuty,
+  setDestination,
+  unassignDuty,
+  type Duty,
+  type DutyDestination,
+} from "@/features/duties";
 import { cancelEvent, editOccurrence, getEvent, londonParts } from "@/features/events";
 import { getLocation, listLocations, type Location } from "@/features/locations";
-import { isCommitteeOrAbove } from "@/features/users";
+import { isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
 import { requireApprovedUser } from "@/lib/session";
 
 function formatTime(d: Date) {
@@ -49,6 +59,39 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     revalidatePath("/events");
   }
 
+  const field = "rounded-md border border-border bg-background px-2 py-1";
+
+  async function duty(formData: FormData) {
+    "use server";
+    const current = await requireApprovedUser();
+    const committee = isCommitteeOrAbove(current.role);
+    const dutyId = String(formData.get("dutyId"));
+    const other = String(formData.get("userId") ?? "");
+    switch (formData.get("action")) {
+      case "claim":
+        await claimDuty(db, dutyId, current.id);
+        break;
+      case "handOn":
+        if (other) await handOnDuty(db, dutyId, current.id, other);
+        break;
+      case "assign":
+        if (committee && other) await assignDuty(db, dutyId, other);
+        break;
+      case "unassign":
+        if (committee) await unassignDuty(db, dutyId);
+        break;
+      case "destination": {
+        if (!committee) break;
+        const value = String(formData.get("destination"));
+        const destination: DutyDestination =
+          value === "holder" ? { type: "holder" } : value.startsWith("store:") ? { type: "store", storeId: value.slice(6) } : { type: "home" };
+        await setDestination(db, dutyId, destination);
+        break;
+      }
+    }
+    revalidatePath(`/events/${id}`);
+  }
+
   const [resolved, kitUnits] = await Promise.all([
     resolveEventChecklist(db, {
       eventId: id,
@@ -58,6 +101,88 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     listKitUnits(db),
   ]);
   const kitNames = new Map(kitUnits.map((u) => [u.id, u.name]));
+  const [duties, people, allLocations] = await Promise.all([
+    ensureDuties(db, id, resolved.kitUnitIds),
+    listApprovedUsers(db),
+    listLocations(db),
+  ]);
+  const approved = people.filter((p) => p.accessState === "approved");
+  const personName = new Map(people.map((p) => [p.id, p.name]));
+  const stores = allLocations.filter((l: Location) => l.isStore);
+  const committee = isCommitteeOrAbove(user.role);
+  const dutyFor = (kid: string, direction: Duty["direction"]) =>
+    duties.find((d) => d.kitUnitId === kid && d.direction === direction)!;
+
+  function DutyRow({ d }: { d: Duty }) {
+    const mine = d.userId === user.id;
+    const label = d.direction === "to" ? "To" : "From";
+    return (
+      <div className="flex flex-col gap-1 border-t border-border pt-2 first:border-t-0 first:pt-0">
+        <p>
+          <span className="font-medium">{label}:</span>{" "}
+          {d.userId ? (
+            <span className={mine ? "rounded-md bg-accent px-1 text-accent-foreground" : undefined}>
+              {mine ? "You" : (personName.get(d.userId) ?? d.userId)}
+            </span>
+          ) : (
+            <span className="text-destructive">❗unassigned</span>
+          )}
+        </p>
+        <form action={duty} className="flex flex-wrap items-center gap-2">
+          <input type="hidden" name="dutyId" value={d.id} />
+          {!d.userId && (
+            <button name="action" value="claim" className="rounded-md bg-primary px-3 py-1 text-primary-foreground">
+              Claim
+            </button>
+          )}
+          {(mine || committee) && (
+            <>
+              <select name="userId" aria-label={`${label} Duty person`} className={field}>
+                {approved.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              {mine && <button name="action" value="handOn" className={field}>Hand on</button>}
+              {committee && <button name="action" value="assign" className={field}>Assign</button>}
+              {committee && d.userId && <button name="action" value="unassign" className={field}>Unassign</button>}
+            </>
+          )}
+        </form>
+        {d.direction === "from" && (
+          <form action={duty} className="flex flex-wrap items-center gap-2">
+            <input type="hidden" name="dutyId" value={d.id} />
+            <input type="hidden" name="action" value="destination" />
+            <span className="text-muted-foreground">Destination:</span>
+            {committee ? (
+              <>
+                <select
+                  name="destination"
+                  aria-label="Destination"
+                  defaultValue={d.destination.type === "store" ? `store:${d.destination.storeId}` : d.destination.type}
+                  className={field}
+                >
+                  <option value="home">Home</option>
+                  {stores.map((s: Location) => (
+                    <option key={s.id} value={`store:${s.id}`}>{s.name}</option>
+                  ))}
+                  <option value="holder">Stays with the Duty&apos;s User</option>
+                </select>
+                <button className={field}>Set</button>
+              </>
+            ) : (
+              <span>
+                {d.destination.type === "home"
+                  ? "Home"
+                  : d.destination.type === "holder"
+                    ? "Stays with the Duty's User"
+                    : (stores.find((s: Location) => s.id === (d.destination as { storeId: string }).storeId)?.name ?? "Store")}
+              </span>
+            )}
+          </form>
+        )}
+      </div>
+    );
+  }
   const sourceLabel = { event: "this Event", series: "its Series", default: "the Default Checklist", none: "" }[
     resolved.source
   ];
@@ -119,9 +244,13 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
 
       <div className="flex flex-col gap-2 rounded-md border border-border p-3 text-sm">
         <h3 className="font-medium">Checklist{sourceLabel && ` (from ${sourceLabel})`}</h3>
-        <ul>
+        <ul className="flex flex-col gap-4">
           {resolved.kitUnitIds.map((kid) => (
-            <li key={kid}>{kitNames.get(kid) ?? kid}</li>
+            <li key={kid} className="flex flex-col gap-2">
+              <span className="font-medium">{kitNames.get(kid) ?? kid}</span>
+              <DutyRow d={dutyFor(kid, "to")} />
+              <DutyRow d={dutyFor(kid, "from")} />
+            </li>
           ))}
           {resolved.kitUnitIds.length === 0 && <li className="text-muted-foreground">No Kit Units needed.</li>}
         </ul>

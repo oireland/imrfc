@@ -11,3 +11,9 @@ test("a signed-out visitor is sent to sign in from Checklists admin", async ({ p
 
   await expect(page).toHaveURL(/\/sign-in$/);
 });
+
+test("a signed-out visitor is sent to sign in from an Event's Duties", async ({ page }) => {
+  await page.goto("/events/some-event");
+
+  await expect(page).toHaveURL(/\/sign-in$/);
+});
