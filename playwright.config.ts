@@ -15,6 +15,7 @@ export default defineConfig({
   projects: [{ name: "mobile", use: { ...devices["Pixel 7"] } }],
   webServer: {
     command: `pnpm next dev --port ${port}`,
+    env: { BETTER_AUTH_URL: `http://localhost:${port}` },
     url: `http://localhost:${port}`,
     reuseExistingServer: !process.env.CI,
   },
