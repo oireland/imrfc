@@ -123,19 +123,23 @@ When a User is Blocked:
 
 ## Look and feel
 
-- Tailwind + shadcn/ui, following system light/dark. All colours come from one theme file of CSS tokens.
-- Crest: [docs/brand/crest.png](docs/brand/crest.png) — header, favicon and PWA icons. It has a white background; icons need padding and a navy or white tile.
-- Palette, sampled from the crest:
+- **"Clubhouse" look:** warm, minimal neutrals; editorial serif headings (Instrument Serif, one weight, never bolded) with Inter Tight for everything else; generous space; large rounded cards. Tailwind + shadcn/ui. All colours come from one theme file of CSS tokens (`src/app/globals.css`).
+- **No app name in the UI.** The crest ([docs/brand/crest.png](docs/brand/crest.png), white background, always on a white round tile) sits top-right of Home and above the signed-out screens. On Home it is also the **colour theme menu**: System (default) / Light / Dark, saved on the User and applied as `<html data-theme>`.
+- **The crest's colours are accents only:** gold marks what is yours (Your Duty markers, the active tab dot, the "With you" Kit group); navy marks your next Duty and Matches.
+- **Home:** greeting ("Evening, Ollie."), Your duties as small 2-up cards (the next one navy), then **What's coming up** with Calendar and Agenda tabs. Events uses the same Calendar/Agenda view, plus Past events.
+- **Calendar:** a month grid where every Event is readable in its day (name wraps to three lines, then its time); Training, Match and Social have distinct colours; your Duties get a gold edge. Tap a day to select it and see its Events; Committee tap again (or an empty day) to quick-add an Event, Google-Calendar style.
 
-| Role | Colour | Light mode | Dark mode |
-|---|---|---|---|
-| Navy (fleur-de-lis) | `#1F2F55` | primary (buttons, header), text on gold | background base: `#0F1729` bg, `#1A2544` cards |
-| Gold (phoenix) | `#F2C400` | accent: highlights, "your Duty" markers, active tab — always with navy text, never gold text on white | primary, with navy text |
-| Deep gold | `#8A6D00` | gold-toned text/links on white (passes contrast) | — |
-| Red (cross) | `#DE2029` | destructive + Clash warnings, unassigned Duties | `#F0474E` for contrast on navy |
-| Neutrals | slate greys | background `#FFFFFF`, muted `#F4F5F8`, border `#E2E5EC`, text `#0F172A` | text `#F4F5F8`, muted text `#A3ADC2` |
+| Token | Light | Dark |
+|---|---|---|
+| background / card | `#F5F4F0` / `#FFFFFF` | `#11100F` / `#1B1A18` |
+| text / muted text | `#111111` / `#66645D` | `#F3F1EC` / `#A19D93` |
+| primary (buttons) | near-black `#111111` | off-white `#F3F1EC` |
+| accent (gold, yours) | `#F2C400` with near-black text | same |
+| lead (your next Duty) | navy `#1F2F55` | `#24365F` |
+| Training / Match / Social | `#EBE9E3` / `#1F2F55` / `#FBEAA3` | `#2A2825` / `#34497F` / `#4A3D0B` |
+| destructive | `#B3151D` | `#FF6B70` |
 
-Contrast check: navy on white ≈ 13:1, navy on gold ≈ 8:1, red on white ≈ 4.7:1.
+Every signed-in screen is checked with axe in light, dark (device) and Dark chosen on a light device (`e2e/design.spec.ts`).
 
 ## Technology
 

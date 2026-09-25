@@ -1,0 +1,50 @@
+import { describe, expect, it } from "vitest";
+import { buildQuickEvent } from "./quick-add";
+
+const base = { date: "2026-10-24", startTime: "19:00", endTime: "21:00", venueId: "v1", title: "" };
+
+describe("buildQuickEvent", () => {
+  it("turns London wall-clock times into UTC during BST", () => {
+    const e = buildQuickEvent({ ...base, type: "training" });
+
+    expect(e.start.toISOString()).toBe("2026-10-24T18:00:00.000Z");
+    expect(e.end.toISOString()).toBe("2026-10-24T20:00:00.000Z");
+  });
+
+  it("turns London wall-clock times into UTC after the clocks go back", () => {
+    const e = buildQuickEvent({ ...base, date: "2026-10-26", type: "training" });
+
+    expect(e.start.toISOString()).toBe("2026-10-26T19:00:00.000Z");
+  });
+
+  it("names an untitled Event after its type", () => {
+    expect(buildQuickEvent({ ...base, type: "social" }).title).toBe("Social");
+    expect(buildQuickEvent({ ...base, type: "training", title: " Fitness " }).title).toBe("Fitness");
+  });
+
+  it("ends the next day when the end time is before the start time", () => {
+    const e = buildQuickEvent({ ...base, type: "social", startTime: "20:00", endTime: "00:30" });
+
+    expect(e.end.toISOString()).toBe("2026-10-24T23:30:00.000Z");
+  });
+
+  it("builds Match details, meeting at kick-off, titled after the opponent", () => {
+    const e = buildQuickEvent({
+      ...base,
+      type: "match",
+      startTime: "14:30",
+      endTime: "16:30",
+      opponent: "UCL Medics",
+      homeAway: "away",
+      competition: "bucs",
+    });
+
+    expect(e.title).toBe("vs UCL Medics");
+    expect(e.eventType === "match" && e.matchDetails).toEqual({
+      opponent: "UCL Medics",
+      homeAway: "away",
+      competition: "bucs",
+      meetTime: e.start,
+    });
+  });
+});

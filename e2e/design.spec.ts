@@ -1,0 +1,132 @@
+import { AxeBuilder } from "@axe-core/playwright";
+import { expect, test, type Page } from "@playwright/test";
+import postgres from "postgres";
+
+const MAILPIT = "http://localhost:8025";
+const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "irelandoliver4@gmail.com";
+
+async function magicLink(email: string): Promise<string> {
+  for (let i = 0; i < 30; i++) {
+    const list = await (
+      await fetch(`${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}&limit=1`)
+    ).json();
+    const id = list.messages?.[0]?.ID;
+    if (id) {
+      const msg = await (await fetch(`${MAILPIT}/api/v1/message/${id}`)).json();
+      const match = String(msg.Text).match(/https?:\/\/\S+/);
+      if (match) return match[0];
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error("No magic link email arrived in Mailpit");
+}
+
+async function signIn(page: Page, baseURL: string | undefined) {
+  await page.goto("/sign-in");
+  await page.getByPlaceholder("you@example.com").fill(ADMIN_EMAIL);
+  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  await expect(page.getByText("Check your email")).toBeVisible();
+  const link = new URL(await magicLink(ADMIN_EMAIL));
+  await page.goto(new URL(link.pathname + link.search, baseURL).toString());
+}
+
+async function assertNoHorizontalScroll(page: Page) {
+  const overflowing = await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  );
+  expect(overflowing).toBe(false);
+}
+
+async function axeReport(page: Page, screen: string): Promise<string | null> {
+  const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+  if (results.violations.length === 0) return null;
+  const details = results.violations
+    .map(
+      (v) =>
+        `\n  - [${v.id}] ${v.help}\n` +
+        v.nodes.map((n) => `      target: ${n.target.join(" ")}${n.any[0]?.data?.fgColor ? ` (${n.any[0].data.fgColor} on ${n.any[0].data.bgColor}, ${n.any[0].data.contrastRatio}:1) "${n.html.slice(0, 80)}"` : ""}`).join("\n"),
+    )
+    .join("");
+  return `${screen}:${details}`;
+}
+
+test.describe("Design pass: every screen is accessible at phone width, light and dark", () => {
+  // Signed-in tests share one Mailpit inbox for magic links; run them one at a
+  // time so a parallel run doesn't race for the same link.
+  test.describe.configure({ mode: "serial" });
+
+  let sql: ReturnType<typeof postgres>;
+  let eventId: string;
+  let kitId: string;
+
+  test.beforeAll(async () => {
+    sql = postgres(process.env.DATABASE_URL ?? "postgres://imrfc:imrfc@localhost:5432/imrfc");
+    const run = crypto.randomUUID().slice(0, 8);
+    const store = crypto.randomUUID();
+    const venue = crypto.randomUUID();
+    kitId = crypto.randomUUID();
+    eventId = crypto.randomUUID();
+    const list = crypto.randomUUID();
+    await sql`insert into location (id, name, address, is_store) values (${store}, ${`Shed ${run}`}, 'x', true)`;
+    await sql`insert into location (id, name, address, is_venue) values (${venue}, ${`Pitch ${run}`}, 'x', true)`;
+    await sql`insert into kit_unit (id, name, home_id, store_id) values (${kitId}, ${`Ball bag ${run}`}, ${store}, ${store})`;
+    await sql`insert into event (id, title, event_type, start, "end", venue_id)
+      values (${eventId}, ${`Training ${run}`}, 'training', now() + interval '1 day', now() + interval '1 day 2 hours', ${venue})`;
+    await sql`insert into checklist (id, scope, scope_id) values (${list}, 'event', ${eventId})`;
+    await sql`insert into checklist_item (id, checklist_id, kit_unit_id) values (${crypto.randomUUID()}, ${list}, ${kitId})`;
+  });
+
+  test.afterAll(async () => {
+    await sql.end();
+  });
+
+  // "light" / "dark" follow the device (the default System theme); "chosen dark" is
+  // the crest menu's Dark choice (<html data-theme="dark">) on a light device.
+  for (const mode of ["light", "dark", "chosen dark"] as const) {
+    test(`signed-in screens have no axe violations (${mode})`, async ({ page, baseURL }) => {
+      await page.emulateMedia({ colorScheme: mode === "dark" ? "dark" : "light" });
+      await signIn(page, baseURL);
+
+      const screens = [
+        "/",
+        "/events",
+        "/events?tab=past",
+        `/events/${eventId}`,
+        "/kit",
+        `/kit/${kitId}`,
+        "/locations",
+        "/profile",
+        "/admin",
+        "/admin/kit",
+        "/events/new",
+        "/kit/new",
+        "/admin/series",
+        "/admin/checklists",
+        "/admin/users",
+      ];
+
+      const reports: string[] = [];
+      for (const screen of screens) {
+        await page.goto(screen);
+        if (mode === "chosen dark") await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
+        await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
+        await assertNoHorizontalScroll(page);
+        const report = await axeReport(page, screen);
+        if (report) reports.push(report);
+      }
+      expect(reports, `Accessibility violations found:\n${reports.join("\n")}`).toEqual([]);
+    });
+  }
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    test(`signed-out sign-in screen has no axe violations (${colorScheme})`, async ({ browser }) => {
+      const context = await browser.newContext({ colorScheme });
+      const page = await context.newPage();
+      await page.goto("/sign-in");
+      await assertNoHorizontalScroll(page);
+      const report = await axeReport(page, "/sign-in (signed out)");
+      expect(report, report ?? undefined).toBeNull();
+      await context.close();
+    });
+  }
+});
