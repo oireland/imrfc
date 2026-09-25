@@ -20,6 +20,8 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { BackLink } from "@/components/back-link";
 import { formatWhen } from "@/lib/format-time";
+import { mapsSearchUrl } from "@/lib/maps";
+import { VenueInput } from "@/components/venue-input";
 import { resolveEventChecklist } from "@/features/checklists";
 import { listKitUnits, type KitUnit } from "@/features/kit";
 import {
@@ -33,8 +35,8 @@ import {
   type Duty,
   type DutyRequest,
 } from "@/features/duties";
-import { cancelEvent, editOccurrence, getEvent, londonParts } from "@/features/events";
-import { getLocation, listLocations, type Location } from "@/features/locations";
+import { cancelEvent, editOccurrence, getEvent, listVenues, londonParts } from "@/features/events";
+import { listStores, type Store } from "@/features/stores";
 import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
 import { requireApprovedUser } from "@/lib/session";
 
@@ -44,8 +46,6 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
 
   const eventDetails = await getEvent(db, id);
   if (!eventDetails) notFound();
-
-  const venue = await getLocation(db, eventDetails.venueId);
 
   async function cancel() {
     "use server";
@@ -67,7 +67,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
         title: String(formData.get("title")),
         startTime: String(formData.get("startTime")),
         endTime: String(formData.get("endTime")),
-        venueId: String(formData.get("venueId")),
+        venue: String(formData.get("venue")),
       },
       formData.get("scope") === "future" ? "future" : "this",
     );
@@ -92,10 +92,10 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     listKitUnits(db),
   ]);
   const kitNames = new Map(kitUnits.map((u) => [u.id, u.name]));
-  const [duties, people, allLocations] = await Promise.all([
+  const [duties, people, stores] = await Promise.all([
     ensureDuties(db, id, resolved.kitUnitIds),
     listApprovedUsers(db),
-    listLocations(db),
+    listStores(db),
   ]);
   const [clashes, headsUps] = await Promise.all([
     listClashes(db).then((all) => all.filter((c) => c.eventIds.includes(id))),
@@ -103,13 +103,12 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
   ]);
   const approved = people.filter((p) => p.accessState === "approved");
   const personName = new Map(people.map((p) => [p.id, displayName(p)]));
-  const stores = allLocations.filter((l: Location) => l.isStore);
   const committee = isCommitteeOrAbove(user.role);
   const dutyFor = (kid: string, direction: Duty["direction"]) =>
     duties.find((d) => d.kitUnitId === kid && d.direction === direction)!;
 
   const kitById = new Map(kitUnits.map((u: KitUnit) => [u.id, u]));
-  const storeName = (storeId: string | null) => stores.find((l: Location) => l.id === storeId)?.name ?? "a store";
+  const storeName = (storeId: string | null) => stores.find((s: Store) => s.id === storeId)?.name ?? "a store";
   const nameOf = (userId: string | null) => (userId === user.id ? "You" : userId ? (personName.get(userId) ?? "Someone") : null);
   const slot = (d: Duty, homeId: string | null): DutySlot => ({
     id: d.id,
@@ -148,7 +147,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
             : storeName(homeId),
       places: [
         { value: "home", label: `${storeName(homeId)} (its home)` },
-        ...stores.filter((l: Location) => l.id !== homeId).map((l: Location) => ({ value: `store:${l.id}`, label: l.name })),
+        ...stores.filter((s: Store) => s.id !== homeId).map((s: Store) => ({ value: `store:${s.id}`, label: s.name })),
         { value: "holder", label: "Stays with whoever takes it back" },
       ],
       to: slot(dutyFor(kid, "to"), homeId),
@@ -159,7 +158,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
   const summary = formatDutySummary({
     title: eventDetails.title,
     start: eventDetails.start,
-    venueName: venue?.name ?? "",
+    venueName: eventDetails.venue,
     items: resolved.kitUnitIds.map((kid) => ({
       kitName: kitNames.get(kid) ?? kid,
       to: dutyFor(kid, "to").userId ? (personName.get(dutyFor(kid, "to").userId!) ?? null) : null,
@@ -173,7 +172,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     none: "",
   }[resolved.source];
 
-  const venues = eventDetails.seriesId ? (await listLocations(db)).filter((l: Location) => l.isVenue) : [];
+  const venues = eventDetails.seriesId ? await listVenues(db) : [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -188,16 +187,12 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
         <CardContent className="flex flex-col gap-1 text-sm">
           <p className="capitalize text-muted-foreground">{eventDetails.eventType}</p>
           <p>{formatWhen(eventDetails.start)} – {formatWhen(eventDetails.end)}</p>
-          {venue && (
+          {eventDetails.venue && (
             <p>
               Venue:{" "}
-              {venue.mapsLink ? (
-                <a href={venue.mapsLink} target="_blank" rel="noreferrer" className="underline">
-                  {venue.name}
-                </a>
-              ) : (
-                venue.name
-              )}
+              <a href={mapsSearchUrl(eventDetails.venue)} target="_blank" rel="noreferrer" className="underline">
+                {eventDetails.venue}
+              </a>
             </p>
           )}
           {eventDetails.teams.length > 0 && (
@@ -302,11 +297,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
                 </div>
                 <div className="flex flex-col gap-1">
                   <Label htmlFor={`edit-venue-${id}`}>Venue</Label>
-                  <NativeSelect id={`edit-venue-${id}`} name="venueId" defaultValue={eventDetails.venueId}>
-                    {venues.map((v: Location) => (
-                      <NativeSelectOption key={v.id} value={v.id}>{v.name}</NativeSelectOption>
-                    ))}
-                  </NativeSelect>
+                  <VenueInput id={`edit-venue-${id}`} name="venue" defaultValue={eventDetails.venue} suggestions={venues} required />
                 </div>
                 <div className="flex flex-col gap-1">
                   <Label htmlFor={`edit-scope-${id}`}>Applies to</Label>

@@ -21,14 +21,13 @@ async function magicLink(email: string): Promise<string> {
 test("Home shows my Duties, what's coming up and the Kit I hold", async ({ page, baseURL }) => {
   const sql = postgres(process.env.DATABASE_URL ?? "postgres://imrfc:imrfc@localhost:5432/imrfc");
   const run = crypto.randomUUID().slice(0, 8);
-  const [store, venue, kit, event, list] = Array.from({ length: 5 }, () => crypto.randomUUID());
+  const [store, kit, event, list] = Array.from({ length: 4 }, () => crypto.randomUUID());
   const kitName = `Tackle shield ${run}`;
   const eventTitle = `Home training ${run}`;
-  await sql`insert into location (id, name, address, is_store) values (${store}, ${`Shed ${run}`}, 'x', true)`;
-  await sql`insert into location (id, name, address, is_venue) values (${venue}, ${`Pitch ${run}`}, 'x', true)`;
+  await sql`insert into store (id, name, address) values (${store}, ${`Shed ${run}`}, 'x')`;
   await sql`insert into kit_unit (id, name, home_id, store_id) values (${kit}, ${kitName}, ${store}, ${store})`;
-  await sql`insert into event (id, title, event_type, start, "end", venue_id)
-    values (${event}, ${eventTitle}, 'training', now() + interval '1 hour', now() + interval '3 hours', ${venue})`;
+  await sql`insert into event (id, title, event_type, start, "end", venue)
+    values (${event}, ${eventTitle}, 'training', now() + interval '1 hour', now() + interval '3 hours', 'Harlington')`;
   await sql`insert into checklist (id, scope, scope_id) values (${list}, 'event', ${event})`;
   await sql`insert into checklist_item (id, checklist_id, kit_unit_id) values (${crypto.randomUUID()}, ${list}, ${kit})`;
 

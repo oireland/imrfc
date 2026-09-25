@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { createKitUnit } from "@/features/kit";
-import { listLocations, type Location } from "@/features/locations";
+import { listStores, type Store } from "@/features/stores";
 import { isCommitteeOrAbove } from "@/features/users";
 import { getCurrentUser } from "@/lib/session";
 import { BackLink } from "@/components/back-link";
@@ -16,7 +16,7 @@ export default async function NewKitUnitPage() {
   const user = await getCurrentUser();
   if (!user || !isCommitteeOrAbove(user.role)) redirect("/");
 
-  const stores = (await listLocations(db)).filter((l: Location) => l.isStore);
+  const stores = await listStores(db);
 
   async function create(formData: FormData) {
     "use server";
@@ -49,7 +49,7 @@ export default async function NewKitUnitPage() {
               <Label htmlFor="kit-home">Home</Label>
               <NativeSelect id="kit-home" name="homeId" required className="w-full">
                 <NativeSelectOption value="">Choose a store…</NativeSelectOption>
-                {stores.map((s: Location) => (
+                {stores.map((s: Store) => (
                   <NativeSelectOption key={s.id} value={s.id}>
                     {s.name}
                   </NativeSelectOption>

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
-import { location } from "@/features/locations";
+import { store } from "@/features/stores";
 import { createKitUnit, getKitUnit, listMovementLog, recordMove } from "@/features/kit";
 import { cancelEvent, createEvent } from "@/features/events";
 import { user } from "@/features/users";
@@ -31,10 +31,10 @@ async function setup() {
     ["tom", "sam", "priya"].map((id) => ({ id, name: id, email: `${id}@x.org`, accessState: "approved" as const })),
   );
   const [shed, cupboard] = await db
-    .insert(location)
+    .insert(store)
     .values([
-      { id: "shed", name: "Shed", address: "x", isVenue: false, isStore: true },
-      { id: "cupboard", name: "Cupboard", address: "x", isVenue: false, isStore: true },
+      { id: "shed", name: "Shed", address: "x" },
+      { id: "cupboard", name: "Cupboard", address: "x" },
     ])
     .returning();
   const made = await createKitUnit(db, { name: "Balls", homeId: shed.id });
@@ -231,7 +231,7 @@ describe("Duties", () => {
         eventType: "training",
         start: new Date(Date.now() - (hoursAgo + 2) * 3600_000),
         end: new Date(Date.now() - hoursAgo * 3600_000),
-        venueId: shedId,
+        venue: "Harlington",
       });
       if (!made.ok) throw new Error(made.error);
       return made.event;
@@ -270,7 +270,7 @@ describe("Duties", () => {
         eventType: "training",
         start: new Date(Date.now() - 3600_000),
         end: new Date(Date.now() + 3600_000),
-        venueId: shed.id,
+        venue: "Harlington",
       });
       if (!ongoing.ok) throw new Error(ongoing.error);
       const [to2] = (await ensureDuties(db, ongoing.event.id, [kit.id])).filter((d) => d.direction === "to");
@@ -300,20 +300,20 @@ describe("Duties", () => {
   });
 
   it("releases a Blocked User's unconfirmed Duties on upcoming Events, keeping past ones", async () => {
-    const { db, shed, kit } = await setup();
+    const { db, kit } = await setup();
     const soon = await createEvent(db, {
       title: "Training",
       eventType: "training",
       start: new Date(Date.now() + 3600_000),
       end: new Date(Date.now() + 7200_000),
-      venueId: shed.id,
+      venue: "Harlington",
     });
     const past = await createEvent(db, {
       title: "Old",
       eventType: "training",
       start: new Date(Date.now() - 7200_000),
       end: new Date(Date.now() - 3600_000),
-      venueId: shed.id,
+      venue: "Harlington",
     });
     if (!soon.ok || !past.ok) throw new Error("setup");
     const future = await ensureDuties(db, soon.event.id, [kit.id]);
@@ -336,7 +336,7 @@ describe("listUpcomingDutiesForUser", () => {
       eventType: "training",
       start: new Date(Date.now() + hours * 3600_000),
       end: new Date(Date.now() + (hours + 1) * 3600_000),
-      venueId: shedId,
+      venue: "Harlington",
     });
     if (!made.ok) throw new Error(made.error);
     return made.event;
@@ -434,7 +434,7 @@ describe("Clashes and heads-ups", () => {
       eventType: "training",
       start: soon,
       end: new Date(soon.getTime() + 2 * 60 * 60 * 1000),
-      venueId: "shed",
+      venue: "Harlington",
     });
     if (!made.ok) throw new Error(made.error);
     await addToChecklist(db, { scope: "event", scopeId: made.event.id }, kit.id);

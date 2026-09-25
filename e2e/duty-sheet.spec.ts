@@ -23,15 +23,14 @@ async function magicLink(email: string): Promise<string> {
 test("Committee give a Duty to a teammate and choose where the kit goes back to, from the Duty sheet", async ({ page, baseURL }) => {
   const sql = postgres(process.env.DATABASE_URL ?? "postgres://imrfc:imrfc@localhost:5432/imrfc");
   const run = crypto.randomUUID().slice(0, 8);
-  const [store, otherStore, venue, kit, event, list, teammate] = Array.from({ length: 7 }, () => crypto.randomUUID());
+  const [store, otherStore, kit, event, list, teammate] = Array.from({ length: 6 }, () => crypto.randomUUID());
   const kitName = `Tackle shields ${run}`;
   const teammateName = `Tom ${run}`;
-  await sql`insert into location (id, name, address, is_store) values (${store}, ${`Shed ${run}`}, 'x', true)`;
-  await sql`insert into location (id, name, address, is_store) values (${otherStore}, ${`Locker ${run}`}, 'x', true)`;
-  await sql`insert into location (id, name, address, is_venue) values (${venue}, ${`Pitch ${run}`}, 'x', true)`;
+  await sql`insert into store (id, name, address) values (${store}, ${`Shed ${run}`}, 'x')`;
+  await sql`insert into store (id, name, address) values (${otherStore}, ${`Locker ${run}`}, 'x')`;
   await sql`insert into kit_unit (id, name, home_id, store_id) values (${kit}, ${kitName}, ${store}, ${store})`;
-  await sql`insert into event (id, title, event_type, start, "end", venue_id)
-    values (${event}, ${`Sheet training ${run}`}, 'training', now() + interval '5 days', now() + interval '5 days 2 hours', ${venue})`;
+  await sql`insert into event (id, title, event_type, start, "end", venue)
+    values (${event}, ${`Sheet training ${run}`}, 'training', now() + interval '5 days', now() + interval '5 days 2 hours', 'Harlington')`;
   await sql`insert into checklist (id, scope, scope_id) values (${list}, 'event', ${event})`;
   await sql`insert into checklist_item (id, checklist_id, kit_unit_id) values (${crypto.randomUUID()}, ${list}, ${kit})`;
   await sql`insert into "user" (id, name, email, access_state) values (${teammate}, ${teammateName}, ${`${run}@example.com`}, 'approved')`;
@@ -73,7 +72,7 @@ test("Committee give a Duty to a teammate and choose where the kit goes back to,
   await sql`delete from checklist where id = ${list}`;
   await sql`delete from event where id = ${event}`;
   await sql`delete from kit_unit where id = ${kit}`;
-  await sql`delete from location where id in (${store}, ${otherStore}, ${venue})`;
+  await sql`delete from store where id in (${store}, ${otherStore}, 'Harlington')`;
   await sql`delete from "user" where id = ${teammate}`;
   await sql.end();
 });

@@ -6,7 +6,7 @@ const training: NewEvent = {
   eventType: "training",
   start: new Date("2026-01-07T19:00:00Z"),
   end: new Date("2026-01-07T20:30:00Z"),
-  venueId: "venue-1",
+  venue: "Harlington",
 };
 
 describe("validateEvent", () => {
@@ -22,9 +22,9 @@ describe("validateEvent", () => {
   });
 
   it("rejects an Event without a Venue", () => {
-    expect(validateEvent({ ...training, venueId: "" })).toEqual({
+    expect(validateEvent({ ...training, venue: " " })).toEqual({
       ok: false,
-      error: "Choose a venue.",
+      error: "Where is it? Add a venue.",
     });
   });
 

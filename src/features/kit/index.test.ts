@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
-import { location } from "@/features/locations";
+import { store } from "@/features/stores";
 import { user } from "@/features/users";
 import {
   createKitUnit,
@@ -15,13 +15,11 @@ import {
 
 async function seedHome(db: Awaited<ReturnType<typeof createTestDb>>) {
   const [row] = await db
-    .insert(location)
+    .insert(store)
     .values({
       id: crypto.randomUUID(),
       name: "Kit shed",
       address: "SW7",
-      isVenue: false,
-      isStore: true,
     })
     .returning();
   return row;

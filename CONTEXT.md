@@ -16,7 +16,7 @@ _Avoid_: Permission, rank
 The base Role: can see everything, claim Duties, Confirm their own Duties and record Moves.
 
 **Committee**:
-The Role that runs things: creates and edits Events, Series, Kit Units, Locations and Checklists, and assigns or Confirms any Duty. Captains are Committee.
+The Role that runs things: creates and edits Events, Series, Kit Units, Stores and Checklists, and assigns or Confirms any Duty. Captains are Committee.
 _Avoid_: Captain, organiser, kit manager (as system concepts)
 
 **Admin**:
@@ -28,16 +28,13 @@ _Avoid_: Status (reserved for Kit Units), active/inactive
 
 ## Places
 
-**Location**:
-A named physical place with an address. A Location can be a Venue, a Store, or both.
-_Avoid_: Place, site, ground
-
 **Venue**:
-A Location where Events happen.
+Where an Event happens, written as free text on the Event (a ground's name, a pub, an away team's address). Venues are not kept as records of their own.
+_Avoid_: Location, ground (as system concepts)
 
 **Store**:
-A Location where Kit Units are kept between Events.
-_Avoid_: Storage, cupboard, shed (these are names of Stores, not the concept)
+A named place with an address where Kit Units are kept between Events. The only kind of place the app keeps as a record.
+_Avoid_: Location, storage, cupboard, shed (these last are names of Stores, not the concept)
 
 ## Kit
 
@@ -57,7 +54,7 @@ Free text describing a Kit Unit's current state (e.g. "2 balls need pumping").
 
 **Whereabouts**:
 Where a Kit Unit is right now: at a Store, with a Holder, or Unconfirmed.
-_Avoid_: Location (that is a place, not a Kit Unit's state), position
+_Avoid_: Location, position
 
 **Holder**:
 The User a Kit Unit is currently with.

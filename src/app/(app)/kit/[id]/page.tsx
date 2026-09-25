@@ -12,7 +12,7 @@ import { listClashes, listHeadsUps } from "@/features/duties";
 import { getKitUnit, listMovementLog, quickMoveFor, recordMove, type MovementLogEntry } from "@/features/kit";
 import { getEvent } from "@/features/events";
 import { displayName, listApprovedUsers } from "@/features/users";
-import { listLocations, type Location } from "@/features/locations";
+import { listStores, type Store } from "@/features/stores";
 import { requireApprovedUser } from "@/lib/session";
 
 const CARD_TITLE_CLASS = "font-heading text-[22px] leading-tight";
@@ -24,8 +24,8 @@ export default async function KitUnitDetailPage({ params }: PageProps<"/kit/[id]
   const unit = await getKitUnit(db, id);
   if (!unit) notFound();
 
-  const [locations, log, allClashes, allHeadsUps, people] = await Promise.all([
-    listLocations(db),
+  const [stores, log, allClashes, allHeadsUps, people] = await Promise.all([
+    listStores(db),
     listMovementLog(db, id),
     listClashes(db),
     listHeadsUps(db),
@@ -44,9 +44,8 @@ export default async function KitUnitDetailPage({ params }: PageProps<"/kit/[id]
   );
   const clashes = allClashes.filter((c) => c.kitUnitId === id);
   const headsUps = allHeadsUps.filter((h) => h.kitUnitId === id);
-  const locationsById = new Map(locations.map((l: Location) => [l.id, l]));
-  const stores = locations.filter((l: Location) => l.isStore);
-  const storeName = (storeId: string | null) => (storeId && locationsById.get(storeId)?.name) || "a store";
+  const storesById = new Map(stores.map((s: Store) => [s.id, s]));
+  const storeName = (storeId: string | null) => (storeId && storesById.get(storeId)?.name) || "a store";
   const whereaboutsLabel =
     unit.whereaboutsType === "store"
       ? `In ${storeName(unit.storeId)}`
@@ -155,7 +154,7 @@ export default async function KitUnitDetailPage({ params }: PageProps<"/kit/[id]
             </label>
             <div className="flex gap-2">
               <NativeSelect id="put-in-store" name="storeId" className="flex-1" defaultValue={unit.homeId}>
-                {stores.map((s: Location) => (
+                {stores.map((s: Store) => (
                   <NativeSelectOption key={s.id} value={s.id}>
                     {s.name}
                   </NativeSelectOption>

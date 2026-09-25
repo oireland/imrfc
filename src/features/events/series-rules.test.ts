@@ -52,7 +52,7 @@ describe("validateSeries", () => {
     weekdays: [3],
     startTime: "19:00",
     endTime: "20:30",
-    venueId: "v",
+    venue: "Harlington",
     startDate: "2026-01-07",
     endDate: "2026-03-25",
   };
@@ -64,7 +64,7 @@ describe("validateSeries", () => {
   it.each([
     [{ title: " " }, "title"],
     [{ weekdays: [] }, "day of the week"],
-    [{ venueId: "" }, "venue"],
+    [{ venue: " " }, "venue"],
     [{ endTime: "18:00" }, "end"],
     [{ endDate: "2026-01-01" }, "last date"],
   ])("rejects %j", (patch, word) => {

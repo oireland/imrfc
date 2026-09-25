@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
-import { location } from "@/features/locations";
 import { cancelEvent, getEvent, listTeams } from "./index";
 import {
   createSeries,
@@ -14,23 +13,16 @@ import {
 async function setup() {
   const db = await createTestDb();
   await migrate(db);
-  const [venue, otherVenue] = await db
-    .insert(location)
-    .values([
-      { id: "v1", name: "Harlington", address: "x", isVenue: true, isStore: false },
-      { id: "v2", name: "Hyde Park", address: "y", isVenue: true, isStore: false },
-    ])
-    .returning();
   const pattern: NewSeries = {
     title: "Wednesday Training",
     weekdays: [3],
     startTime: "19:00",
     endTime: "20:30",
-    venueId: venue.id,
+    venue: "Harlington",
     startDate: "2999-01-09", // a Wednesday
     endDate: "2999-01-30",
   };
-  return { db, venue, otherVenue, pattern };
+  return { db, pattern };
 }
 
 const titles = (rows: { title: string }[]) => rows.map((r) => r.title);
@@ -52,7 +44,7 @@ describe("createSeries", () => {
     expect(occurrences[0]).toMatchObject({
       eventType: "training",
       title: "Wednesday Training",
-      venueId: "v1",
+      venue: "Harlington",
       end: new Date("2999-01-09T20:30:00Z"),
     });
   });
@@ -97,12 +89,12 @@ describe("createSeries", () => {
 
 describe("editOccurrence", () => {
   it("'this one' changes only that Occurrence", async () => {
-    const { db, pattern, otherVenue } = await setup();
+    const { db, pattern } = await setup();
     const created = await createSeries(db, pattern);
     if (!created.ok) throw new Error(created.error);
     const [, second] = await listOccurrences(db, created.series.id);
 
-    await editOccurrence(db, second.id, { venueId: otherVenue.id, title: "Special" }, "this");
+    await editOccurrence(db, second.id, { venue: "Hyde Park", title: "Special" }, "this");
 
     const after = await listOccurrences(db, created.series.id);
     expect(titles(after)).toEqual([
@@ -111,7 +103,7 @@ describe("editOccurrence", () => {
       "Wednesday Training",
       "Wednesday Training",
     ]);
-    expect(after.map((o) => o.venueId)).toEqual(["v1", "v2", "v1", "v1"]);
+    expect(after.map((o) => o.venue)).toEqual(["Harlington", "Hyde Park", "Harlington", "Harlington"]);
   });
 
   it("'this and future' leaves earlier Occurrences alone", async () => {
@@ -132,17 +124,17 @@ describe("editOccurrence", () => {
   });
 
   it("'this and future' preserves Occurrences already edited individually", async () => {
-    const { db, pattern, otherVenue } = await setup();
+    const { db, pattern } = await setup();
     const created = await createSeries(db, pattern);
     if (!created.ok) throw new Error(created.error);
     const [first, second, third] = await listOccurrences(db, created.series.id);
-    await editOccurrence(db, third.id, { venueId: otherVenue.id }, "this");
+    await editOccurrence(db, third.id, { venue: "Hyde Park" }, "this");
 
     await editOccurrence(db, second.id, { title: "Renamed" }, "future");
 
     const after = await listOccurrences(db, created.series.id);
     expect(titles(after)).toEqual([first.title, "Renamed", "Wednesday Training", "Renamed"]);
-    expect(after[2].venueId).toBe("v2");
+    expect(after[2].venue).toBe("Hyde Park");
   });
 
   it("'this and future' also updates the Series so later extensions use the new pattern", async () => {

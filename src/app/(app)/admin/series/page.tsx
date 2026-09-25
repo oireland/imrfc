@@ -2,14 +2,13 @@ import { redirect } from "next/navigation";
 import { BackLink } from "@/components/back-link";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
-import { createSeries, extendSeries, listSeries, listTeams } from "@/features/events";
-import { listLocations, type Location } from "@/features/locations";
+import { createSeries, extendSeries, listSeries, listTeams, listVenues } from "@/features/events";
 import { isCommitteeOrAbove } from "@/features/users";
 import { getCurrentUser } from "@/lib/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { VenueInput } from "@/components/venue-input";
 import { Textarea } from "@/components/ui/textarea";
 import { SubmitButton } from "@/components/submit-button";
 
@@ -20,7 +19,7 @@ export default async function AdminSeriesPage() {
   if (!user || !isCommitteeOrAbove(user.role)) redirect("/");
 
   const [venues, teams, allSeries] = await Promise.all([
-    listLocations(db).then((ls: Location[]) => ls.filter((l) => l.isVenue)),
+    listVenues(db),
     listTeams(db),
     listSeries(db),
   ]);
@@ -32,7 +31,7 @@ export default async function AdminSeriesPage() {
       weekdays: formData.getAll("weekdays").map(Number),
       startTime: String(formData.get("startTime")),
       endTime: String(formData.get("endTime")),
-      venueId: String(formData.get("venueId")),
+      venue: String(formData.get("venue")),
       startDate: String(formData.get("startDate")),
       endDate: String(formData.get("endDate")),
       notes: String(formData.get("notes") ?? ""),
@@ -92,14 +91,7 @@ export default async function AdminSeriesPage() {
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="series-venue">Venue</Label>
-              <NativeSelect id="series-venue" name="venueId" required>
-                <NativeSelectOption value="">Choose a venue…</NativeSelectOption>
-                {venues.map((v: Location) => (
-                  <NativeSelectOption key={v.id} value={v.id}>
-                    {v.name}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              <VenueInput id="series-venue" name="venue" suggestions={venues} required />
             </div>
             <fieldset className="flex flex-col gap-1 text-sm">
               <legend className="mb-1 font-medium">Teams (leave blank for the whole club)</legend>

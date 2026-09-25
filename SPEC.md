@@ -35,7 +35,7 @@ Imperial Medicals RFC keeps forgetting kit and keeps asking the same questions o
 | View Events, Kit, Duties, Movement Log | ✓ | ✓ | ✓ |
 | Claim a Duty, Confirm own Duty, hand own Duty on | ✓ | ✓ | ✓ |
 | Record an ad-hoc Move, edit Condition Note | ✓ | ✓ | ✓ |
-| Create/edit Events, Series, Kit Units, Locations, Checklists | | ✓ | ✓ |
+| Create/edit Events, Series, Kit Units, Stores, Checklists | | ✓ | ✓ |
 | Assign / unassign / Confirm any Duty | | ✓ | ✓ |
 | Approve, block, unblock Users; change Roles | | | ✓ |
 
@@ -47,10 +47,10 @@ When a User is Blocked:
 - Kit Units they Hold stay with them, flagged "with blocked user".
 - Their history (Moves, past Duties) is kept.
 
-## Locations
+## Stores and Venues
 
-- Name, address, maps link, flags `isVenue` / `isStore` (at least one).
-- Managed by Committee. Never hard-deleted (archive).
+- **Store**: name, address, maps link. Managed by Committee. Never hard-deleted (archive).
+- **Venues are free text** on each Event and Series (e.g. "Harlington", or an away ground's address), so nobody has to add a record for every away fixture. Venue boxes suggest venues already used; an Event's venue links to a Google Maps search.
 
 ## Kit
 
@@ -71,6 +71,7 @@ When a User is Blocked:
 - Type-specific details are held so that new Event Types can add fields without changing existing ones.
 - Teams are seeded (1st XV, 2nd XV); Users do not belong to Teams. Everyone sees every Event.
 - Events list: Upcoming (default) and Past tabs. Past Events are never deleted.
+- **Import from CSV** (Committee): upload a CSV to create many Events at once. The header row is required (column names, any order, optional columns may be left out); dates are `YYYY-MM-DD` or `DD/MM/YYYY`, times 24-hour London; the venue is free text and Teams are matched by name. All or nothing — any bad row means nothing is created and every problem is listed by row. The page offers a downloadable template and a popup describing every column. Up to 500 Events per file.
 - **Cancelled** Events stay visible with a clear cancelled marker; their Duties are voided.
 
 ### Series
@@ -117,7 +118,7 @@ When a User is Blocked:
 - **Home**: my Duties (upcoming, soonest first), next few Events, Kit Units I Hold.
 - **Events**: Upcoming / Past lists → Event detail (details, maps link, Clashes, **Who's bringing what**, Duty Summary button). Who's bringing what has one row per Kit Unit on the Checklist with its Whereabouts, a Bring slot and a Take back slot (who, done or not, gold for yours, "Needs someone" within 48h) and its heads-ups. Tapping a slot opens a sheet with only the actions the viewer may take (claim, mark as done, hand on / give it to someone from a tap-a-name list, where it goes back to, take someone off).
 - **Kit**: grouped by Whereabouts → Kit Unit detail (Whereabouts, Condition Note, upcoming Duties, Movement Log, "I've got it", then "give it to someone" and "put it away in [Store]" below it).
-- **Admin** (Committee/Admin sections as permitted): Pending Users, Users & Roles, Locations, Kit Units, Event Types & Default Checklists, Series.
+- **Admin** (Committee/Admin sections as permitted): Pending Users, Users & Roles, Stores, Kit Units, Event Types & Default Checklists, Series.
 - **Profile**: name, Calendar Feed URL (copy/reset), sign out.
 - PWA manifest + icons (installable via "Add to Home Screen" on iOS/Android) — nice-to-have, last slice.
 

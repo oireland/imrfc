@@ -1,6 +1,6 @@
 import { pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { kitUnit } from "@/features/kit";
-import { location } from "@/features/locations";
+import { store } from "@/features/stores";
 import { user } from "@/features/users";
 
 // One To Duty and one From Duty per Kit Unit per Event. The Event is referenced
@@ -19,7 +19,7 @@ export const duty = pgTable(
     destinationType: text("destination_type", { enum: ["home", "store", "holder"] })
       .notNull()
       .default("home"),
-    destinationStoreId: text("destination_store_id").references(() => location.id),
+    destinationStoreId: text("destination_store_id").references(() => store.id),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
     // Set when the Event is Cancelled: a voided Duty can no longer be Confirmed.
     voidedAt: timestamp("voided_at", { withTimezone: true }),

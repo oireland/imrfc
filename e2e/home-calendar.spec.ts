@@ -32,7 +32,6 @@ test("Committee add an Event by tapping a day on the Home calendar", async ({ pa
   const sql = postgres(process.env.DATABASE_URL ?? "postgres://imrfc:imrfc@localhost:5432/imrfc");
   const run = crypto.randomUUID().slice(0, 8);
   const venueName = `Pitch ${run}`;
-  await sql`insert into location (id, name, address, is_venue) values (${crypto.randomUUID()}, ${venueName}, 'x', true)`;
   await signIn(page, baseURL);
 
   const calendar = page.getByRole("region", { name: "What's coming up" });
@@ -47,7 +46,7 @@ test("Committee add an Event by tapping a day on the Home calendar", async ({ pa
   const title = `Fitness ${run}`;
   await sheet.getByLabel("Title").fill(title);
   await sheet.getByRole("button", { name: "Social" }).click();
-  await sheet.getByLabel("Venue").selectOption({ label: venueName });
+  await sheet.getByLabel("Venue").fill(venueName);
   await sheet.getByRole("button", { name: "Save" }).click();
 
   await expect(page.getByText("Event created")).toBeVisible();

@@ -8,7 +8,7 @@ import { canManageUsers, isCommitteeOrAbove, listPendingUsers } from "@/features
 import { getCurrentUser } from "@/lib/session";
 
 const LINKS = [
-  { href: "/locations", label: "Locations" },
+  { href: "/stores", label: "Stores" },
   { href: "/admin/kit", label: "Kit" },
   { href: "/admin/series", label: "Series" },
   { href: "/admin/checklists", label: "Checklists" },
