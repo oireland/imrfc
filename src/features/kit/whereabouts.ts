@@ -7,8 +7,11 @@ export type WhereaboutsGroup =
   | { type: "holder"; holderId: string; units: KitUnit[] }
   | { type: "unconfirmed"; units: KitUnit[] };
 
-/** Groups Active Kit Units by Whereabouts: each Store, each Holder, then Unconfirmed. */
-export function groupByWhereabouts(units: KitUnit[]): WhereaboutsGroup[] {
+/**
+ * Groups Active Kit Units by Whereabouts: what the viewer holds, then each Store, each other Holder,
+ * then Unconfirmed.
+ */
+export function groupByWhereabouts(units: KitUnit[], viewerId?: string): WhereaboutsGroup[] {
   const stores = new Map<string, KitUnit[]>();
   const holders = new Map<string, KitUnit[]>();
   const unconfirmed: KitUnit[] = [];
@@ -23,7 +26,11 @@ export function groupByWhereabouts(units: KitUnit[]): WhereaboutsGroup[] {
     }
   }
 
+  const viewerUnits = viewerId ? holders.get(viewerId) : undefined;
+  if (viewerId) holders.delete(viewerId);
+
   return [
+    ...(viewerUnits ? [{ type: "holder" as const, holderId: viewerId!, units: viewerUnits }] : []),
     ...[...stores.entries()].map(([storeId, group]) => ({
       type: "store" as const,
       storeId,

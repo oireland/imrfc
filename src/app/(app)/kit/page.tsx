@@ -38,7 +38,7 @@ export default async function KitViewPage() {
   const storeName = (id: string) => locationsById.get(id)?.name ?? "Store";
   const activeUnits = allUnits.filter((u: KitUnit) => u.status === "active");
   const inactiveUnits = allUnits.filter((u: KitUnit) => u.status !== "active");
-  const groups = groupByWhereabouts(activeUnits);
+  const groups = groupByWhereabouts(activeUnits, user.id);
 
   async function quickMove(formData: FormData) {
     "use server";

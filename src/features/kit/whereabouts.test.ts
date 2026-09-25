@@ -45,6 +45,18 @@ describe("groupByWhereabouts", () => {
     ]);
   });
 
+  it("puts the viewer's own Kit Units first", () => {
+    const stored = unit({ storeId: "store-1" });
+    const theirs = unit({ whereaboutsType: "holder", storeId: null, holderId: "other" });
+    const mine = unit({ whereaboutsType: "holder", storeId: null, holderId: "me" });
+
+    expect(groupByWhereabouts([stored, theirs, mine], "me")).toEqual([
+      { type: "holder", holderId: "me", units: [mine] },
+      { type: "store", storeId: "store-1", units: [stored] },
+      { type: "holder", holderId: "other", units: [theirs] },
+    ]);
+  });
+
   it("puts Unconfirmed Kit Units in a final group", () => {
     const stored = unit({ storeId: "store-1" });
     const lost = unit({ whereaboutsType: "unconfirmed", storeId: null, lastSeenEventId: "e1" });

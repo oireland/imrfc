@@ -247,8 +247,6 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
         act={act}
       />
 
-      <CopySummary text={summary} />
-
       {committee && (
         <Card>
           <CardHeader>
@@ -264,6 +262,8 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
           </CardContent>
         </Card>
       )}
+
+      <CopySummary text={summary} />
 
       {eventDetails.seriesId && !eventDetails.cancelled && committee && (
         <Collapsible>
