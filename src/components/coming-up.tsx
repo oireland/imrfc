@@ -45,6 +45,7 @@ export function ComingUp({
   now,
   canAdd,
   venues,
+  teams,
   addAction,
   title = "What's coming up",
 }: {
@@ -52,7 +53,8 @@ export function ComingUp({
   today: string; // YYYY-MM-DD, London
   now: number; // for Upcoming vs Past, fixed on the server
   canAdd: boolean;
-  venues: { id: string; name: string }[];
+  venues: string[];
+  teams: { id: string; name: string }[];
   addAction: (input: QuickEventInput) => Promise<{ ok: true; id: string } | { ok: false; error: string }>;
   title?: string;
 }) {
@@ -90,7 +92,7 @@ export function ComingUp({
         <Agenda events={events} now={now} />
       )}
 
-      {adding && <QuickAddSheet date={adding} venues={venues} action={addAction} onClose={() => setAdding(null)} />}
+      {adding && <QuickAddSheet date={adding} venues={venues} teams={teams} action={addAction} onClose={() => setAdding(null)} />}
     </section>
   );
 }
@@ -182,9 +184,9 @@ function MonthCalendar({
                   key={e.id}
                   className={cn(
                     "flex min-w-0 flex-col rounded-[6px] px-[3px] py-[3px] leading-[1.12]",
-                    TYPE[e.type].className,
+                    // Cancelled: dashed and muted rather than faded, so the text keeps its contrast.
+                    e.cancelled ? "border border-dashed border-border text-muted-foreground line-through" : TYPE[e.type].className,
                     e.mine && "shadow-[inset_3px_0_0_var(--gold)]",
-                    e.cancelled && "line-through opacity-60",
                   )}
                 >
                   <span className="line-clamp-3 text-[10px] font-semibold tracking-[-0.01em] hyphens-auto [overflow-wrap:anywhere]">

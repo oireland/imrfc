@@ -7,10 +7,13 @@ export type QuickEventInput = {
   endTime: string;
   type: EventType;
   title: string;
-  venueId: string;
+  venue: string;
   opponent?: string;
   homeAway?: HomeAway;
   competition?: Competition;
+  meetTime?: string; // HH:MM, London; Matches only, defaults to kick-off
+  notes?: string;
+  teamIds?: string[]; // none means the whole club
 };
 
 const DEFAULT_TITLE: Record<EventType, string> = { training: "Training", match: "Match", social: "Social" };
@@ -27,7 +30,13 @@ export function buildQuickEvent(input: QuickEventInput): NewEvent {
     next.setUTCDate(next.getUTCDate() + 1);
     end = londonToUtc(next.toISOString().slice(0, 10), input.endTime);
   }
-  const common = { start, end, venueId: input.venueId };
+  const common = {
+    start,
+    end,
+    venue: input.venue.trim(),
+    notes: (input.notes ?? "").trim(),
+    teamIds: input.teamIds ?? [],
+  };
 
   if (input.type === "match") {
     const opponent = (input.opponent ?? "").trim();
@@ -39,7 +48,7 @@ export function buildQuickEvent(input: QuickEventInput): NewEvent {
         opponent,
         homeAway: input.homeAway ?? "home",
         competition: input.competition ?? "friendly",
-        meetTime: start,
+        meetTime: input.meetTime ? londonToUtc(input.date, input.meetTime) : start,
       },
     };
   }

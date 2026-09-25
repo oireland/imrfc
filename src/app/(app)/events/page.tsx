@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Upload } from "lucide-react";
 import { db } from "@/db/client";
-import { AddLink } from "@/components/add-link";
+import { AddEventButton } from "@/components/add-event-button";
 import { BackLink } from "@/components/back-link";
 import { ComingUp } from "@/components/coming-up";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatWhen } from "@/lib/format-time";
 import { listEvents, type Event } from "@/features/events";
@@ -60,7 +61,15 @@ export default async function EventsPage({ searchParams }: PageProps<"/events">)
 
       <ComingUp {...comingUp} title="Upcoming" canAdd={committee} addAction={quickAddEvent} />
 
-      {committee && <AddLink href="/events/new">Add event</AddLink>}
+      {committee && (
+        <div className="flex flex-col gap-2">
+          <AddEventButton venues={comingUp.venues} teams={comingUp.teams} action={quickAddEvent} />
+          <Link href="/events/import" className={buttonVariants({ variant: "outline", size: "lg", className: "h-11 w-full" })}>
+            <Upload aria-hidden="true" />
+            Import from CSV
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

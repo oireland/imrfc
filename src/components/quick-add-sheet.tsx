@@ -1,11 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, X } from "lucide-react";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { ChevronDown, Loader2, X } from "lucide-react";
+import { VenueInput } from "@/components/venue-input";
 import { cn } from "cn";
 import type { QuickEventInput } from "@/features/events";
 
@@ -13,11 +12,16 @@ type EventType = QuickEventInput["type"];
 type HomeAway = NonNullable<QuickEventInput["homeAway"]>;
 type Competition = NonNullable<QuickEventInput["competition"]>;
 
-const DEFAULT_TIMES: Record<EventType, [string, string]> = {
-  training: ["19:00", "21:00"],
-  match: ["14:30", "16:30"],
-  social: ["20:00", "23:00"],
-};
+/** Now and an hour on, as London HH:MM, to prefill the time pickers. */
+function nowAndAnHourOn(): [string, string] {
+  const parts = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Europe/London" }).formatToParts(
+    new Date(),
+  );
+  const hour = Number(parts.find((p) => p.type === "hour")?.value);
+  const minute = parts.find((p) => p.type === "minute")?.value ?? "00";
+  const pad = (h: number) => String(h).padStart(2, "0");
+  return [`${pad(hour)}:${minute}`, `${pad((hour + 1) % 24)}:${minute}`];
+}
 
 const COMPETITIONS: { key: Competition; label: string }[] = [
   { key: "bucs", label: "BUCS" },
@@ -42,37 +46,45 @@ function Chip({ selected, onClick, children }: { selected: boolean; onClick: () 
   );
 }
 
-/** Tap-a-day "New event" sheet, like Google Calendar. Committee and above only. */
+/**
+ * "New event" sheet, like Google Calendar. Committee and above only. Give it a date (tap-a-day)
+ * or leave it out and it asks for one.
+ */
 export function QuickAddSheet({
-  date,
+  date: fixedDate,
   venues,
+  teams,
   onClose,
   action,
 }: {
-  date: string; // YYYY-MM-DD, London
-  venues: { id: string; name: string }[];
+  date?: string; // YYYY-MM-DD, London; omit to let the user choose
+  venues: string[]; // already used, as suggestions
+  teams: { id: string; name: string }[];
   onClose: () => void;
   action: (input: QuickEventInput) => Promise<{ ok: true; id: string } | { ok: false; error: string }>;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [type, setType] = useState<EventType>("training");
+  const [chosenDate, setChosenDate] = useState("");
+  const date = fixedDate ?? chosenDate;
   const [title, setTitle] = useState("");
-  const [start, setStart] = useState(DEFAULT_TIMES.training[0]);
-  const [end, setEnd] = useState(DEFAULT_TIMES.training[1]);
-  const [venueId, setVenueId] = useState(venues[0]?.id ?? "");
+  const [[defaultStart, defaultEnd]] = useState(nowAndAnHourOn);
+  const [start, setStart] = useState(defaultStart);
+  const [end, setEnd] = useState(defaultEnd);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [notes, setNotes] = useState("");
+  const [teamIds, setTeamIds] = useState<string[]>([]);
+  const [meetTime, setMeetTime] = useState("");
+  const [venue, setVenue] = useState(venues[0] ?? "");
   const [opponent, setOpponent] = useState("");
   const [homeAway, setHomeAway] = useState<HomeAway>("home");
   const [competition, setCompetition] = useState<Competition>("bucs");
-  const dateLabel = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(
-    new Date(`${date}T12:00:00Z`),
-  );
-
-  function pickType(t: EventType) {
-    setType(t);
-    setStart(DEFAULT_TIMES[t][0]);
-    setEnd(DEFAULT_TIMES[t][1]);
-  }
+  const dateLabel = fixedDate
+    ? new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(
+        new Date(`${fixedDate}T12:00:00Z`),
+      )
+    : null;
 
   function save(e: React.FormEvent) {
     e.preventDefault();
@@ -83,8 +95,10 @@ export function QuickAddSheet({
         endTime: end,
         type,
         title,
-        venueId,
-        ...(type === "match" ? { opponent, homeAway, competition } : {}),
+        venue,
+        notes,
+        teamIds,
+        ...(type === "match" ? { opponent, homeAway, competition, meetTime: meetTime || undefined } : {}),
       });
       if (!result.ok) {
         toast.error(result.error);
@@ -96,6 +110,23 @@ export function QuickAddSheet({
     });
   }
 
+  const teamsField = teams.length > 0 && (
+    <fieldset className="flex flex-col gap-2">
+                <legend className="mb-2 text-sm text-muted-foreground">Teams (leave blank for the whole club)</legend>
+                <div className="flex flex-wrap gap-2">
+                  {teams.map((t) => (
+                    <Chip
+                      key={t.id}
+                      selected={teamIds.includes(t.id)}
+                      onClick={() => setTeamIds((ids) => (ids.includes(t.id) ? ids.filter((id) => id !== t.id) : [...ids, t.id]))}
+                    >
+                      {t.name}
+                    </Chip>
+                  ))}
+                </div>
+              </fieldset>
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="quick-add-title">
       <button type="button" aria-label="Close" className="absolute inset-0 animate-in bg-black/50 backdrop-blur-sm fade-in" onClick={onClose} />
@@ -106,10 +137,17 @@ export function QuickAddSheet({
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-border" />
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">New event</p>
-            <p id="quick-add-title" className="text-lg font-semibold">
-              {dateLabel}
+            <p
+              id={dateLabel ? undefined : "quick-add-title"}
+              className="text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase"
+            >
+              New event
             </p>
+            {dateLabel && (
+              <p id="quick-add-title" className="text-lg font-semibold">
+                {dateLabel}
+              </p>
+            )}
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="rounded-full bg-muted p-2">
             <X className="size-4" />
@@ -117,7 +155,7 @@ export function QuickAddSheet({
         </div>
 
         <input
-          autoFocus
+          autoFocus={!!fixedDate}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder={type === "match" ? "Title (defaults to vs Opponent)" : "Add title"}
@@ -126,13 +164,13 @@ export function QuickAddSheet({
         />
 
         <div className="mb-4 flex gap-2" role="group" aria-label="Event Type">
-          <Chip selected={type === "training"} onClick={() => pickType("training")}>
+          <Chip selected={type === "training"} onClick={() => setType("training")}>
             Training
           </Chip>
-          <Chip selected={type === "match"} onClick={() => pickType("match")}>
+          <Chip selected={type === "match"} onClick={() => setType("match")}>
             Match
           </Chip>
-          <Chip selected={type === "social"} onClick={() => pickType("social")}>
+          <Chip selected={type === "social"} onClick={() => setType("social")}>
             Social
           </Chip>
         </div>
@@ -162,7 +200,19 @@ export function QuickAddSheet({
                 </Chip>
               ))}
             </div>
+            {teamsField}
           </div>
+        )}
+
+        {!fixedDate && (
+          <input
+            type="date"
+            value={chosenDate}
+            onChange={(e) => setChosenDate(e.target.value)}
+            aria-label="Date"
+            required
+            className="mb-3 block rounded-xl bg-muted px-3 py-2 text-sm"
+          />
         )}
 
         <div className="mb-3 flex items-center gap-2 text-sm">
@@ -187,19 +237,53 @@ export function QuickAddSheet({
           />
         </div>
 
-        <div className="mb-5 flex items-center gap-2">
-          <NativeSelect aria-label="Venue" value={venueId} onChange={(e) => setVenueId(e.target.value)} required className="flex-1">
-            {venues.length === 0 && <NativeSelectOption value="">No venues yet</NativeSelectOption>}
-            {venues.map((v) => (
-              <NativeSelectOption key={v.id} value={v.id}>
-                {v.name}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-          <Link href="/events/new" className="shrink-0 text-sm text-muted-foreground underline-offset-4 hover:underline">
-            More options
-          </Link>
-        </div>
+        <VenueInput
+          id="quick-add-venue"
+          aria-label="Venue"
+          value={venue}
+          onChange={(e) => setVenue(e.target.value)}
+          onFocus={(e) => e.target.select()}
+          suggestions={venues}
+          required
+          className="mb-3 h-10 w-full rounded-xl"
+        />
+
+        <button
+          type="button"
+          onClick={() => setMoreOpen((o) => !o)}
+          aria-expanded={moreOpen}
+          aria-controls="quick-add-more"
+          className="mb-5 flex items-center gap-1 text-sm text-muted-foreground"
+        >
+          More options
+          <ChevronDown className={cn("size-4 transition-transform", moreOpen && "rotate-180")} aria-hidden="true" />
+        </button>
+
+        {moreOpen && (
+          <div id="quick-add-more" className="mb-5 flex flex-col gap-4">
+            {type === "match" && (
+              <label className="flex items-center gap-3 text-sm">
+                <span className="text-muted-foreground">Meet time</span>
+                <input
+                  type="time"
+                  value={meetTime}
+                  onChange={(e) => setMeetTime(e.target.value)}
+                  aria-label="Meet time"
+                  className="rounded-xl bg-muted px-3 py-2 tabular-nums"
+                />
+              </label>
+            )}
+            {type !== "match" && teamsField}
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Notes"
+              aria-label="Notes"
+              rows={3}
+              className="rounded-xl bg-muted px-3 py-2 text-sm outline-none placeholder:text-muted-foreground/60 focus-visible:ring-3 focus-visible:ring-ring/50"
+            />
+          </div>
+        )}
 
         <button
           type="submit"
