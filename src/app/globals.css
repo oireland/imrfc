@@ -188,6 +188,36 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Tailwind v4 leaves buttons on the default cursor; anything clickable gets the pointer. */
+  a[href],
+  button,
+  select,
+  summary,
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"],
+  [role="menuitemradio"],
+  [role="menuitemcheckbox"],
+  [role="option"],
+  [role="checkbox"],
+  [role="radio"],
+  [role="switch"],
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="file"],
+  input[type="submit"],
+  input[type="button"],
+  input[type="reset"],
+  input[type="color"],
+  ::file-selector-button,
+  label:has(input[type="checkbox"], input[type="radio"]) {
+    cursor: pointer;
+  }
+  :disabled,
+  [aria-disabled="true"],
+  [data-disabled] {
+    cursor: not-allowed;
+  }
   html {
     @apply font-sans;
     color-scheme: light;
