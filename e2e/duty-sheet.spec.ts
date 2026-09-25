@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { AxeBuilder } from "@axe-core/playwright";
 import postgres from "postgres";
+import { TEST_DATABASE_URL } from "./support/test-db";
 
 
 const MAILPIT = "http://localhost:8025";
@@ -21,7 +22,7 @@ async function magicLink(email: string): Promise<string> {
 }
 
 test("Committee give a Duty to a teammate and choose where the kit goes back to, from the Duty sheet", async ({ page, baseURL }) => {
-  const sql = postgres(process.env.DATABASE_URL ?? "postgres://imrfc:imrfc@localhost:5432/imrfc");
+  const sql = postgres(TEST_DATABASE_URL);
   const run = crypto.randomUUID().slice(0, 8);
   const [store, otherStore, kit, event, list, teammate] = Array.from({ length: 6 }, () => crypto.randomUUID());
   const kitName = `Tackle shields ${run}`;

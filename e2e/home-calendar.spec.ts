@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import postgres from "postgres";
+import { TEST_DATABASE_URL } from "./support/test-db";
 
 const MAILPIT = "http://localhost:8025";
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "irelandoliver4@gmail.com";
@@ -29,7 +30,7 @@ async function signIn(page: Page, baseURL: string | undefined) {
 }
 
 test("Committee add an Event by tapping a day on the Home calendar", async ({ page, baseURL }) => {
-  const sql = postgres(process.env.DATABASE_URL ?? "postgres://imrfc:imrfc@localhost:5432/imrfc");
+  const sql = postgres(TEST_DATABASE_URL);
   const run = crypto.randomUUID().slice(0, 8);
   const venueName = `Pitch ${run}`;
   await signIn(page, baseURL);

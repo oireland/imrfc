@@ -1,6 +1,7 @@
 import { AxeBuilder } from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import postgres from "postgres";
+import { TEST_DATABASE_URL } from "./support/test-db";
 
 const MAILPIT = "http://localhost:8025";
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "irelandoliver4@gmail.com";
@@ -60,7 +61,7 @@ test.describe("Design pass: every screen is accessible at phone width, light and
   let kitId: string;
 
   test.beforeAll(async () => {
-    sql = postgres(process.env.DATABASE_URL ?? "postgres://imrfc:imrfc@localhost:5432/imrfc");
+    sql = postgres(TEST_DATABASE_URL);
     const run = crypto.randomUUID().slice(0, 8);
     const store = crypto.randomUUID();
     kitId = crypto.randomUUID();

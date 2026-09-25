@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import postgres from "postgres";
+import { TEST_DATABASE_URL } from "./support/test-db";
 
 const MAILPIT = "http://localhost:8025";
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "irelandoliver4@gmail.com";
@@ -19,7 +20,7 @@ async function magicLink(email: string): Promise<string> {
 }
 
 test("Committee claims and Confirms Duties, and the Kit Unit follows", async ({ page, baseURL }) => {
-  const sql = postgres(process.env.DATABASE_URL ?? "postgres://imrfc:imrfc@localhost:5432/imrfc");
+  const sql = postgres(TEST_DATABASE_URL);
   const run = crypto.randomUUID().slice(0, 8);
   const [store, kit, event, list] = Array.from({ length: 4 }, () => crypto.randomUUID());
   const storeName = `Shed ${run}`;
