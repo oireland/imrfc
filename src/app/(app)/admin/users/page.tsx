@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
+import { BackLink } from "@/components/back-link";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { releaseDutiesOfBlockedUser } from "@/features/duties";
@@ -54,12 +54,10 @@ export default async function UsersAdminPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-4">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <Link href="/admin" className="text-sm text-muted-foreground hover:underline">
-          ← Admin
-        </Link>
-        <h2 className="text-xl font-semibold">Users</h2>
+        <BackLink href="/admin">Admin</BackLink>
+        <h2 className="font-heading text-[40px] leading-none tracking-tight">Users</h2>
       </div>
 
       <div className="flex flex-col gap-3">

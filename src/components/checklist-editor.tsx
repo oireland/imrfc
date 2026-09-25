@@ -2,7 +2,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { SubmitButton } from "@/components/submit-button";
 import { Label } from "@/components/ui/label";
-import { NativeSelect } from "@/components/ui/native-select";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import {
   addToChecklist,
   clearChecklist,
@@ -83,13 +83,13 @@ export async function ChecklistEditor({
         <div className="flex flex-col gap-1">
           <Label htmlFor={`add-kit-unit-${target.scopeId}`}>Add Kit Unit</Label>
           <NativeSelect id={`add-kit-unit-${target.scopeId}`} name="kitUnitId" required>
-            <option value="">Choose a Kit Unit…</option>
+            <NativeSelectOption value="">Choose a Kit Unit…</NativeSelectOption>
             {active
               .filter((u) => !own?.includes(u.id))
               .map((u) => (
-                <option key={u.id} value={u.id}>
+                <NativeSelectOption key={u.id} value={u.id}>
                   {u.name}
-                </option>
+                </NativeSelectOption>
               ))}
           </NativeSelect>
         </div>

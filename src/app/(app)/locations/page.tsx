@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
+import { BackLink } from "@/components/back-link";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { archiveLocation, createLocation, listLocations, type Location } from "@/features/locations";
@@ -35,12 +35,10 @@ export default async function LocationsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-4">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <Link href="/admin" className="text-sm text-muted-foreground hover:underline">
-          ← Admin
-        </Link>
-        <h2 className="text-xl font-semibold">Locations</h2>
+        <BackLink href="/admin">Admin</BackLink>
+        <h2 className="font-heading text-[40px] leading-none tracking-tight">Locations</h2>
       </div>
 
       <Card className="py-0">

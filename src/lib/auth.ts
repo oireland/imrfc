@@ -29,7 +29,7 @@ export const auth = betterAuth({
       sendMagicLink: async ({ email, url }) => {
         await getMailSender().send({
           to: email,
-          subject: "Sign in to IMRFC Club Hub",
+          subject: "Sign in to IMRFC",
           text: `Sign in here: ${url}`,
         });
       },
@@ -39,6 +39,7 @@ export const auth = betterAuth({
     additionalFields: {
       role: { type: "string", defaultValue: "member", input: false },
       accessState: { type: "string", defaultValue: "pending", input: false },
+      theme: { type: "string", defaultValue: "system", input: false },
     },
   },
   databaseHooks: {

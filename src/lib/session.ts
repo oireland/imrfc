@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import type { AccessState, Role } from "@/features/users";
+import type { AccessState, Role, ThemePreference } from "@/features/users";
 import { auth } from "./auth";
 
 export type CurrentUser = {
@@ -9,14 +9,15 @@ export type CurrentUser = {
   email: string;
   role: Role;
   accessState: AccessState;
+  theme: ThemePreference;
 };
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return null;
-  const { id, name, email, role, accessState } = session.user as typeof session.user &
+  const { id, name, email, role, accessState, theme } = session.user as typeof session.user &
     CurrentUser;
-  return { id, name, email, role, accessState };
+  return { id, name, email, role, accessState, theme: theme ?? "system" };
 }
 
 /** Redirects to sign-in, the waiting screen, or the blocked screen; otherwise returns the Approved User. */

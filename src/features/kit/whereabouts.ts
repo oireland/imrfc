@@ -37,3 +37,13 @@ export function groupByWhereabouts(units: KitUnit[]): WhereaboutsGroup[] {
     ...(unconfirmed.length > 0 ? [{ type: "unconfirmed" as const, units: unconfirmed }] : []),
   ];
 }
+
+export type QuickMove = { type: "store"; storeId: string } | { type: "holder"; holderId: string };
+
+/** The one-tap Move offered on the Kit view: return a Kit Unit I hold to its Home, otherwise "I've got it". */
+export function quickMoveFor(unit: KitUnit, userId: string): QuickMove {
+  if (unit.whereaboutsType === "holder" && unit.holderId === userId) {
+    return { type: "store", storeId: unit.homeId };
+  }
+  return { type: "holder", holderId: userId };
+}

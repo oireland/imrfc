@@ -1,13 +1,19 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import Image from "next/image";
-import crest from "../../docs/brand/crest.png";
+import { Geist_Mono, Instrument_Serif, Inter_Tight } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
+import { getCurrentUser } from "@/lib/session";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const interTight = Inter_Tight({
+  variable: "--font-inter-tight",
   subsets: ["latin"],
+});
+
+const instrumentSerif = Instrument_Serif({
+  variable: "--font-instrument-serif",
+  subsets: ["latin"],
+  weight: "400",
+  style: ["normal", "italic"],
 });
 
 const geistMono = Geist_Mono({
@@ -16,32 +22,30 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "IMRFC Club Hub",
+  title: "IMRFC",
   description: "Events and kit tracking for Imperial Medicals RFC",
 };
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#1f2f55" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f1729" },
+    { media: "(prefers-color-scheme: light)", color: "#f5f4f0" },
+    { media: "(prefers-color-scheme: dark)", color: "#11100f" },
   ],
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // The crest menu's theme choice; "system" leaves it to prefers-color-scheme.
+  const theme = (await getCurrentUser())?.theme ?? "system";
+
   return (
     <html
       lang="en-GB"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      data-theme={theme === "system" ? undefined : theme}
+      className={`${interTight.variable} ${instrumentSerif.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
-        <header className="flex items-center gap-3 bg-primary px-4 py-3 text-primary-foreground dark:bg-card dark:text-card-foreground">
-          <div className="rounded-lg bg-tile p-1">
-            <Image src={crest} alt="IMRFC crest" className="size-9" priority />
-          </div>
-          <h1 className="font-heading text-lg font-semibold">IMRFC Club Hub</h1>
-        </header>
-        <main className="flex-1 px-4 py-6">{children}</main>
-        <Toaster />
+        <main className="flex-1 px-4 pt-10 pb-6">{children}</main>
+        <Toaster theme={theme} />
       </body>
     </html>
   );

@@ -1,4 +1,4 @@
-import { asc, desc, eq, gte, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lt } from "drizzle-orm";
 import { event, eventTeam, matchDetails, team } from "./schema";
 import { classifyEvent, validateEvent, type NewEvent } from "./rules";
 
@@ -14,7 +14,8 @@ export {
   type OccurrenceChanges,
   type Series,
 } from "./series";
-export { londonParts } from "./series-rules";
+export { londonParts, londonToUtc } from "./series-rules";
+export { buildQuickEvent, type QuickEventInput } from "./quick-add";
 export type { EventType, HomeAway, Competition, NewEvent, NewMatchDetails } from "./rules";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -77,6 +78,15 @@ export async function listEvents(db: Db, { when }: { when: "upcoming" | "past" }
   return when === "upcoming"
     ? db.select().from(event).where(gte(event.end, now)).orderBy(asc(event.start))
     : db.select().from(event).where(lt(event.end, now)).orderBy(desc(event.start));
+}
+
+/** Events (cancelled included) starting in [from, to), soonest first — for the month calendar. */
+export async function listEventsBetween(db: Db, from: Date, to: Date): Promise<Event[]> {
+  return db
+    .select()
+    .from(event)
+    .where(and(gte(event.start, from), lt(event.start, to)))
+    .orderBy(asc(event.start));
 }
 
 /** The next few upcoming Events that are still happening, soonest first. */

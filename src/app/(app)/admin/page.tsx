@@ -10,7 +10,6 @@ import { getCurrentUser } from "@/lib/session";
 const LINKS = [
   { href: "/locations", label: "Locations" },
   { href: "/admin/kit", label: "Kit Units" },
-  { href: "/admin/events", label: "Events Admin" },
   { href: "/admin/series", label: "Series" },
   { href: "/admin/checklists", label: "Checklists" },
   { href: "/admin/users", label: "Users" },
@@ -24,7 +23,7 @@ export default async function AdminPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-xl font-semibold">Admin</h2>
+      <h2 className="font-heading text-[40px] leading-none tracking-tight">Admin</h2>
       <Card className="divide-y divide-border py-0">
         {LINKS.map(({ href, label }) => (
           <Link

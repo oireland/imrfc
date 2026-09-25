@@ -1,19 +1,19 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { createEvent, listTeams, type Competition, type EventType, type HomeAway } from "@/features/events";
 import { listLocations, type Location } from "@/features/locations";
 import { isCommitteeOrAbove } from "@/features/users";
 import { getCurrentUser } from "@/lib/session";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { SubmitButton } from "@/components/submit-button";
+import { BackLink } from "@/components/back-link";
 
-export default async function AdminEventsPage() {
+export default async function NewEventPage() {
   const user = await getCurrentUser();
   if (!user || !isCommitteeOrAbove(user.role)) redirect("/");
 
@@ -24,6 +24,8 @@ export default async function AdminEventsPage() {
 
   async function create(formData: FormData) {
     "use server";
+    const current = await getCurrentUser();
+    if (!current || !isCommitteeOrAbove(current.role)) redirect("/");
     const eventType = formData.get("eventType") as EventType;
     const start = new Date(String(formData.get("start")));
     const end = new Date(String(formData.get("end")));
@@ -38,7 +40,7 @@ export default async function AdminEventsPage() {
       teamIds,
     };
 
-    await createEvent(
+    const result = await createEvent(
       db,
       eventType === "match"
         ? {
@@ -53,23 +55,19 @@ export default async function AdminEventsPage() {
           }
         : { ...common, eventType },
     );
-    revalidatePath("/admin/events");
+    if (!result.ok) redirect(`/events/new?error=${encodeURIComponent(result.error)}`);
     revalidatePath("/events");
+    redirect(`/events/${result.event.id}?flash=event-created`);
   }
 
   return (
-    <div className="flex flex-col gap-6 p-4">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <Link href="/admin" className="text-sm text-muted-foreground hover:underline">
-          ← Admin
-        </Link>
-        <h2 className="text-xl font-semibold">Events Admin</h2>
+        <BackLink href="/events">Events</BackLink>
+        <h2 className="font-heading text-[40px] leading-none tracking-tight">New Event</h2>
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>New Event</CardTitle>
-        </CardHeader>
         <CardContent>
           <form action={create} className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
@@ -144,7 +142,7 @@ export default async function AdminEventsPage() {
               </div>
             </fieldset>
 
-            <SubmitButton>Add</SubmitButton>
+            <SubmitButton pendingLabel="Creating…">Create Event</SubmitButton>
           </form>
         </CardContent>
       </Card>

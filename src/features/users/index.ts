@@ -4,6 +4,7 @@ import { session, user } from "./schema";
 
 export { resolveNewUser } from "./access";
 export type { AccessState, Role } from "./access";
+export { displayName } from "./display-name";
 export { canAccessApp, canManageUsers, isCommitteeOrAbove } from "./permissions";
 // Other features' schema.ts files reference this table for foreign keys.
 export { user } from "./schema";
@@ -37,4 +38,17 @@ export async function unblockUser(db: Db, userId: string) {
 
 export async function setRole(db: Db, userId: string, role: Role) {
   await db.update(user).set({ role }).where(eq(user.id, userId));
+}
+
+export async function setName(db: Db, userId: string, name: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const trimmed = name.trim();
+  if (!trimmed) return { ok: false, error: "Name is required" };
+  await db.update(user).set({ name: trimmed }).where(eq(user.id, userId));
+  return { ok: true };
+}
+
+export type ThemePreference = "system" | "light" | "dark";
+
+export async function setThemePreference(db: Db, userId: string, theme: ThemePreference) {
+  await db.update(user).set({ theme }).where(eq(user.id, userId));
 }

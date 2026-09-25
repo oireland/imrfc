@@ -80,14 +80,17 @@ test.describe("Design pass: every screen is accessible at phone width, light and
     await sql.end();
   });
 
-  for (const colorScheme of ["light", "dark"] as const) {
-    test(`signed-in screens have no axe violations (${colorScheme})`, async ({ page, baseURL }) => {
-      await page.emulateMedia({ colorScheme });
+  // "light" / "dark" follow the device (the default System theme); "chosen dark" is
+  // the crest menu's Dark choice (<html data-theme="dark">) on a light device.
+  for (const mode of ["light", "dark", "chosen dark"] as const) {
+    test(`signed-in screens have no axe violations (${mode})`, async ({ page, baseURL }) => {
+      await page.emulateMedia({ colorScheme: mode === "dark" ? "dark" : "light" });
       await signIn(page, baseURL);
 
       const screens = [
         "/",
         "/events",
+        "/events?tab=past",
         `/events/${eventId}`,
         "/kit",
         `/kit/${kitId}`,
@@ -95,7 +98,8 @@ test.describe("Design pass: every screen is accessible at phone width, light and
         "/profile",
         "/admin",
         "/admin/kit",
-        "/admin/events",
+        "/events/new",
+        "/kit/new",
         "/admin/series",
         "/admin/checklists",
         "/admin/users",
@@ -104,6 +108,7 @@ test.describe("Design pass: every screen is accessible at phone width, light and
       const reports: string[] = [];
       for (const screen of screens) {
         await page.goto(screen);
+        if (mode === "chosen dark") await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
         await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
         await assertNoHorizontalScroll(page);
         const report = await axeReport(page, screen);
@@ -111,7 +116,9 @@ test.describe("Design pass: every screen is accessible at phone width, light and
       }
       expect(reports, `Accessibility violations found:\n${reports.join("\n")}`).toEqual([]);
     });
+  }
 
+  for (const colorScheme of ["light", "dark"] as const) {
     test(`signed-out sign-in screen has no axe violations (${colorScheme})`, async ({ browser }) => {
       const context = await browser.newContext({ colorScheme });
       const page = await context.newPage();

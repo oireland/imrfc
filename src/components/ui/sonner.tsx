@@ -3,11 +3,12 @@
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
 
-// No toggle: light/dark follows the system only (see SPEC → Look and feel).
+// Pass the User's theme choice through `theme`; defaults to following the system.
 const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       theme="system"
+      position="top-center"
       className="toaster group"
       icons={{
         success: (

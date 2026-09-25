@@ -8,6 +8,8 @@ import {
   blockUser,
   listApprovedUsers,
   listPendingUsers,
+  setName,
+  setThemePreference,
   setRole,
   unblockUser,
 } from "./index";
@@ -115,5 +117,43 @@ describe("setRole", () => {
 
     const [updated] = await db.select().from(user).where(eq(user.id, alex.id));
     expect(updated.role).toBe("committee");
+  });
+});
+
+describe("setName", () => {
+  it("saves a trimmed name", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const u = await seedUser(db, { name: "" });
+
+    await setName(db, u.id, "  Ollie Ireland ");
+
+    const [row] = await db.select().from(user).where(eq(user.id, u.id));
+    expect(row.name).toBe("Ollie Ireland");
+  });
+
+  it("refuses a blank name", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const u = await seedUser(db, { name: "Kept" });
+
+    expect(await setName(db, u.id, "   ")).toEqual({ ok: false, error: "Name is required" });
+
+    const [row] = await db.select().from(user).where(eq(user.id, u.id));
+    expect(row.name).toBe("Kept");
+  });
+});
+
+describe("setThemePreference", () => {
+  it("defaults to system and saves a chosen theme", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const u = await seedUser(db);
+    expect(u.theme).toBe("system");
+
+    await setThemePreference(db, u.id, "dark");
+
+    const [row] = await db.select().from(user).where(eq(user.id, u.id));
+    expect(row.theme).toBe("dark");
   });
 });

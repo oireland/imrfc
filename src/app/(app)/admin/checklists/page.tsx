@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
+import { BackLink } from "@/components/back-link";
 import { db } from "@/db/client";
 import { ChecklistEditor } from "@/components/checklist-editor";
 import { listSeries } from "@/features/events";
@@ -15,12 +15,10 @@ export default async function AdminChecklistsPage() {
   const allSeries = await listSeries(db);
 
   return (
-    <div className="flex flex-col gap-6 p-4">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <Link href="/admin" className="text-sm text-muted-foreground hover:underline">
-          ← Admin
-        </Link>
-        <h2 className="text-xl font-semibold">Checklists</h2>
+        <BackLink href="/admin">Admin</BackLink>
+        <h2 className="font-heading text-[40px] leading-none tracking-tight">Checklists</h2>
       </div>
 
       <div className="flex flex-col gap-3">

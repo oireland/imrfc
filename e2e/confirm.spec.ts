@@ -48,7 +48,7 @@ test("Committee claims and Confirms Duties, and the Kit Unit follows", async ({ 
   await expect(page.getByText("Confirmed", { exact: true })).toHaveCount(1);
 
   await page.goto("/kit");
-  const held = page.locator("div", { has: page.getByRole("heading", { name: "You" }) }).filter({ hasText: kitName });
+  const held = page.getByRole("region", { name: "With you" }).getByRole("link", { name: kitName });
   await expect(held.first()).toBeVisible();
 
   await page.goto(`/events/${event}`);
@@ -56,7 +56,7 @@ test("Committee claims and Confirms Duties, and the Kit Unit follows", async ({ 
   await expect(page.getByText("Confirmed", { exact: true })).toHaveCount(2);
 
   await page.goto("/kit");
-  const home = page.locator("div", { has: page.getByRole("heading", { name: storeName }) }).filter({ hasText: kitName });
+  const home = page.getByRole("region", { name: storeName }).getByRole("link", { name: kitName });
   await expect(home.first()).toBeVisible();
   await sql.end();
 });

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { location } from "@/features/locations";
-import { cancelEvent, createEvent, getEvent, listEvents, listNextEvents, listTeams, type NewEvent } from "./index";
+import { cancelEvent, createEvent, getEvent, listEvents, listEventsBetween, listNextEvents, listTeams, type NewEvent } from "./index";
 
 async function seedVenue(db: Awaited<ReturnType<typeof createTestDb>>) {
   const [row] = await db
@@ -179,5 +179,29 @@ describe("listNextEvents", () => {
     const next = await listNextEvents(db, 2);
 
     expect(next.map((e) => e.title)).toEqual(["Day 2", "Day 3"]);
+  });
+});
+
+describe("listEventsBetween", () => {
+  it("returns Events starting in the range, soonest first", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const venue = await seedVenue(db);
+    const make = (title: string, start: string) =>
+      createEvent(db, {
+        title,
+        eventType: "training",
+        start: new Date(start),
+        end: new Date(new Date(start).getTime() + 7_200_000),
+        venueId: venue.id,
+      });
+    await make("Before", "2026-08-31T18:00:00Z");
+    await make("Later", "2026-09-20T18:00:00Z");
+    await make("Sooner", "2026-09-02T18:00:00Z");
+    await make("After", "2026-10-01T18:00:00Z");
+
+    const events = await listEventsBetween(db, new Date("2026-09-01T00:00:00Z"), new Date("2026-10-01T00:00:00Z"));
+
+    expect(events.map((e) => e.title)).toEqual(["Sooner", "Later"]);
   });
 });

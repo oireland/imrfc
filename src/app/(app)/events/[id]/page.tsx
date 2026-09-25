@@ -16,7 +16,8 @@ import {
 } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { NativeSelect } from "@/components/ui/native-select";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { BackLink } from "@/components/back-link";
 import { formatWhen } from "@/lib/format-time";
 import { resolveEventChecklist } from "@/features/checklists";
 import { listKitUnits } from "@/features/kit";
@@ -37,7 +38,7 @@ import {
 } from "@/features/duties";
 import { cancelEvent, editOccurrence, getEvent, londonParts } from "@/features/events";
 import { getLocation, listLocations, type Location } from "@/features/locations";
-import { isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
+import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
 import { requireApprovedUser } from "@/lib/session";
 import { ChevronRight } from "lucide-react";
 
@@ -129,7 +130,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
   ]);
   const clashes = (await listClashes(db)).filter((c) => c.eventIds.includes(id));
   const approved = people.filter((p) => p.accessState === "approved");
-  const personName = new Map(people.map((p) => [p.id, p.name]));
+  const personName = new Map(people.map((p) => [p.id, displayName(p)]));
   const stores = allLocations.filter((l: Location) => l.isStore);
   const committee = isCommitteeOrAbove(user.role);
   const dutyFor = (kid: string, direction: Duty["direction"]) =>
@@ -174,11 +175,13 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
                 size="sm"
                 defaultValue=""
               >
-                <option value="" disabled>
+                <NativeSelectOption value="" disabled>
                   Choose a person…
-                </option>
+                </NativeSelectOption>
                 {approved.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
+                  <NativeSelectOption key={p.id} value={p.id}>
+                    {p.id === user.id ? `${displayName(p)} (you)` : displayName(p)}
+                  </NativeSelectOption>
                 ))}
               </NativeSelect>
               {mine && (
@@ -212,11 +215,11 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
                   size="sm"
                   defaultValue={d.destination.type === "store" ? `store:${d.destination.storeId}` : d.destination.type}
                 >
-                  <option value="home">Home</option>
+                  <NativeSelectOption value="home">Home</NativeSelectOption>
                   {stores.map((s: Location) => (
-                    <option key={s.id} value={`store:${s.id}`}>{s.name}</option>
+                    <NativeSelectOption key={s.id} value={`store:${s.id}`}>{s.name}</NativeSelectOption>
                   ))}
-                  <option value="holder">Stays with the Duty&apos;s User</option>
+                  <NativeSelectOption value="holder">Stays with the Duty&apos;s User</NativeSelectOption>
                 </NativeSelect>
                 <SubmitButton size="sm">Set</SubmitButton>
               </>
@@ -252,6 +255,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
 
   return (
     <div className="flex flex-col gap-4">
+      <BackLink href="/events">Events</BackLink>
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -387,15 +391,15 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
                   <Label htmlFor={`edit-venue-${id}`}>Venue</Label>
                   <NativeSelect id={`edit-venue-${id}`} name="venueId" defaultValue={eventDetails.venueId}>
                     {venues.map((v: Location) => (
-                      <option key={v.id} value={v.id}>{v.name}</option>
+                      <NativeSelectOption key={v.id} value={v.id}>{v.name}</NativeSelectOption>
                     ))}
                   </NativeSelect>
                 </div>
                 <div className="flex flex-col gap-1">
                   <Label htmlFor={`edit-scope-${id}`}>Applies to</Label>
                   <NativeSelect id={`edit-scope-${id}`} name="scope" defaultValue="this">
-                    <option value="this">This one</option>
-                    <option value="future">This and future</option>
+                    <NativeSelectOption value="this">This one</NativeSelectOption>
+                    <NativeSelectOption value="future">This and future</NativeSelectOption>
                   </NativeSelect>
                 </div>
                 <SubmitButton className="self-start">Save</SubmitButton>

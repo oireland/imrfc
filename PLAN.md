@@ -18,6 +18,7 @@ Vertical slices, built in order, each test-first (red → green → refactor). A
 - [x] **13. Duty Summary** — WhatsApp copy button.
 - [x] **14. Calendar Feed** — Feed Token, ICS with my Duties, reset, dead for Blocked Users.
 - [x] **15. Design pass** — sweep every screen: replace raw HTML controls with shadcn/ui components, apply the crest palette theme tokens (SPEC → Look and feel), consistent mobile-first layout, light/dark check.
+- [x] **15a. Clubhouse redesign** — warm light/dark theme with the crest as theme menu (saved per User); no app name; Home with 2-up Duty cards and What’s coming up (month Calendar with readable Events and tap-a-day quick add, Agenda); Events uses the same view; add Kit Units and Events from their own pages; toasts on create; back links; clearer Kit view.
 - [ ] **16. PWA** — manifest, icons, iOS home-screen meta.
 
 After v1: deploy to Vercel + Neon, choose production mail sender, then Availability/RSVP as the first extension.

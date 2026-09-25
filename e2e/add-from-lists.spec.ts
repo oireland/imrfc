@@ -1,0 +1,74 @@
+import { expect, test, type Page } from "@playwright/test";
+import postgres from "postgres";
+
+const MAILPIT = "http://localhost:8025";
+const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "irelandoliver4@gmail.com";
+
+async function magicLink(email: string): Promise<string> {
+  for (let i = 0; i < 30; i++) {
+    const list = await (await fetch(`${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}&limit=1`)).json();
+    const id = list.messages?.[0]?.ID;
+    if (id) {
+      const msg = await (await fetch(`${MAILPIT}/api/v1/message/${id}`)).json();
+      const match = String(msg.Text).match(/https?:\/\/\S+/);
+      if (match) return match[0];
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error("No magic link email arrived in Mailpit");
+}
+
+async function signIn(page: Page, baseURL: string | undefined) {
+  await page.goto("/sign-in");
+  await page.getByPlaceholder("you@example.com").fill(ADMIN_EMAIL);
+  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  await expect(page.getByText("Check your email")).toBeVisible();
+  const link = new URL(await magicLink(ADMIN_EMAIL));
+  await page.goto(new URL(link.pathname + link.search, baseURL).toString());
+  await expect(page.getByRole("link", { name: "Kit", exact: true })).toBeVisible();
+}
+
+test("Committee add Kit Units and Events from the Kit and Events pages, with a confirmation toast", async ({
+  page,
+  baseURL,
+}) => {
+  const sql = postgres(process.env.DATABASE_URL ?? "postgres://imrfc:imrfc@localhost:5432/imrfc");
+  const run = crypto.randomUUID().slice(0, 8);
+  const storeName = `Locker ${run}`;
+  const venueName = `Pitch ${run}`;
+  await sql`insert into location (id, name, address, is_store) values (${crypto.randomUUID()}, ${storeName}, 'x', true)`;
+  await sql`insert into location (id, name, address, is_venue) values (${crypto.randomUUID()}, ${venueName}, 'x', true)`;
+  await signIn(page, baseURL);
+
+  const kitName = `Cones ${run}`;
+  await page.goto("/kit");
+  await page.getByRole("link", { name: "Add Kit Unit" }).click();
+  await page.getByLabel("Name").fill(kitName);
+  await page.getByLabel("Home").selectOption({ label: storeName });
+  await page.getByRole("button", { name: "Add Kit Unit" }).click();
+  await expect(page.getByText("Kit Unit added")).toBeVisible();
+  await expect(page.getByRole("heading", { name: kitName })).toBeVisible();
+
+  await page.getByRole("link", { name: "Kit", exact: true }).first().click();
+  await page.getByRole("button", { name: `I've got ${kitName}` }).click();
+  await expect(page.getByRole("region", { name: "With you" }).getByRole("link", { name: kitName })).toBeVisible();
+
+  const title = `Training ${run}`;
+  // A random far-future day, so repeated runs don't Clash with each other.
+  const day = new Date(Date.UTC(2031 + Math.floor(Math.random() * 20), 4, 1 + Math.floor(Math.random() * 28)))
+    .toISOString()
+    .slice(0, 10);
+  await page.goto("/events");
+  await page.getByRole("link", { name: "Add event" }).click();
+  await page.getByLabel("Title").fill(title);
+  await page.getByLabel("Start").fill(`${day}T18:00`);
+  await page.getByLabel("End").fill(`${day}T20:00`);
+  await page.getByLabel("Venue").selectOption({ label: venueName });
+  await page.getByRole("button", { name: "Create Event" }).click();
+  await expect(page.getByText("Event created")).toBeVisible();
+  await expect(page.getByText(title, { exact: true })).toBeVisible();
+
+  await page.getByRole("link", { name: "Events" }).first().click();
+  await expect(page).toHaveURL(/\/events$/);
+  await sql.end();
+});

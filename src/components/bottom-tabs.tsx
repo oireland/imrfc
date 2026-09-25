@@ -33,7 +33,7 @@ const ADMIN_TAB: Tab = {
   isActive: (p) => p.startsWith("/admin") || p.startsWith("/locations"),
 };
 
-/** The fixed bottom tab bar: Home, Events, Kit, Profile, plus Admin for Committee and above. */
+/** The fixed, frosted bottom tab bar: Home, Events, Kit, Profile, plus Admin for Committee and above. */
 export function BottomTabs({ showAdmin, pendingCount = 0 }: BottomTabsProps) {
   const pathname = usePathname();
   const tabs = showAdmin ? [...TABS, ADMIN_TAB] : TABS;
@@ -41,9 +41,9 @@ export function BottomTabs({ showAdmin, pendingCount = 0 }: BottomTabsProps) {
   return (
     <nav
       aria-label="Main"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card pb-[env(safe-area-inset-bottom)]"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/80 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl"
     >
-      <div className="mx-auto flex max-w-2xl items-stretch justify-around">
+      <div className="mx-auto flex max-w-2xl items-stretch justify-around py-1.5">
         {tabs.map(({ href, label, icon: Icon, isActive }) => {
           const active = isActive(pathname);
           return (
@@ -51,25 +51,22 @@ export function BottomTabs({ showAdmin, pendingCount = 0 }: BottomTabsProps) {
               key={href}
               href={href}
               aria-current={active ? "page" : undefined}
-              className="flex flex-1 items-center justify-center px-1 py-2"
+              className={cn(
+                "relative flex flex-1 flex-col items-center gap-1 px-1 py-1 text-[11px] font-medium",
+                active ? "text-foreground" : "text-muted-foreground",
+              )}
             >
-              <span
-                className={cn(
-                  "relative flex flex-col items-center gap-0.5 rounded-full px-3 py-1 text-xs font-medium text-muted-foreground",
-                  active && "bg-accent text-accent-foreground",
-                )}
-              >
-                <Icon className="size-5" aria-hidden="true" />
-                {label}
-                {label === "Admin" && pendingCount > 0 && (
-                  <span
-                    aria-hidden="true"
-                    className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-destructive text-[10px] text-destructive-foreground"
-                  >
-                    {pendingCount}
-                  </span>
-                )}
-              </span>
+              <Icon className="size-[22px]" strokeWidth={active ? 2.2 : 1.6} aria-hidden="true" />
+              {label}
+              <span className={cn("size-1 rounded-full", active ? "bg-accent" : "bg-transparent")} aria-hidden="true" />
+              {label === "Admin" && pendingCount > 0 && (
+                <span
+                  aria-hidden="true"
+                  className="absolute top-0 left-1/2 ml-2 flex size-4 items-center justify-center rounded-full bg-destructive text-[10px] font-semibold text-background"
+                >
+                  {pendingCount}
+                </span>
+              )}
             </Link>
           );
         })}

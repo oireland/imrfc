@@ -13,6 +13,10 @@ export const user = pgTable("user", {
   accessState: text("access_state", { enum: ["pending", "approved", "blocked"] })
     .notNull()
     .default("pending"),
+  // Colour theme chosen from the crest menu; "system" follows the device.
+  theme: text("theme", { enum: ["system", "light", "dark"] })
+    .notNull()
+    .default("system"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

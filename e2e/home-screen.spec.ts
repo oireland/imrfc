@@ -18,7 +18,7 @@ async function magicLink(email: string): Promise<string> {
   throw new Error("No magic link email arrived in Mailpit");
 }
 
-test("Home shows my Duties, the next Events and the Kit I Hold", async ({ page, baseURL }) => {
+test("Home shows my Duties, what's coming up and the Kit I hold", async ({ page, baseURL }) => {
   const sql = postgres(process.env.DATABASE_URL ?? "postgres://imrfc:imrfc@localhost:5432/imrfc");
   const run = crypto.randomUUID().slice(0, 8);
   const [store, venue, kit, event, list] = Array.from({ length: 5 }, () => crypto.randomUUID());
@@ -46,9 +46,19 @@ test("Home shows my Duties, the next Events and the Kit I Hold", async ({ page, 
   await expect(page.getByText("Confirmed", { exact: true })).toHaveCount(1);
 
   await page.goto("/");
-  const duties = page.getByRole("region", { name: "My Duties" });
-  await expect(duties.getByText(`Take away ${kitName}`)).toBeVisible();
-  await expect(page.getByRole("region", { name: "Next Events" }).getByRole("link", { name: eventTitle })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Kit I Hold" }).getByRole("link", { name: kitName })).toBeVisible();
+  const duties = page.getByRole("region", { name: "Your duties" });
+  const duty = duties.getByRole("link", { name: new RegExp(kitName) });
+  await expect(duty).toContainText("Take away");
+  const comingUp = page.getByRole("region", { name: "What's coming up" });
+  await comingUp.getByRole("tab", { name: "agenda" }).click();
+  await expect(comingUp.getByRole("link", { name: new RegExp(eventTitle) })).toBeVisible();
+  // Home names the first two held Kit Units, then "& N more" links to the Kit page.
+  const held = page.getByRole("link", { name: kitName, exact: true });
+  if ((await held.count()) === 0) {
+    await page.getByRole("link", { name: /\d+ more$/ }).click();
+    await expect(page.getByRole("region", { name: "With you" }).getByRole("link", { name: kitName })).toBeVisible();
+  } else {
+    await expect(held).toBeVisible();
+  }
   await sql.end();
 });

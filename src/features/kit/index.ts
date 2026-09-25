@@ -5,8 +5,8 @@ import { validateKitUnit, type NewKitUnit } from "./rules";
 export { kitUnit } from "./schema";
 export { validateKitUnit } from "./rules";
 export type { NewKitUnit } from "./rules";
-export { groupByWhereabouts } from "./whereabouts";
-export type { WhereaboutsGroup } from "./whereabouts";
+export { groupByWhereabouts, quickMoveFor } from "./whereabouts";
+export type { QuickMove, WhereaboutsGroup } from "./whereabouts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;

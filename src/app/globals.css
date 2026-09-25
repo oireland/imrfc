@@ -6,15 +6,28 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/* Follow the system light/dark setting. */
-@custom-variant dark (@media (prefers-color-scheme: dark));
+/*
+ * Dark mode: the User's theme choice (crest menu) is stored on <html data-theme>.
+ * "system" (no attribute match) follows the device's prefers-color-scheme.
+ */
+@custom-variant dark {
+  :root[data-theme="dark"] & {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) & {
+      @slot;
+    }
+  }
+}
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-inter-tight);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-geist-sans);
+  /* Editorial serif for page and section headings. One weight only — never bold it. */
+  --font-heading: var(--font-instrument-serif);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -34,6 +47,15 @@
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
   --color-tile: var(--tile);
+  --color-lead: var(--lead);
+  --color-lead-foreground: var(--lead-foreground);
+  --color-training: var(--training);
+  --color-training-foreground: var(--training-foreground);
+  --color-match: var(--match);
+  --color-match-foreground: var(--match-foreground);
+  --color-social: var(--social);
+  --color-social-foreground: var(--social-foreground);
+  --shadow-card: var(--card-shadow);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -43,65 +65,115 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * The "Clubhouse" palette: warm, minimal neutrals. The crest's navy and gold are
+ * accents only — gold marks what is yours, navy marks your next Duty and Matches.
+ */
 :root {
   --navy: #1f2f55;
   --gold: #f2c400;
-  --deep-gold: #8a6d00;
-  --red: #de2029;
-  --deep-red: #b3151d;
 
-  --background: #ffffff;
-  --foreground: #0f172a;
+  --background: #f5f4f0;
+  --foreground: #111111;
   --card: #ffffff;
-  --card-foreground: #0f172a;
+  --card-foreground: #111111;
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px rgb(0 0 0 / 0.05);
   --popover: #ffffff;
-  --popover-foreground: #0f172a;
-  /* Navy: buttons, header. */
-  --primary: var(--navy);
+  --popover-foreground: #111111;
+  --primary: #111111;
   --primary-foreground: #ffffff;
-  --secondary: #f4f5f8;
-  --secondary-foreground: var(--navy);
-  --muted: #f4f5f8;
-  --muted-foreground: #525c72;
-  /* Gold: highlights, "your Duty", active tab — always with navy text. */
+  --secondary: #efede7;
+  --secondary-foreground: #111111;
+  --muted: #efede7;
+  --muted-foreground: #66645d;
+  /* Gold: "your Duty" markers — always with near-black text, never gold text on white. */
   --accent: var(--gold);
-  --accent-foreground: var(--navy);
-  /* Gold-toned text on the background (gold itself fails contrast on white). */
-  --accent-text: var(--deep-gold);
-  /* Red: destructive, Clash warnings, unassigned Duties. */
-  --destructive: var(--red);
-  /* Red text on a red tint (plain red fails contrast there). */
-  --destructive-text: var(--deep-red);
-  --border: #e2e5ec;
-  --input: #e2e5ec;
-  --ring: var(--navy);
+  --accent-foreground: #111111;
+  --accent-text: #7a6100;
+  --destructive: #b3151d;
+  --destructive-text: #9c1219;
+  --border: #e6e3dc;
+  --input: #d9d5cc;
+  --ring: #111111;
   /* The crest has a white background, so it always sits on a white tile. */
   --tile: #ffffff;
-  --radius: 0.625rem;
+  /* Navy: your next Duty. */
+  --lead: var(--navy);
+  --lead-foreground: #ffffff;
+  /* Event Types, as seen on the calendar. */
+  --training: #ebe9e3;
+  --training-foreground: #3d3b36;
+  --match: var(--navy);
+  --match-foreground: #ffffff;
+  --social: #fbeaa3;
+  --social-foreground: #5c4a00;
+  --radius: 0.875rem;
+}
+
+/* Dark tokens: an explicit Dark choice, or System on a dark device. Keep both copies in step. */
+:root[data-theme="dark"] {
+  --background: #11100f;
+  --foreground: #f3f1ec;
+  --card: #1b1a18;
+  --card-foreground: #f3f1ec;
+  --card-shadow: 0 0 0 1px rgb(255 255 255 / 0.04);
+  --popover: #201f1d;
+  --popover-foreground: #f3f1ec;
+  --primary: #f3f1ec;
+  --primary-foreground: #11100f;
+  --secondary: #272522;
+  --secondary-foreground: #f3f1ec;
+  --muted: #272522;
+  --muted-foreground: #a19d93;
+  --accent: var(--gold);
+  --accent-foreground: #111111;
+  --accent-text: var(--gold);
+  --destructive: #ff6b70;
+  --destructive-text: #ff8a8e;
+  --border: #2d2b28;
+  --input: #3a3834;
+  --ring: #f3f1ec;
+  --lead: #24365f;
+  --lead-foreground: #ffffff;
+  --training: #2a2825;
+  --training-foreground: #d9d5cc;
+  --match: #34497f;
+  --match-foreground: #eef2fb;
+  --social: #4a3d0b;
+  --social-foreground: #f7dc6f;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0f1729;
-    --foreground: #f4f5f8;
-    --card: #1a2544;
-    --card-foreground: #f4f5f8;
-    --popover: #1a2544;
-    --popover-foreground: #f4f5f8;
-    --primary: var(--gold);
-    --primary-foreground: var(--navy);
-    --secondary: #1a2544;
-    --secondary-foreground: #f4f5f8;
-    --muted: #1a2544;
-    --muted-foreground: #a3adc2;
+  :root:not([data-theme="light"]) {
+    --background: #11100f;
+    --foreground: #f3f1ec;
+    --card: #1b1a18;
+    --card-foreground: #f3f1ec;
+    --card-shadow: 0 0 0 1px rgb(255 255 255 / 0.04);
+    --popover: #201f1d;
+    --popover-foreground: #f3f1ec;
+    --primary: #f3f1ec;
+    --primary-foreground: #11100f;
+    --secondary: #272522;
+    --secondary-foreground: #f3f1ec;
+    --muted: #272522;
+    --muted-foreground: #a19d93;
     --accent: var(--gold);
-    --accent-foreground: var(--navy);
+    --accent-foreground: #111111;
     --accent-text: var(--gold);
     --destructive: #ff6b70;
     --destructive-text: #ff8a8e;
-    --border: #2a3658;
-    --input: #2a3658;
-    --ring: var(--gold);
+    --border: #2d2b28;
+    --input: #3a3834;
+    --ring: #f3f1ec;
+    --lead: #24365f;
+    --lead-foreground: #ffffff;
+    --training: #2a2825;
+    --training-foreground: #d9d5cc;
+    --match: #34497f;
+    --match-foreground: #eef2fb;
+    --social: #4a3d0b;
+    --social-foreground: #f7dc6f;
   }
 }
 
@@ -114,5 +186,14 @@
   }
   html {
     @apply font-sans;
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+    }
   }
 }
