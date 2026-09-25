@@ -48,29 +48,29 @@ export default async function Home() {
             <span className="break-words italic">{firstName}.</span>
           </h1>
           <p className="mt-3 text-[15px] text-muted-foreground">
-            {duties.length === 0 ? "No duties coming up" : `${duties.length} ${duties.length === 1 ? "duty" : "duties"} coming up`}
-            {held.length > 0 && (
-              <>
-                {" · holding "}
-                {held.slice(0, HELD_SHOWN).map((unit, i, shown) => (
-                  <Fragment key={unit.id}>
-                    {i > 0 && (i === shown.length - 1 && held.length <= HELD_SHOWN ? " & " : ", ")}
-                    <Link href={`/kit/${unit.id}`} className="text-foreground underline-offset-4 hover:underline">
-                      {unit.name}
-                    </Link>
-                  </Fragment>
-                ))}
-                {held.length > HELD_SHOWN && (
-                  <>
-                    {" & "}
-                    <Link href="/kit" className="text-foreground underline-offset-4 hover:underline">
-                      {held.length - HELD_SHOWN} more
-                    </Link>
-                  </>
-                )}
-              </>
-            )}
+            {duties.length === 0 ? "No duties coming up." : `${duties.length} ${duties.length === 1 ? "duty" : "duties"} coming up.`}
           </p>
+          {held.length > 0 && (
+            <p className="mt-1 text-[15px] text-muted-foreground">
+              {"You've got: "}
+              {held.slice(0, HELD_SHOWN).map((unit, i, shown) => (
+                <Fragment key={unit.id}>
+                  {i > 0 && (i === shown.length - 1 && held.length <= HELD_SHOWN ? " & " : ", ")}
+                  <Link href={`/kit/${unit.id}`} className="text-foreground underline-offset-4 hover:underline">
+                    {unit.name}
+                  </Link>
+                </Fragment>
+              ))}
+              {held.length > HELD_SHOWN && (
+                <>
+                  {" & "}
+                  <Link href="/kit" className="text-foreground underline-offset-4 hover:underline">
+                    {held.length - HELD_SHOWN} more
+                  </Link>
+                </>
+              )}
+            </p>
+          )}
         </div>
         <CrestThemePicker theme={user.theme} onChange={setTheme} />
       </header>
@@ -84,7 +84,7 @@ export default async function Home() {
         </div>
         {duties.length === 0 ? (
           <p className="rounded-3xl bg-card px-5 py-6 text-sm text-muted-foreground shadow-card">
-            Nothing to bring or take away. Claim a Duty from an Event.
+            Nothing to bring or take back. Claim one on any event.
           </p>
         ) : (
           <ul className="grid grid-cols-2 gap-2.5">
@@ -102,7 +102,7 @@ export default async function Home() {
                   >
                     <span className="flex items-center justify-between text-[10.5px] font-medium tracking-wide uppercase">
                       <span className={next ? "text-lead-foreground/70" : "text-muted-foreground"}>
-                        {duty.direction === "to" ? "Bring" : "Take away"}
+                        {duty.direction === "to" ? "Bring" : "Take back"}
                       </span>
                       {next && (
                         <span className="size-1.5 rounded-full bg-accent">

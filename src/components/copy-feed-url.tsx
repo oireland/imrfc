@@ -15,10 +15,10 @@ export function CopyFeedUrl({ url }: { url: string }) {
         className="self-start"
         onClick={async () => {
           await navigator.clipboard.writeText(url);
-          toast("Copied");
+          toast("Link copied");
         }}
       >
-        Copy feed URL
+        Copy link
       </Button>
     </div>
   );

@@ -14,7 +14,7 @@ import { listKitUnits } from "@/features/kit";
 import { isCommitteeOrAbove } from "@/features/users";
 import { requireApprovedUser } from "@/lib/session";
 
-/** Edits one level's own Checklist; `inheritedFrom` says what applies while it has none. */
+/** Edits one level's own Checklist; `inheritedFrom` names the list that applies while it has none, e.g. "the default list". */
 export async function ChecklistEditor({
   target,
   path,
@@ -54,7 +54,7 @@ export async function ChecklistEditor({
     <div className="flex flex-col gap-3 text-sm">
       {own === undefined ? (
         <p className="text-muted-foreground">
-          No Checklist of its own{inheritedFrom ? ` — uses the ${inheritedFrom}` : ""}.
+          {inheritedFrom ? `Using ${inheritedFrom}. Add kit to give it its own list.` : "Nothing on the list yet."}
         </p>
       ) : (
         <>
@@ -70,20 +70,20 @@ export async function ChecklistEditor({
                 </form>
               </li>
             ))}
-            {own.length === 0 && <li className="py-1.5 text-muted-foreground">No Kit Units yet.</li>}
+            {own.length === 0 && <li className="py-1.5 text-muted-foreground">Nothing on the list yet.</li>}
           </ul>
           <form action={clear}>
             <SubmitButton variant="link" size="sm">
-              Stop overriding
+              {inheritedFrom ? `Go back to ${inheritedFrom}` : "Clear the list"}
             </SubmitButton>
           </form>
         </>
       )}
       <form action={add} className="flex flex-wrap items-end gap-2">
         <div className="flex flex-col gap-1">
-          <Label htmlFor={`add-kit-unit-${target.scopeId}`}>Add Kit Unit</Label>
+          <Label htmlFor={`add-kit-unit-${target.scopeId}`}>Add kit</Label>
           <NativeSelect id={`add-kit-unit-${target.scopeId}`} name="kitUnitId" required>
-            <NativeSelectOption value="">Choose a Kit Unit…</NativeSelectOption>
+            <NativeSelectOption value="">Choose kit…</NativeSelectOption>
             {active
               .filter((u) => !own?.includes(u.id))
               .map((u) => (

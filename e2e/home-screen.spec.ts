@@ -41,18 +41,22 @@ test("Home shows my Duties, what's coming up and the Kit I hold", async ({ page,
   await expect(page.getByRole("link", { name: "Kit", exact: true })).toBeVisible();
 
   await page.goto(`/events/${event}`);
-  await page.getByRole("button", { name: "Claim" }).first().click();
-  await page.getByRole("button", { name: "Confirm" }).first().click();
-  await expect(page.getByText("Confirmed", { exact: true })).toHaveCount(1);
+  const eventDuties = page.getByRole("region", { name: "Who's bringing what" });
+  await eventDuties.getByRole("button", { name: `Bring ${kitName}: nobody yet` }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "I'll do it" }).click();
+  await eventDuties.getByRole("button", { name: `Bring ${kitName}: you` }).click();
+  await page.getByRole("dialog").getByRole("button", { name: /mark as done/ }).click();
+  await expect(eventDuties.getByRole("button", { name: `Bring ${kitName}: you, done` })).toBeVisible();
 
   await page.goto("/");
   const duties = page.getByRole("region", { name: "Your duties" });
   const duty = duties.getByRole("link", { name: new RegExp(kitName) });
-  await expect(duty).toContainText("Take away");
+  await expect(duty).toContainText("Take back");
   const comingUp = page.getByRole("region", { name: "What's coming up" });
   await comingUp.getByRole("tab", { name: "agenda" }).click();
   await expect(comingUp.getByRole("link", { name: new RegExp(eventTitle) })).toBeVisible();
   // Home names the first two held Kit Units, then "& N more" links to the Kit page.
+  await expect(page.getByText("You've got:")).toBeVisible();
   const held = page.getByRole("link", { name: kitName, exact: true });
   if ((await held.count()) === 0) {
     await page.getByRole("link", { name: /\d+ more$/ }).click();

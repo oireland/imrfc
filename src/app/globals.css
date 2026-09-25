@@ -70,6 +70,8 @@
  * accents only — gold marks what is yours, navy marks your next Duty and Matches.
  */
 :root {
+  /* Native controls (select menus, date pickers) follow the theme. */
+  color-scheme: light;
   --navy: #1f2f55;
   --gold: #f2c400;
 
@@ -112,6 +114,7 @@
 
 /* Dark tokens: an explicit Dark choice, or System on a dark device. Keep both copies in step. */
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --background: #11100f;
   --foreground: #f3f1ec;
   --card: #1b1a18;
@@ -145,6 +148,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --background: #11100f;
     --foreground: #f3f1ec;
     --card: #1b1a18;

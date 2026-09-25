@@ -63,10 +63,10 @@ describe("validateSeries", () => {
 
   it.each([
     [{ title: " " }, "title"],
-    [{ weekdays: [] }, "weekday"],
-    [{ venueId: "" }, "Venue"],
+    [{ weekdays: [] }, "day of the week"],
+    [{ venueId: "" }, "venue"],
     [{ endTime: "18:00" }, "end"],
-    [{ endDate: "2026-01-01" }, "end date"],
+    [{ endDate: "2026-01-01" }, "last date"],
   ])("rejects %j", (patch, word) => {
     const result = validateSeries({ ...ok, ...patch });
     expect(result.ok).toBe(false);

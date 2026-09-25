@@ -42,7 +42,7 @@ export async function setRole(db: Db, userId: string, role: Role) {
 
 export async function setName(db: Db, userId: string, name: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const trimmed = name.trim();
-  if (!trimmed) return { ok: false, error: "Name is required" };
+  if (!trimmed) return { ok: false, error: "Please enter your name." };
   await db.update(user).set({ name: trimmed }).where(eq(user.id, userId));
   return { ok: true };
 }

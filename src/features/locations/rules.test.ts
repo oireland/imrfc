@@ -17,6 +17,6 @@ describe("validateLocation", () => {
   it("rejects a Location that is neither a Venue nor a Store", () => {
     expect(
       validateLocation({ name: "Somewhere", address: "SW7", isVenue: false, isStore: false }),
-    ).toEqual({ ok: false, error: "A Location must be a Venue, a Store, or both." });
+    ).toEqual({ ok: false, error: "Tick venue, store, or both." });
   });
 });

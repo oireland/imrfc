@@ -9,14 +9,14 @@ describe("validateKitUnit", () => {
   it("rejects a Kit Unit without a name", () => {
     expect(validateKitUnit({ name: "", homeId: "loc-1" })).toEqual({
       ok: false,
-      error: "A Kit Unit needs a name.",
+      error: "Give the kit a name.",
     });
   });
 
   it("rejects a Kit Unit without a Home", () => {
     expect(validateKitUnit({ name: "Ball bag A", homeId: "" })).toEqual({
       ok: false,
-      error: "A Kit Unit needs a Home.",
+      error: "Choose where the kit lives.",
     });
   });
 });

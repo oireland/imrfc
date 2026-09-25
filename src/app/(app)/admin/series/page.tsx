@@ -58,7 +58,7 @@ export default async function AdminSeriesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>New Series</CardTitle>
+          <CardTitle>New series</CardTitle>
         </CardHeader>
         <CardContent>
           <form action={create} className="flex flex-col gap-3">
@@ -93,7 +93,7 @@ export default async function AdminSeriesPage() {
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="series-venue">Venue</Label>
               <NativeSelect id="series-venue" name="venueId" required>
-                <NativeSelectOption value="">Venue...</NativeSelectOption>
+                <NativeSelectOption value="">Choose a venue…</NativeSelectOption>
                 {venues.map((v: Location) => (
                   <NativeSelectOption key={v.id} value={v.id}>
                     {v.name}
@@ -102,7 +102,7 @@ export default async function AdminSeriesPage() {
               </NativeSelect>
             </div>
             <fieldset className="flex flex-col gap-1 text-sm">
-              <legend className="mb-1 font-medium">Teams (none = whole club)</legend>
+              <legend className="mb-1 font-medium">Teams (leave blank for the whole club)</legend>
               {teams.map((t) => (
                 <label key={t.id} className="flex items-center gap-2">
                   <input type="checkbox" name="teamIds" value={t.id} className="size-4" /> {t.name}
@@ -113,16 +113,16 @@ export default async function AdminSeriesPage() {
               <Label htmlFor="series-notes">Notes</Label>
               <Textarea id="series-notes" name="notes" />
             </div>
-            <SubmitButton>Create Series</SubmitButton>
+            <SubmitButton>Create series</SubmitButton>
           </form>
         </CardContent>
       </Card>
 
       <div className="flex flex-col gap-3">
-        <h3 className="text-sm font-medium text-muted-foreground">Existing Series</h3>
+        <h3 className="text-sm font-medium text-muted-foreground">Current series</h3>
         <Card className="py-0">
           <div className="divide-y divide-border">
-            {allSeries.length === 0 && <p className="p-4 text-muted-foreground">No Series yet.</p>}
+            {allSeries.length === 0 && <p className="p-4 text-muted-foreground">No series yet.</p>}
             {allSeries.map((s) => {
               const extendFormId = `extend-date-${s.id}`;
               return (

@@ -61,7 +61,7 @@ export default async function UsersAdminPage() {
       </div>
 
       <div className="flex flex-col gap-3">
-        <h3 className="text-sm font-medium text-muted-foreground">Pending Users</h3>
+        <h3 className="text-sm font-medium text-muted-foreground">Waiting for approval</h3>
         <Card className="py-0">
           <div className="divide-y divide-border">
             {pending.length === 0 && <p className="p-4 text-muted-foreground">Nobody waiting.</p>}
@@ -85,7 +85,7 @@ export default async function UsersAdminPage() {
                       formId={blockFormId}
                       triggerLabel="Block"
                       triggerSize="sm"
-                      title="Block User?"
+                      title={`Block ${p.name}?`}
                       description={`${p.name} will lose access immediately.`}
                       confirmLabel="Block"
                     />
@@ -101,7 +101,7 @@ export default async function UsersAdminPage() {
         <h3 className="text-sm font-medium text-muted-foreground">Users & Roles</h3>
         <Card className="py-0">
           <div className="divide-y divide-border">
-            {approved.length === 0 && <p className="p-4 text-muted-foreground">No Users yet.</p>}
+            {approved.length === 0 && <p className="p-4 text-muted-foreground">Nobody yet.</p>}
             {approved.map((p: PendingUser) => {
               const blockFormId = `block-approved-${p.id}`;
               return (
@@ -131,7 +131,7 @@ export default async function UsersAdminPage() {
                           formId={blockFormId}
                           triggerLabel="Block"
                           triggerSize="sm"
-                          title="Block User?"
+                          title={`Block ${p.name}?`}
                           description={`${p.name} will lose access immediately.`}
                           confirmLabel="Block"
                         />

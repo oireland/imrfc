@@ -60,20 +60,20 @@ export default async function ProfilePage() {
 
       <Card>
         <CardHeader>
-          <h3 className="font-heading text-[22px] leading-tight">Calendar Feed</h3>
+          <h3 className="font-heading text-[22px] leading-tight">Your calendar</h3>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">
-            Subscribe to this URL in your calendar app to see every Event, with your own Duties in the
-            description. Keep it private: anyone with the URL can see your feed.
+            Subscribe to this link in your calendar app to see every event, with your own duties written
+            in. Keep it to yourself: anyone with the link can see your calendar.
           </p>
           <CopyFeedUrl url={feedUrl} />
           <form id="reset-feed-url" action={reset}>
             <ConfirmSubmit
               formId="reset-feed-url"
-              triggerLabel="Reset feed URL"
-              title="Reset feed URL?"
-              description="The old Calendar Feed URL will stop working immediately. You'll need to re-subscribe with the new one."
+              triggerLabel="Reset link"
+              title="Reset your calendar link?"
+              description="The old link stops working straight away, so you'll need to subscribe again with the new one."
               confirmLabel="Yes, reset"
               triggerVariant="outline"
               triggerSize="sm"

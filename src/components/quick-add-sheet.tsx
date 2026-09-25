@@ -189,7 +189,7 @@ export function QuickAddSheet({
 
         <div className="mb-5 flex items-center gap-2">
           <NativeSelect aria-label="Venue" value={venueId} onChange={(e) => setVenueId(e.target.value)} required className="flex-1">
-            {venues.length === 0 && <NativeSelectOption value="">No Venues yet</NativeSelectOption>}
+            {venues.length === 0 && <NativeSelectOption value="">No venues yet</NativeSelectOption>}
             {venues.map((v) => (
               <NativeSelectOption key={v.id} value={v.id}>
                 {v.name}

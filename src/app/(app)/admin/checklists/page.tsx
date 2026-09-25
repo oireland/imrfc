@@ -22,7 +22,7 @@ export default async function AdminChecklistsPage() {
       </div>
 
       <div className="flex flex-col gap-3">
-        <h3 className="text-sm font-medium text-muted-foreground">Default Checklists</h3>
+        <h3 className="text-sm font-medium text-muted-foreground">Default lists</h3>
         {EVENT_TYPES.map((type) => (
           <Card key={type}>
             <CardHeader>
@@ -39,7 +39,7 @@ export default async function AdminChecklistsPage() {
       </div>
 
       <div className="flex flex-col gap-3">
-        <h3 className="text-sm font-medium text-muted-foreground">Series Checklists</h3>
+        <h3 className="text-sm font-medium text-muted-foreground">Series lists</h3>
         {allSeries.map((s) => (
           <Card key={s.id}>
             <CardHeader>
@@ -49,7 +49,7 @@ export default async function AdminChecklistsPage() {
               <ChecklistEditor
                 target={{ scope: "series", scopeId: s.id }}
                 path="/admin/checklists"
-                inheritedFrom="Default Checklist"
+                inheritedFrom="the default list"
               />
             </CardContent>
           </Card>

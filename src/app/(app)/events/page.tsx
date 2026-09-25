@@ -28,7 +28,7 @@ export default async function EventsPage({ searchParams }: PageProps<"/events">)
         </div>
         <Card className="py-0">
           <CardContent className="divide-y divide-border px-0">
-            {past.length === 0 && <p className="px-5 py-4 text-muted-foreground">No past Events.</p>}
+            {past.length === 0 && <p className="px-5 py-4 text-muted-foreground">No past events yet.</p>}
             {past.map((e: Event) => (
               <Link key={e.id} href={`/events/${e.id}`} className="flex items-center justify-between gap-2 px-5 py-3.5 hover:bg-muted/60">
                 <span className="flex min-w-0 flex-col">

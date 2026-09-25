@@ -44,7 +44,7 @@ describe("Checklists", () => {
 
     const result = await addToChecklist(db, { scope: "event", scopeId: "e" }, balls.id);
 
-    expect(result).toEqual({ ok: false, error: "Only Active Kit Units can go on a Checklist." });
+    expect(result).toEqual({ ok: false, error: "Missing or retired kit can't go on the list." });
     expect(await getChecklist(db, { scope: "event", scopeId: "e" })).toBeUndefined();
   });
 

@@ -32,7 +32,7 @@ export default async function KitViewPage() {
   const personById = new Map(people.map((p) => [p.id, p]));
   const lastSeen = new Map<string, string>();
   for (const eventId of new Set(allUnits.flatMap((u: KitUnit) => (u.lastSeenEventId ? [u.lastSeenEventId] : [])))) {
-    lastSeen.set(eventId as string, (await getEvent(db, eventId as string))?.title ?? "an Event");
+    lastSeen.set(eventId as string, (await getEvent(db, eventId as string))?.title ?? "an event");
   }
   const locationsById = new Map(locations.map((l: Location) => [l.id, l]));
   const storeName = (id: string) => locationsById.get(id)?.name ?? "Store";
@@ -54,13 +54,13 @@ export default async function KitViewPage() {
       return { icon: Warehouse, title: storeName(group.storeId), kind: "In store" };
     }
     if (group.type === "unconfirmed") {
-      return { icon: CircleHelp, title: "Unconfirmed", kind: "Nobody confirmed where these went" };
+      return { icon: CircleHelp, title: "Not confirmed", kind: "Nobody confirmed where these went" };
     }
     const holder = personById.get(group.holderId);
     return {
       icon: User,
       title: group.holderId === user.id ? "With you" : `With ${holder ? displayName(holder) : "someone"}`,
-      kind: holder?.accessState === "blocked" ? "Blocked user" : "Being held",
+      kind: holder?.accessState === "blocked" ? "Blocked user" : undefined,
       blocked: holder?.accessState === "blocked",
     };
   }
@@ -101,10 +101,10 @@ export default async function KitViewPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h2 className="font-heading text-[40px] leading-none tracking-tight">Kit</h2>
-        <p className="text-sm text-muted-foreground">Where everything is right now. Tap a Kit Unit for its history.</p>
+        <p className="text-sm text-muted-foreground">Where everything is right now. Tap anything to see its history.</p>
       </div>
 
-      {groups.length === 0 && <p className="text-muted-foreground">No Kit Units yet.</p>}
+      {groups.length === 0 && <p className="text-muted-foreground">No kit yet.</p>}
 
       {groups.map((group) => {
         const { icon: Icon, title, kind, blocked } = groupHeading(group);
@@ -122,7 +122,7 @@ export default async function KitViewPage() {
                   {title}
                 </h3>
                 <span className={blocked ? "text-xs font-semibold text-destructive" : "text-xs text-muted-foreground"}>
-                  {kind} · {group.units.length} {group.units.length === 1 ? "item" : "items"}
+                  {kind && `${kind} · `}{group.units.length} {group.units.length === 1 ? "item" : "items"}
                 </span>
               </div>
             </div>
@@ -160,7 +160,7 @@ export default async function KitViewPage() {
         </section>
       )}
 
-      {isCommitteeOrAbove(user.role) && <AddLink href="/kit/new">Add Kit Unit</AddLink>}
+      {isCommitteeOrAbove(user.role) && <AddLink href="/kit/new">Add kit</AddLink>}
     </div>
   );
 }

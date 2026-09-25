@@ -67,7 +67,7 @@ _Avoid_: Owner, keeper
 The Whereabouts of a Kit Unit whose From Duty was never Confirmed; shown as "last seen at" the Event.
 
 **Move**:
-A recorded change of a Kit Unit's Whereabouts, either by Confirming a Duty or ad hoc ("I've got it now").
+A recorded change of a Kit Unit's Whereabouts, either by Confirming a Duty or ad hoc ("I've got it", "give it to Priya", "put it in the Shed").
 _Avoid_: Transfer, check-in/check-out
 
 **Movement Log**:
@@ -141,8 +141,12 @@ Marking a Duty as done, which records a Move. Only a Confirmed Duty changes a Ki
 _Avoid_: Complete, tick off, check in
 
 **Clash**:
-A warning that a Kit Unit's plan looks wrong, e.g. it is on two Checklists at overlapping times, or its Holder has no Duty for an Event that needs it. Clashes warn; they never block.
+A warning that a Kit Unit is double-booked: it is on the Checklists of two Events that overlap, or that are back-to-back with nobody taking it away from the first. Clashes warn; they never block.
 _Avoid_: Conflict, error
+
+**Heads-up**:
+A gentler warning about an Event's kit plan that isn't a Clash: nobody is on a Duty and the Event starts within 48 hours, a Kit Unit on the Checklist is Missing or Retired, or the Holder needs to pass a Kit Unit to whoever is bringing it.
+_Avoid_: Clash (for these), alert
 
 **Duty Summary**:
 Text summarising an Event and its Duties, formatted for pasting into the club WhatsApp group.

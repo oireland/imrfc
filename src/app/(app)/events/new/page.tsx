@@ -64,7 +64,7 @@ export default async function NewEventPage() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
         <BackLink href="/events">Events</BackLink>
-        <h2 className="font-heading text-[40px] leading-none tracking-tight">New Event</h2>
+        <h2 className="font-heading text-[40px] leading-none tracking-tight">New event</h2>
       </div>
 
       <Card>
@@ -93,7 +93,7 @@ export default async function NewEventPage() {
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="event-venue">Venue</Label>
               <NativeSelect id="event-venue" name="venueId" required>
-                <NativeSelectOption value="">Venue...</NativeSelectOption>
+                <NativeSelectOption value="">Choose a venue…</NativeSelectOption>
                 {venues.map((v: Location) => (
                   <NativeSelectOption key={v.id} value={v.id}>
                     {v.name}
@@ -102,7 +102,7 @@ export default async function NewEventPage() {
               </NativeSelect>
             </div>
             <fieldset className="flex flex-col gap-1 text-sm">
-              <legend className="mb-1 font-medium">Teams (none = whole club)</legend>
+              <legend className="mb-1 font-medium">Teams (leave blank for the whole club)</legend>
               {teams.map((t) => (
                 <label key={t.id} className="flex items-center gap-2">
                   <input type="checkbox" name="teamIds" value={t.id} className="size-4" /> {t.name}
@@ -115,7 +115,7 @@ export default async function NewEventPage() {
             </div>
 
             <fieldset className="flex flex-col gap-3 rounded-md border border-border p-3 text-sm">
-              <legend className="px-1 font-medium">Match details (if Match)</legend>
+              <legend className="px-1 font-medium">Match details (matches only)</legend>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="event-opponent">Opponent</Label>
                 <Input id="event-opponent" name="opponent" />

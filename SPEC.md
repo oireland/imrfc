@@ -58,7 +58,7 @@ When a User is Blocked:
 - Kinds of unit include balls/ball bags, tackle shields, cones, bibs, water bottles, physio kit — no fixed category list in v1.
 - **Kit Status**: Active / Missing / Retired. Only Active units may be added to a Checklist. Never hard-deleted.
 - **Whereabouts** is exactly one of: a Store, a Holder (User), or Unconfirmed (last seen at an Event).
-- Any User may record an **ad-hoc Move**: "I've got it" (Holder = me) or "put it in [Store]".
+- Any User may record an **ad-hoc Move**: "I've got it" (Holder = me), "give it to [User]" (Holder = another approved User) or "put it in [Store]".
 - Every Move and every Condition Note change goes in the **Movement Log** (who, what, from, to, when, why — Duty or ad hoc).
 - **Kit view**: all Active Kit Units grouped by Whereabouts — each Store, each Holder, then Unconfirmed. Missing/Retired in a secondary list.
 
@@ -92,11 +92,11 @@ When a User is Blocked:
   - From Duty Confirmed → Move to the Destination (Store, or Holder = the Duty's User).
   - The Duty's User or any Committee member may Confirm.
 - **Unconfirmed**: once an Event has ended, if its From Duty isn't Confirmed, the Kit Unit's Whereabouts shows Unconfirmed — "last seen at [Event]". The app never assumes a Move happened.
-- **Clashes** (warnings only, shown on the Event and the Kit Unit):
-  - Kit Unit on the Checklists of two Events whose times overlap or are back-to-back without a From Duty in between.
-  - Kit Unit's current Holder has no To Duty for an upcoming Event that needs it.
+- **Clashes** (warnings only, shown on the Event and the Kit Unit) are only about double-booked kit: a Kit Unit on the Checklists of two Events whose times overlap, or are back-to-back without a From Duty in between.
+- **Heads-ups** (gentler warnings, same places) cover the rest:
+  - Nobody is taking a Kit Unit to, or back from, an Event that starts within 48h.
   - Kit Unit on a Checklist is Missing/Retired (it was Active when added).
-  - Duty unfilled within 48h of the Event.
+  - Kit Unit's current Holder isn't the person bringing it to the next Event that needs it ("Sam needs to pass Tackle Shields to Tom before Alumni Day"). Nothing is said while nobody is bringing it yet.
 - **Duty Summary**: "Copy WhatsApp message" button on an Event, producing e.g.
 
   ```
@@ -115,8 +115,8 @@ When a User is Blocked:
 ## Screens (mobile-first)
 
 - **Home**: my Duties (upcoming, soonest first), next few Events, Kit Units I Hold.
-- **Events**: Upcoming / Past lists → Event detail (details, maps link, Checklist with To/From Duties, Clashes, Duty Summary button).
-- **Kit**: grouped by Whereabouts → Kit Unit detail (Whereabouts, Condition Note, upcoming Duties, Movement Log, "I've got it" / "Put in store").
+- **Events**: Upcoming / Past lists → Event detail (details, maps link, Clashes, **Who's bringing what**, Duty Summary button). Who's bringing what has one row per Kit Unit on the Checklist with its Whereabouts, a Bring slot and a Take back slot (who, done or not, gold for yours, "Needs someone" within 48h) and its heads-ups. Tapping a slot opens a sheet with only the actions the viewer may take (claim, mark as done, hand on / give it to someone from a tap-a-name list, where it goes back to, take someone off).
+- **Kit**: grouped by Whereabouts → Kit Unit detail (Whereabouts, Condition Note, upcoming Duties, Movement Log, "I've got it", then "give it to someone" and "put it away in [Store]" below it).
 - **Admin** (Committee/Admin sections as permitted): Pending Users, Users & Roles, Locations, Kit Units, Event Types & Default Checklists, Series.
 - **Profile**: name, Calendar Feed URL (copy/reset), sign out.
 - PWA manifest + icons (installable via "Add to Home Screen" on iOS/Android) — nice-to-have, last slice.
@@ -128,6 +128,7 @@ When a User is Blocked:
 - **The crest's colours are accents only:** gold marks what is yours (Your Duty markers, the active tab dot, the "With you" Kit group); navy marks your next Duty and Matches.
 - **Home:** greeting ("Evening, Ollie."), Your duties as small 2-up cards (the next one navy), then **What's coming up** with Calendar and Agenda tabs. Events uses the same Calendar/Agenda view, plus Past events.
 - **Calendar:** a month grid where every Event is readable in its day (name wraps to three lines, then its time); Training, Match and Social have distinct colours; your Duties get a gold edge. Tap a day to select it and see its Events; Committee tap again (or an empty day) to quick-add an Event, Google-Calendar style.
+- **Copy sounds like a teammate talking**, not the system: plain sentences about who is doing what ("Nobody is taking Tackle Shields to Alumni Day", "You've got: Cones & Ball Bag", "Tom gave it to Priya"). Domain terms stay the same words but go lower-case in running text ("claim a duty", "no events yet"); never build possessives or labels from them ("Tackle Shields's To Duty", "Holder has no To Duty").
 
 | Token | Light | Dark |
 |---|---|---|

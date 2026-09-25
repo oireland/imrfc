@@ -17,7 +17,7 @@ export default async function BlockedPage() {
         </CardHeader>
         <CardContent>
           <p className="text-center text-sm text-muted-foreground">
-            Your account has been Blocked. Contact a club Admin if you think this is a mistake.
+            Your access has been blocked. If you think that’s a mistake, speak to someone on the committee.
           </p>
         </CardContent>
       </Card>
