@@ -15,7 +15,7 @@ export {
   type Series,
 } from "./series";
 export { londonParts, londonToUtc } from "./series-rules";
-export { buildQuickEvent, type QuickEventInput } from "./quick-add";
+export { buildQuickEvent, buildQuickSeries, type QuickEventInput } from "./quick-add";
 export {
   EVENT_CSV_COLUMNS,
   MAX_EVENTS_PER_IMPORT,

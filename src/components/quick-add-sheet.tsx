@@ -75,6 +75,7 @@ export function QuickAddSheet({
   const [moreOpen, setMoreOpen] = useState(false);
   const [notes, setNotes] = useState("");
   const [teamIds, setTeamIds] = useState<string[]>([]);
+  const [repeatUntil, setRepeatUntil] = useState("");
   const [meetTime, setMeetTime] = useState("");
   const [venue, setVenue] = useState(venues[0] ?? "");
   const [opponent, setOpponent] = useState("");
@@ -98,13 +99,14 @@ export function QuickAddSheet({
         venue,
         notes,
         teamIds,
+        ...(type === "training" && repeatUntil ? { repeatUntil } : {}),
         ...(type === "match" ? { opponent, homeAway, competition, meetTime: meetTime || undefined } : {}),
       });
       if (!result.ok) {
         toast.error(result.error);
         return;
       }
-      toast.success("Event created");
+      toast.success(type === "training" && repeatUntil ? "Weekly training created" : "Event created");
       onClose();
       router.refresh();
     });
@@ -270,6 +272,19 @@ export function QuickAddSheet({
                   onChange={(e) => setMeetTime(e.target.value)}
                   aria-label="Meet time"
                   className="rounded-xl bg-muted px-3 py-2 tabular-nums"
+                />
+              </label>
+            )}
+            {type === "training" && (
+              <label className="flex items-center gap-3 text-sm">
+                <span className="text-muted-foreground">Repeat weekly until</span>
+                <input
+                  type="date"
+                  value={repeatUntil}
+                  min={date || undefined}
+                  onChange={(e) => setRepeatUntil(e.target.value)}
+                  aria-label="Repeat weekly until"
+                  className="rounded-xl bg-muted px-3 py-2 text-sm"
                 />
               </label>
             )}
