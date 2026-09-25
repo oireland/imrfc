@@ -180,7 +180,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
       <BackLink href="/events">Events</BackLink>
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
+          <CardTitle className="flex items-center gap-2 text-[28px] leading-none">
             {eventDetails.title}
             {eventDetails.cancelled && <Badge variant="destructive">Cancelled</Badge>}
           </CardTitle>
