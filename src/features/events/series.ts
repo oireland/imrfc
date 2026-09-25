@@ -12,7 +12,7 @@ export type NewSeries = SeriesPattern;
 export type Series = typeof series.$inferSelect;
 export type Occurrence = typeof event.$inferSelect;
 export type OccurrenceChanges = Partial<
-  Pick<SeriesPattern, "title" | "venueId" | "notes" | "startTime" | "endTime">
+  Pick<SeriesPattern, "title" | "venue" | "notes" | "startTime" | "endTime">
 >;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -28,7 +28,7 @@ async function insertOccurrences(db: Db, s: Series, dates: string[], teamIds: st
       eventType: "training",
       start: londonToUtc(date, s.startTime),
       end: londonToUtc(date, s.endTime),
-      venueId: s.venueId,
+      venue: s.venue,
       notes: s.notes,
       seriesId: s.id,
     });
@@ -58,7 +58,7 @@ export async function createSeries(
       weekdays: input.weekdays,
       startTime: input.startTime,
       endTime: input.endTime,
-      venueId: input.venueId,
+      venue: input.venue,
       startDate: input.startDate,
       endDate: input.endDate,
       notes: input.notes ?? "",
@@ -124,7 +124,7 @@ export async function editOccurrence(
       .update(event)
       .set({
         ...(changes.title !== undefined && { title: changes.title }),
-        ...(changes.venueId !== undefined && { venueId: changes.venueId }),
+        ...(changes.venue !== undefined && { venue: changes.venue }),
         ...(changes.notes !== undefined && { notes: changes.notes }),
         start: londonToUtc(date, startTime),
         end: londonToUtc(date, endTime),
@@ -149,7 +149,7 @@ export async function editOccurrence(
     .update(series)
     .set({
       ...(changes.title !== undefined && { title: changes.title }),
-      ...(changes.venueId !== undefined && { venueId: changes.venueId }),
+      ...(changes.venue !== undefined && { venue: changes.venue }),
       ...(changes.notes !== undefined && { notes: changes.notes }),
       startTime,
       endTime,

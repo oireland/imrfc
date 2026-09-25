@@ -1,5 +1,5 @@
 import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
-import { location } from "@/features/locations";
+import { store } from "@/features/stores";
 import { user } from "@/features/users";
 
 export const kitUnit = pgTable("kit_unit", {
@@ -8,7 +8,7 @@ export const kitUnit = pgTable("kit_unit", {
   description: text("description").notNull().default(""),
   homeId: text("home_id")
     .notNull()
-    .references(() => location.id),
+    .references(() => store.id),
   status: text("status", { enum: ["active", "missing", "retired"] })
     .notNull()
     .default("active"),
@@ -17,7 +17,7 @@ export const kitUnit = pgTable("kit_unit", {
   whereaboutsType: text("whereabouts_type", { enum: ["store", "holder", "unconfirmed"] })
     .notNull()
     .default("store"),
-  storeId: text("store_id").references(() => location.id),
+  storeId: text("store_id").references(() => store.id),
   holderId: text("holder_id").references(() => user.id),
   // Plain Event id (kit never imports events); set only while Unconfirmed.
   lastSeenEventId: text("last_seen_event_id"),
@@ -35,7 +35,7 @@ export const movementLogEntry = pgTable("movement_log_entry", {
   // Move fields (kind = "move")
   reason: text("reason", { enum: ["ad_hoc", "duty"] }),
   toType: text("to_type", { enum: ["store", "holder"] }),
-  toStoreId: text("to_store_id").references(() => location.id),
+  toStoreId: text("to_store_id").references(() => store.id),
   toHolderId: text("to_holder_id").references(() => user.id),
   // Condition Note fields (kind = "condition_note")
   conditionNote: text("condition_note"),

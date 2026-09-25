@@ -1,6 +1,7 @@
 import { AxeBuilder } from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import postgres from "postgres";
+import { TEST_DATABASE_URL } from "./support/test-db";
 
 const MAILPIT = "http://localhost:8025";
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "irelandoliver4@gmail.com";
@@ -60,18 +61,16 @@ test.describe("Design pass: every screen is accessible at phone width, light and
   let kitId: string;
 
   test.beforeAll(async () => {
-    sql = postgres(process.env.DATABASE_URL ?? "postgres://imrfc:imrfc@localhost:5432/imrfc");
+    sql = postgres(TEST_DATABASE_URL);
     const run = crypto.randomUUID().slice(0, 8);
     const store = crypto.randomUUID();
-    const venue = crypto.randomUUID();
     kitId = crypto.randomUUID();
     eventId = crypto.randomUUID();
     const list = crypto.randomUUID();
-    await sql`insert into location (id, name, address, is_store) values (${store}, ${`Shed ${run}`}, 'x', true)`;
-    await sql`insert into location (id, name, address, is_venue) values (${venue}, ${`Pitch ${run}`}, 'x', true)`;
+    await sql`insert into store (id, name, address) values (${store}, ${`Shed ${run}`}, 'x')`;
     await sql`insert into kit_unit (id, name, home_id, store_id) values (${kitId}, ${`Ball bag ${run}`}, ${store}, ${store})`;
-    await sql`insert into event (id, title, event_type, start, "end", venue_id)
-      values (${eventId}, ${`Training ${run}`}, 'training', now() + interval '1 day', now() + interval '1 day 2 hours', ${venue})`;
+    await sql`insert into event (id, title, event_type, start, "end", venue)
+      values (${eventId}, ${`Training ${run}`}, 'training', now() + interval '1 day', now() + interval '1 day 2 hours', 'Harlington')`;
     await sql`insert into checklist (id, scope, scope_id) values (${list}, 'event', ${eventId})`;
     await sql`insert into checklist_item (id, checklist_id, kit_unit_id) values (${crypto.randomUUID()}, ${list}, ${kitId})`;
   });
@@ -84,6 +83,8 @@ test.describe("Design pass: every screen is accessible at phone width, light and
   // the crest menu's Dark choice (<html data-theme="dark">) on a light device.
   for (const mode of ["light", "dark", "chosen dark"] as const) {
     test(`signed-in screens have no axe violations (${mode})`, async ({ page, baseURL }) => {
+      // Visits and scans every screen (~2s each), well past the default 30s.
+      test.setTimeout(120_000);
       await page.emulateMedia({ colorScheme: mode === "dark" ? "dark" : "light" });
       await signIn(page, baseURL);
 
@@ -94,11 +95,11 @@ test.describe("Design pass: every screen is accessible at phone width, light and
         `/events/${eventId}`,
         "/kit",
         `/kit/${kitId}`,
-        "/locations",
+        "/stores",
         "/profile",
         "/admin",
         "/admin/kit",
-        "/events/new",
+        "/events/import",
         "/kit/new",
         "/admin/series",
         "/admin/checklists",

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import postgres from "postgres";
+import { TEST_DATABASE_URL } from "./support/test-db";
 
 const MAILPIT = "http://localhost:8025";
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "irelandoliver4@gmail.com";
@@ -19,12 +20,12 @@ async function magicLink(email: string): Promise<string> {
 }
 
 test("Anyone can hand a Kit Unit to a teammate from its page", async ({ page, baseURL }) => {
-  const sql = postgres(process.env.DATABASE_URL ?? "postgres://imrfc:imrfc@localhost:5432/imrfc");
+  const sql = postgres(TEST_DATABASE_URL);
   const run = crypto.randomUUID().slice(0, 8);
   const [store, kit, teammate] = Array.from({ length: 3 }, () => crypto.randomUUID());
   const kitName = `First aid kit ${run}`;
   const teammateName = `Priya ${run}`;
-  await sql`insert into location (id, name, address, is_store) values (${store}, ${`Locker ${run}`}, 'x', true)`;
+  await sql`insert into store (id, name, address) values (${store}, ${`Locker ${run}`}, 'x')`;
   await sql`insert into kit_unit (id, name, home_id, store_id) values (${kit}, ${kitName}, ${store}, ${store})`;
   await sql`insert into "user" (id, name, email, access_state) values (${teammate}, ${teammateName}, ${`${run}@example.com`}, 'approved')`;
 
@@ -46,7 +47,7 @@ test("Anyone can hand a Kit Unit to a teammate from its page", async ({ page, ba
   // Test people would otherwise pile up in every person picker on the dev database.
   await sql`delete from movement_log_entry where kit_unit_id = ${kit}`;
   await sql`delete from kit_unit where id = ${kit}`;
-  await sql`delete from location where id = ${store}`;
+  await sql`delete from store where id = ${store}`;
   await sql`delete from "user" where id = ${teammate}`;
   await sql.end();
 });

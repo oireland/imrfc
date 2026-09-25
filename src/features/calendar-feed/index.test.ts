@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
-import { location } from "@/features/locations";
+import { store } from "@/features/stores";
 import { createKitUnit } from "@/features/kit";
 import { cancelEvent, createEvent } from "@/features/events";
 import { claimDuty, ensureDuties } from "@/features/duties";
@@ -16,12 +16,7 @@ async function setup() {
   await db.insert(user).values(
     ["tom", "sam"].map((id) => ({ id, name: id, email: `${id}@x.org`, accessState: "approved" as const })),
   );
-  await db
-    .insert(location)
-    .values([
-      { id: "pitch", name: "Har-Ha", address: "x", isVenue: true, isStore: false },
-      { id: "shed", name: "Shed", address: "x", isVenue: false, isStore: true },
-    ]);
+  await db.insert(store).values({ id: "shed", name: "Shed", address: "x" });
   const made = await createKitUnit(db, { name: "Ball bag A", homeId: "shed" });
   if (!made.ok) throw new Error(made.error);
   const created = await createEvent(db, {
@@ -29,7 +24,7 @@ async function setup() {
     eventType: "training",
     start: future(2),
     end: future(2, 20),
-    venueId: "pitch",
+    venue: "Har-Ha",
   });
   if (!created.ok) throw new Error(created.error);
   return { db, kit: made.kitUnit, event: created.event };

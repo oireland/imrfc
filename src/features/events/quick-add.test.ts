@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildQuickEvent } from "./quick-add";
+import { buildQuickEvent, buildQuickSeries } from "./quick-add";
 
-const base = { date: "2026-10-24", startTime: "19:00", endTime: "21:00", venueId: "v1", title: "" };
+const base = { date: "2026-10-24", startTime: "19:00", endTime: "21:00", venue: "Harlington", title: "" };
 
 describe("buildQuickEvent", () => {
   it("turns London wall-clock times into UTC during BST", () => {
@@ -46,5 +46,48 @@ describe("buildQuickEvent", () => {
       competition: "bucs",
       meetTime: e.start,
     });
+  });
+
+  it("carries notes and Teams through, trimming the notes", () => {
+    const e = buildQuickEvent({ ...base, type: "training", notes: " Bring bibs ", teamIds: ["t1", "t2"] });
+
+    expect(e.notes).toBe("Bring bibs");
+    expect(e.teamIds).toEqual(["t1", "t2"]);
+  });
+
+  it("uses a separate meet time for a Match when one is given", () => {
+    const e = buildQuickEvent({ ...base, type: "match", startTime: "14:30", endTime: "16:30", meetTime: "13:00" });
+
+    expect(e.eventType === "match" && e.matchDetails.meetTime.toISOString()).toBe("2026-10-24T12:00:00.000Z");
+  });
+});
+
+describe("buildQuickSeries", () => {
+  it("repeats weekly on the chosen date's weekday until the given date", () => {
+    // 2026-10-24 is a Saturday.
+    const s = buildQuickSeries({
+      ...base,
+      type: "training",
+      title: " Fitness ",
+      notes: " Bring bibs ",
+      teamIds: ["t1"],
+      repeatUntil: "2026-12-10",
+    });
+
+    expect(s).toEqual({
+      title: "Fitness",
+      weekdays: [6],
+      startTime: "19:00",
+      endTime: "21:00",
+      venue: "Harlington",
+      startDate: "2026-10-24",
+      endDate: "2026-12-10",
+      notes: "Bring bibs",
+      teamIds: ["t1"],
+    });
+  });
+
+  it("names an untitled Series Training", () => {
+    expect(buildQuickSeries({ ...base, type: "training", repeatUntil: "2026-12-10" }).title).toBe("Training");
   });
 });

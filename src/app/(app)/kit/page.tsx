@@ -17,16 +17,16 @@ import {
 import { markUnconfirmed } from "@/features/duties";
 import { getEvent } from "@/features/events";
 import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
-import { listLocations, type Location } from "@/features/locations";
+import { listStores, type Store } from "@/features/stores";
 import { requireApprovedUser } from "@/lib/session";
 
 export default async function KitViewPage() {
   const user = await requireApprovedUser();
 
   await markUnconfirmed(db);
-  const [allUnits, locations, people] = await Promise.all([
+  const [allUnits, stores, people] = await Promise.all([
     listKitUnits(db, { includeRetired: true }),
-    listLocations(db),
+    listStores(db),
     listApprovedUsers(db),
   ]);
   const personById = new Map(people.map((p) => [p.id, p]));
@@ -34,11 +34,11 @@ export default async function KitViewPage() {
   for (const eventId of new Set(allUnits.flatMap((u: KitUnit) => (u.lastSeenEventId ? [u.lastSeenEventId] : [])))) {
     lastSeen.set(eventId as string, (await getEvent(db, eventId as string))?.title ?? "an event");
   }
-  const locationsById = new Map(locations.map((l: Location) => [l.id, l]));
-  const storeName = (id: string) => locationsById.get(id)?.name ?? "Store";
+  const storesById = new Map(stores.map((s: Store) => [s.id, s]));
+  const storeName = (id: string) => storesById.get(id)?.name ?? "Store";
   const activeUnits = allUnits.filter((u: KitUnit) => u.status === "active");
   const inactiveUnits = allUnits.filter((u: KitUnit) => u.status !== "active");
-  const groups = groupByWhereabouts(activeUnits);
+  const groups = groupByWhereabouts(activeUnits, user.id);
 
   async function quickMove(formData: FormData) {
     "use server";

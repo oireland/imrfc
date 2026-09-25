@@ -1,19 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
-import { location } from "@/features/locations";
+import { store } from "@/features/stores";
 import { createKitUnit, setKitStatus } from "@/features/kit";
 import { addToChecklist, getChecklist, removeFromChecklist, resolveEventChecklist } from "./index";
 
 async function setup() {
   const db = await createTestDb();
   await migrate(db);
-  const [store] = await db
-    .insert(location)
-    .values({ id: "s1", name: "Shed", address: "x", isVenue: false, isStore: true })
+  const [shed] = await db
+    .insert(store)
+    .values({ id: "s1", name: "Shed", address: "x" })
     .returning();
   const make = async (name: string) => {
-    const r = await createKitUnit(db, { name, homeId: store.id });
+    const r = await createKitUnit(db, { name, homeId: shed.id });
     if (!r.ok) throw new Error(r.error);
     return r.kitUnit;
   };

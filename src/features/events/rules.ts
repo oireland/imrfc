@@ -7,7 +7,7 @@ export type NewEventCommon = {
   eventType: EventType;
   start: Date;
   end: Date;
-  venueId: string;
+  venue: string;
   notes?: string;
   teamIds?: string[];
 };
@@ -29,7 +29,7 @@ export type ValidationResult = { ok: true } | { ok: false; error: string };
 
 export function validateEvent(input: NewEvent): ValidationResult {
   if (!input.title.trim()) return { ok: false, error: "Give the event a title." };
-  if (!input.venueId) return { ok: false, error: "Choose a venue." };
+  if (!input.venue.trim()) return { ok: false, error: "Where is it? Add a venue." };
   if (input.end < input.start) return { ok: false, error: "The event can't end before it starts." };
   if (input.eventType === "match") {
     if (!input.matchDetails.opponent.trim()) {

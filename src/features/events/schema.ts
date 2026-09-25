@@ -1,5 +1,4 @@
 import { boolean, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
-import { location } from "@/features/locations";
 
 export const team = pgTable("team", {
   id: text("id").primaryKey(),
@@ -12,9 +11,8 @@ export const series = pgTable("series", {
   weekdays: integer("weekdays").array().notNull(),
   startTime: text("start_time").notNull(),
   endTime: text("end_time").notNull(),
-  venueId: text("venue_id")
-    .notNull()
-    .references(() => location.id),
+  // Free text (e.g. "Harlington" or an away ground's address); Venues aren't stored separately.
+  venue: text("venue").notNull(),
   startDate: text("start_date").notNull(),
   endDate: text("end_date").notNull(),
   notes: text("notes").notNull().default(""),
@@ -36,9 +34,8 @@ export const event = pgTable("event", {
   eventType: text("event_type", { enum: ["training", "match", "social"] }).notNull(),
   start: timestamp("start", { withTimezone: true }).notNull(),
   end: timestamp("end", { withTimezone: true }).notNull(),
-  venueId: text("venue_id")
-    .notNull()
-    .references(() => location.id),
+  // Free text (e.g. "Harlington" or an away ground's address); Venues aren't stored separately.
+  venue: text("venue").notNull(),
   notes: text("notes").notNull().default(""),
   cancelled: boolean("cancelled").notNull().default(false),
   // Set for Occurrences; `edited` marks an Occurrence changed on its own, which

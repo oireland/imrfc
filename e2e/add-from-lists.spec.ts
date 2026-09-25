@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import postgres from "postgres";
+import { TEST_DATABASE_URL } from "./support/test-db";
 
 const MAILPIT = "http://localhost:8025";
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "irelandoliver4@gmail.com";
@@ -32,12 +33,11 @@ test("Committee add Kit Units and Events from the Kit and Events pages, with a c
   page,
   baseURL,
 }) => {
-  const sql = postgres(process.env.DATABASE_URL ?? "postgres://imrfc:imrfc@localhost:5432/imrfc");
+  const sql = postgres(TEST_DATABASE_URL);
   const run = crypto.randomUUID().slice(0, 8);
   const storeName = `Locker ${run}`;
   const venueName = `Pitch ${run}`;
-  await sql`insert into location (id, name, address, is_store) values (${crypto.randomUUID()}, ${storeName}, 'x', true)`;
-  await sql`insert into location (id, name, address, is_venue) values (${crypto.randomUUID()}, ${venueName}, 'x', true)`;
+  await sql`insert into store (id, name, address) values (${crypto.randomUUID()}, ${storeName}, 'x')`;
   await signIn(page, baseURL);
 
   const kitName = `Cones ${run}`;
@@ -59,12 +59,14 @@ test("Committee add Kit Units and Events from the Kit and Events pages, with a c
     .toISOString()
     .slice(0, 10);
   await page.goto("/events");
-  await page.getByRole("link", { name: "Add event" }).click();
-  await page.getByLabel("Title").fill(title);
-  await page.getByLabel("Start").fill(`${day}T18:00`);
-  await page.getByLabel("End").fill(`${day}T20:00`);
-  await page.getByLabel("Venue").selectOption({ label: venueName });
-  await page.getByRole("button", { name: "Create Event" }).click();
+  await page.getByRole("button", { name: "Add event" }).click();
+  const sheet = page.getByRole("dialog");
+  await sheet.getByLabel("Date").fill(day);
+  await sheet.getByLabel("Title").fill(title);
+  await sheet.getByLabel("Start time").fill("18:00");
+  await sheet.getByLabel("End time").fill("20:00");
+  await sheet.getByLabel("Venue").fill(venueName);
+  await sheet.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("Event created")).toBeVisible();
   await expect(page.getByText(title, { exact: true })).toBeVisible();
 

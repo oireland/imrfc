@@ -8,7 +8,7 @@ import { canManageUsers, isCommitteeOrAbove, listPendingUsers } from "@/features
 import { getCurrentUser } from "@/lib/session";
 
 const LINKS = [
-  { href: "/locations", label: "Locations" },
+  { href: "/stores", label: "Stores" },
   { href: "/admin/kit", label: "Kit" },
   { href: "/admin/series", label: "Series" },
   { href: "/admin/checklists", label: "Checklists" },
@@ -24,12 +24,12 @@ export default async function AdminPage() {
   return (
     <div className="flex flex-col gap-4">
       <h2 className="font-heading text-[40px] leading-none tracking-tight">Admin</h2>
-      <Card className="divide-y divide-border py-0">
+      <Card className="gap-0 divide-y divide-border py-0">
         {LINKS.map(({ href, label }) => (
           <Link
             key={href}
             href={href}
-            className="flex items-center justify-between gap-2 px-4 py-3 hover:bg-muted"
+            className="flex h-14 items-center justify-between gap-2 px-4 hover:bg-muted"
           >
             <span>{label}</span>
             <span className="flex items-center gap-2">

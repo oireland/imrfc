@@ -15,7 +15,14 @@ export {
   type Series,
 } from "./series";
 export { londonParts, londonToUtc } from "./series-rules";
-export { buildQuickEvent, type QuickEventInput } from "./quick-add";
+export { buildQuickEvent, buildQuickSeries, type QuickEventInput } from "./quick-add";
+export {
+  EVENT_CSV_COLUMNS,
+  MAX_EVENTS_PER_IMPORT,
+  eventCsvTemplate,
+  readEventsCsv,
+  type EventCsvResult,
+} from "./csv-import";
 export type { EventType, HomeAway, Competition, NewEvent, NewMatchDetails } from "./rules";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -40,7 +47,32 @@ export async function createEvent(
 ): Promise<{ ok: true; event: Event } | { ok: false; error: string }> {
   const result = validateEvent(input);
   if (!result.ok) return result;
+  return { ok: true, event: await insertEvent(db, input) };
+}
 
+/**
+ * Creates many Events at once (a CSV import). All or nothing: if any one is
+ * invalid or fails to save, none are created.
+ */
+export async function createEvents(
+  db: Db,
+  inputs: NewEvent[],
+): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  for (const input of inputs) {
+    const result = validateEvent(input);
+    if (!result.ok) return { ok: false, error: `"${input.title}": ${result.error}` };
+  }
+  try {
+    await db.transaction(async (tx: Db) => {
+      for (const input of inputs) await insertEvent(tx, input);
+    });
+  } catch {
+    return { ok: false, error: "Couldn't save the events, so none were added. Check the teams still exist." };
+  }
+  return { ok: true, count: inputs.length };
+}
+
+async function insertEvent(db: Db, input: NewEvent): Promise<Event> {
   const [row] = await db
     .insert(event)
     .values({
@@ -49,7 +81,7 @@ export async function createEvent(
       eventType: input.eventType,
       start: input.start,
       end: input.end,
-      venueId: input.venueId,
+      venue: input.venue.trim(),
       notes: input.notes ?? "",
     })
     .returning();
@@ -70,7 +102,7 @@ export async function createEvent(
     await db.insert(eventTeam).values({ id: crypto.randomUUID(), eventId: row.id, teamId });
   }
 
-  return { ok: true, event: row };
+  return row;
 }
 
 export async function listEvents(db: Db, { when }: { when: "upcoming" | "past" }): Promise<Event[]> {
@@ -87,6 +119,12 @@ export async function listEventsBetween(db: Db, from: Date, to: Date): Promise<E
     .from(event)
     .where(and(gte(event.start, from), lt(event.start, to)))
     .orderBy(asc(event.start));
+}
+
+/** Venues already used, each once, most recently used first — suggestions for typing a new one. */
+export async function listVenues(db: Db): Promise<string[]> {
+  const rows: { venue: string }[] = await db.select({ venue: event.venue }).from(event).orderBy(desc(event.start));
+  return [...new Set(rows.map((r) => r.venue.trim()).filter(Boolean))];
 }
 
 /** The next few upcoming Events that are still happening, soonest first. */

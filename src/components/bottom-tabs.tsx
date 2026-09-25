@@ -30,7 +30,7 @@ const ADMIN_TAB: Tab = {
   href: "/admin",
   label: "Admin",
   icon: ShieldCheck,
-  isActive: (p) => p.startsWith("/admin") || p.startsWith("/locations"),
+  isActive: (p) => p.startsWith("/admin") || p.startsWith("/stores"),
 };
 
 /** The fixed, frosted bottom tab bar: Home, Events, Kit, Profile, plus Admin for Committee and above. */

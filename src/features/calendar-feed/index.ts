@@ -2,7 +2,6 @@ import { eq } from "drizzle-orm";
 import { listUpcomingDutiesForUser } from "@/features/duties";
 import { listEvents } from "@/features/events";
 import { listKitUnits } from "@/features/kit";
-import { listLocations } from "@/features/locations";
 import { user } from "@/features/users";
 import { buildCalendar, type FeedEvent } from "./ics-rules";
 import { feedToken } from "./schema";
@@ -43,14 +42,12 @@ export async function renderFeed(db: Db, token: string, now: Date = new Date()):
   if (!owner) return { status: 404 };
   if (owner.accessState === "blocked") return { status: 410 };
 
-  const [upcoming, past, venues, kit, duties] = await Promise.all([
+  const [upcoming, past, kit, duties] = await Promise.all([
     listEvents(db, { when: "upcoming" }),
     listEvents(db, { when: "past" }),
-    listLocations(db, { includeArchived: true }),
     listKitUnits(db, { includeRetired: true }),
     listUpcomingDutiesForUser(db, owner.id),
   ]);
-  const venueName = new Map(venues.map((v) => [v.id, v.name]));
   const kitName = new Map(kit.map((k) => [k.id, k.name]));
 
   const events: FeedEvent[] = [...past, ...upcoming].map((e) => ({
@@ -58,7 +55,7 @@ export async function renderFeed(db: Db, token: string, now: Date = new Date()):
     title: e.title,
     start: e.start,
     end: e.end,
-    venue: venueName.get(e.venueId) ?? "",
+    venue: e.venue,
     cancelled: e.cancelled,
     description: duties
       .filter((d) => d.event.id === e.id)
