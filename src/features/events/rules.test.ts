@@ -17,21 +17,21 @@ describe("validateEvent", () => {
   it("rejects an Event without a title", () => {
     expect(validateEvent({ ...training, title: "" })).toEqual({
       ok: false,
-      error: "An Event needs a title.",
+      error: "Give the event a title.",
     });
   });
 
   it("rejects an Event without a Venue", () => {
     expect(validateEvent({ ...training, venueId: "" })).toEqual({
       ok: false,
-      error: "An Event needs a Venue.",
+      error: "Choose a venue.",
     });
   });
 
   it("rejects an Event that ends before it starts", () => {
     expect(
       validateEvent({ ...training, start: new Date("2026-01-07T20:00:00Z"), end: new Date("2026-01-07T19:00:00Z") }),
-    ).toEqual({ ok: false, error: "An Event can't end before it starts." });
+    ).toEqual({ ok: false, error: "The event can't end before it starts." });
   });
 
   it("rejects a Match without an opponent", () => {
@@ -45,7 +45,7 @@ describe("validateEvent", () => {
         meetTime: training.start,
       },
     };
-    expect(validateEvent(match)).toEqual({ ok: false, error: "A Match needs an opponent." });
+    expect(validateEvent(match)).toEqual({ ok: false, error: "Who's the match against? Add an opponent." });
   });
 
   it("accepts a valid Match", () => {

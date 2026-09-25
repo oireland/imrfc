@@ -59,12 +59,12 @@ export default async function KitUnitsPage() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
         <BackLink href="/admin">Admin</BackLink>
-        <h2 className="font-heading text-[40px] leading-none tracking-tight">Kit Units</h2>
+        <h2 className="font-heading text-[40px] leading-none tracking-tight">Kit</h2>
       </div>
 
       <Card className="py-0">
         <div className="divide-y divide-border">
-          {units.length === 0 && <p className="p-4 text-muted-foreground">No Kit Units yet.</p>}
+          {units.length === 0 && <p className="p-4 text-muted-foreground">No kit yet.</p>}
           {units.map((k: KitUnit) => (
             <div key={k.id} className="flex flex-col gap-3 p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -78,7 +78,7 @@ export default async function KitUnitsPage() {
                     name="status"
                     defaultValue={k.status}
                     size="sm"
-                    aria-label={`Kit Status for ${k.name}`}
+                    aria-label={`Status of ${k.name}`}
                   >
                     {STATUSES.map((s) => (
                       <NativeSelectOption key={s} value={s}>
@@ -94,13 +94,13 @@ export default async function KitUnitsPage() {
               <form action={changeNote} className="flex items-center gap-2">
                 <input type="hidden" name="kitUnitId" value={k.id} />
                 <Label htmlFor={`note-${k.id}`} className="sr-only">
-                  Condition Note for {k.name}
+                  Condition of {k.name}
                 </Label>
                 <Input
                   id={`note-${k.id}`}
                   name="conditionNote"
                   defaultValue={k.conditionNote}
-                  placeholder="Condition Note"
+                  placeholder="Condition, e.g. 2 balls need pumping"
                   className="flex-1"
                 />
                 <SubmitButton size="sm" variant="outline">

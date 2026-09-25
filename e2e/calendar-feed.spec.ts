@@ -34,7 +34,7 @@ test("Profile shows a Calendar Feed URL that works without signing in until it i
   expect(first.headers()["content-type"]).toContain("text/calendar");
   expect(await first.text()).toContain("BEGIN:VCALENDAR");
 
-  await page.getByRole("button", { name: "Reset feed URL" }).click();
+  await page.getByRole("button", { name: "Reset link" }).click();
   await page.getByRole("button", { name: "Yes, reset" }).click();
   await expect(page.locator("code")).not.toHaveText(feedUrl);
   expect((await anonymous.get(feedUrl)).status()).toBe(404);

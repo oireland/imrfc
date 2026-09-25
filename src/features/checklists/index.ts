@@ -38,7 +38,7 @@ export async function addToChecklist(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const unit = await getKitUnit(db, kitUnitId);
   if (!unit || unit.status !== "active") {
-    return { ok: false, error: "Only Active Kit Units can go on a Checklist." };
+    return { ok: false, error: "Missing or retired kit can't go on the list." };
   }
   let id = await findChecklistId(db, target);
   if (!id) {

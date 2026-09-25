@@ -28,12 +28,12 @@ export type NewEvent =
 export type ValidationResult = { ok: true } | { ok: false; error: string };
 
 export function validateEvent(input: NewEvent): ValidationResult {
-  if (!input.title.trim()) return { ok: false, error: "An Event needs a title." };
-  if (!input.venueId) return { ok: false, error: "An Event needs a Venue." };
-  if (input.end < input.start) return { ok: false, error: "An Event can't end before it starts." };
+  if (!input.title.trim()) return { ok: false, error: "Give the event a title." };
+  if (!input.venueId) return { ok: false, error: "Choose a venue." };
+  if (input.end < input.start) return { ok: false, error: "The event can't end before it starts." };
   if (input.eventType === "match") {
     if (!input.matchDetails.opponent.trim()) {
-      return { ok: false, error: "A Match needs an opponent." };
+      return { ok: false, error: "Who's the match against? Add an opponent." };
     }
   }
   return { ok: true };

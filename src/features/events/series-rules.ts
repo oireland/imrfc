@@ -64,10 +64,10 @@ export function occurrenceDates(p: { weekdays: number[]; startDate: string; endD
 }
 
 export function validateSeries(p: SeriesPattern): { ok: true } | { ok: false; error: string } {
-  if (!p.title.trim()) return { ok: false, error: "A Series needs a title." };
-  if (p.weekdays.length === 0) return { ok: false, error: "A Series needs at least one weekday." };
-  if (!p.venueId) return { ok: false, error: "A Series needs a Venue." };
-  if (p.endTime <= p.startTime) return { ok: false, error: "A Series can't end before it starts (end time)." };
-  if (p.endDate < p.startDate) return { ok: false, error: "The Series end date can't be before its start date." };
+  if (!p.title.trim()) return { ok: false, error: "Give the series a title." };
+  if (p.weekdays.length === 0) return { ok: false, error: "Pick at least one day of the week." };
+  if (!p.venueId) return { ok: false, error: "Choose a venue." };
+  if (p.endTime <= p.startTime) return { ok: false, error: "The end time must be after the start time." };
+  if (p.endDate < p.startDate) return { ok: false, error: "The last date can't be before the first date." };
   return { ok: true };
 }

@@ -43,17 +43,23 @@ test("Committee claims and Confirms Duties, and the Kit Unit follows", async ({ 
   await expect(page.getByRole("link", { name: "Kit", exact: true })).toBeVisible();
 
   await page.goto(`/events/${event}`);
-  await page.getByRole("button", { name: "Claim" }).first().click(); // To Duty; From follows
-  await page.getByRole("button", { name: "Confirm" }).first().click();
-  await expect(page.getByText("Confirmed", { exact: true })).toHaveCount(1);
+  const duties = page.getByRole("region", { name: "Who's bringing what" });
+  await duties.getByRole("button", { name: `Bring ${kitName}: nobody yet` }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "I'll do it" }).click(); // To Duty; From follows
+  await expect(duties.getByRole("button", { name: `Take back ${kitName}: you` })).toBeVisible();
+  await duties.getByRole("button", { name: `Bring ${kitName}: you` }).click();
+  await page.getByRole("dialog").getByRole("button", { name: /mark as done/ }).click();
+  await expect(duties.getByRole("button", { name: `Bring ${kitName}: you, done` })).toBeVisible();
+  await expect(duties).toContainText("1 of 2 done");
 
   await page.goto("/kit");
   const held = page.getByRole("region", { name: "With you" }).getByRole("link", { name: kitName });
   await expect(held.first()).toBeVisible();
 
   await page.goto(`/events/${event}`);
-  await page.getByRole("button", { name: "Confirm" }).click(); // From Duty, Destination Home
-  await expect(page.getByText("Confirmed", { exact: true })).toHaveCount(2);
+  await duties.getByRole("button", { name: `Take back ${kitName}: you` }).click(); // Destination Home
+  await page.getByRole("dialog").getByRole("button", { name: /mark as done/ }).click();
+  await expect(duties).toContainText("2 of 2 done");
 
   await page.goto("/kit");
   const home = page.getByRole("region", { name: storeName }).getByRole("link", { name: kitName });

@@ -1,12 +1,13 @@
 import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { ChevronRight } from "lucide-react";
 import { db } from "@/db/client";
 import { ChecklistEditor } from "@/components/checklist-editor";
 import { ClashList } from "@/components/clash-list";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { CopySummary } from "@/components/copy-summary";
+import { EventDuties, type DutyKit, type DutySlot } from "@/components/event-duties";
 import { SubmitButton } from "@/components/submit-button";
-import { ConfirmedBadge, UnassignedBadge, YourDutyBadge } from "@/components/duty-badges";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -20,27 +21,22 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { BackLink } from "@/components/back-link";
 import { formatWhen } from "@/lib/format-time";
 import { resolveEventChecklist } from "@/features/checklists";
-import { listKitUnits } from "@/features/kit";
+import { listKitUnits, type KitUnit } from "@/features/kit";
 import {
-  assignDuty,
-  claimDuty,
-  confirmDuty,
-  markUnconfirmed,
+  actOnDuty,
+  dutyActions,
   voidDutiesForEvent,
   ensureDuties,
   formatDutySummary,
-  handOnDuty,
   listClashes,
-  setDestination,
-  unassignDuty,
+  listHeadsUps,
   type Duty,
-  type DutyDestination,
+  type DutyRequest,
 } from "@/features/duties";
 import { cancelEvent, editOccurrence, getEvent, londonParts } from "@/features/events";
 import { getLocation, listLocations, type Location } from "@/features/locations";
 import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
 import { requireApprovedUser } from "@/lib/session";
-import { ChevronRight } from "lucide-react";
 
 export default async function EventDetailPage({ params }: PageProps<"/events/[id]">) {
   const { id } = await params;
@@ -79,39 +75,12 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     revalidatePath("/events");
   }
 
-  async function duty(formData: FormData) {
+  async function act(dutyId: string, request: DutyRequest) {
     "use server";
     const current = await requireApprovedUser();
-    const committee = isCommitteeOrAbove(current.role);
-    const dutyId = String(formData.get("dutyId"));
-    const other = String(formData.get("userId") ?? "");
-    switch (formData.get("action")) {
-      case "claim":
-        await claimDuty(db, dutyId, current.id);
-        break;
-      case "handOn":
-        if (other) await handOnDuty(db, dutyId, current.id, other);
-        break;
-      case "assign":
-        if (committee && other) await assignDuty(db, dutyId, other);
-        break;
-      case "confirm":
-        await confirmDuty(db, dutyId, current);
-        await markUnconfirmed(db);
-        break;
-      case "unassign":
-        if (committee) await unassignDuty(db, dutyId);
-        break;
-      case "destination": {
-        if (!committee) break;
-        const value = String(formData.get("destination"));
-        const destination: DutyDestination =
-          value === "holder" ? { type: "holder" } : value.startsWith("store:") ? { type: "store", storeId: value.slice(6) } : { type: "home" };
-        await setDestination(db, dutyId, destination);
-        break;
-      }
-    }
+    const result = await actOnDuty(db, dutyId, current, request);
     revalidatePath(`/events/${id}`);
+    return result;
   }
 
   const [resolved, kitUnits] = await Promise.all([
@@ -128,7 +97,10 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     listApprovedUsers(db),
     listLocations(db),
   ]);
-  const clashes = (await listClashes(db)).filter((c) => c.eventIds.includes(id));
+  const [clashes, headsUps] = await Promise.all([
+    listClashes(db).then((all) => all.filter((c) => c.eventIds.includes(id))),
+    listHeadsUps(db).then((all) => all.filter((h) => h.eventIds.includes(id))),
+  ]);
   const approved = people.filter((p) => p.accessState === "approved");
   const personName = new Map(people.map((p) => [p.id, displayName(p)]));
   const stores = allLocations.filter((l: Location) => l.isStore);
@@ -136,107 +108,54 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
   const dutyFor = (kid: string, direction: Duty["direction"]) =>
     duties.find((d) => d.kitUnitId === kid && d.direction === direction)!;
 
-  function DutyRow({ d }: { d: Duty }) {
-    const mine = d.userId === user.id;
-    const label = d.direction === "to" ? "To" : "From";
-    return (
-      <div className="flex flex-col gap-1.5 border-t border-border pt-2 first:border-t-0 first:pt-0">
-        <div className="flex flex-wrap items-center gap-1.5 text-sm">
-          <span className="font-medium">{label}:</span>
-          {d.userId ? (
-            <span>{mine ? "You" : (personName.get(d.userId) ?? d.userId)}</span>
-          ) : (
-            <UnassignedBadge />
-          )}
-          {mine && !d.voidedAt && <YourDutyBadge />}
-          {d.voidedAt && <Badge variant="outline">Voided</Badge>}
-          {d.confirmedAt && <ConfirmedBadge />}
-        </div>
-        {d.userId && !d.confirmedAt && !d.voidedAt && (mine || committee) && (
-          <form action={duty}>
-            <input type="hidden" name="dutyId" value={d.id} />
-            <SubmitButton name="action" value="confirm" size="sm">
-              Confirm
-            </SubmitButton>
-          </form>
-        )}
-        <form action={duty} className="flex flex-wrap items-center gap-2">
-          <input type="hidden" name="dutyId" value={d.id} />
-          {!d.userId && (
-            <SubmitButton name="action" value="claim" size="sm">
-              Claim
-            </SubmitButton>
-          )}
-          {(mine || committee) && (
-            <>
-              <NativeSelect
-                name="userId"
-                aria-label={`${label} Duty person`}
-                size="sm"
-                defaultValue=""
-              >
-                <NativeSelectOption value="" disabled>
-                  Choose a person…
-                </NativeSelectOption>
-                {approved.map((p) => (
-                  <NativeSelectOption key={p.id} value={p.id}>
-                    {p.id === user.id ? `${displayName(p)} (you)` : displayName(p)}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-              {mine && (
-                <SubmitButton name="action" value="handOn" variant="outline" size="sm">
-                  Hand on
-                </SubmitButton>
-              )}
-              {committee && (
-                <SubmitButton name="action" value="assign" variant="outline" size="sm">
-                  Assign
-                </SubmitButton>
-              )}
-              {committee && d.userId && (
-                <SubmitButton name="action" value="unassign" variant="outline" size="sm">
-                  Unassign
-                </SubmitButton>
-              )}
-            </>
-          )}
-        </form>
-        {d.direction === "from" && (
-          <form action={duty} className="flex flex-wrap items-center gap-2 text-sm">
-            <input type="hidden" name="dutyId" value={d.id} />
-            <input type="hidden" name="action" value="destination" />
-            <span className="text-muted-foreground">Destination:</span>
-            {committee ? (
-              <>
-                <NativeSelect
-                  name="destination"
-                  aria-label="Destination"
-                  size="sm"
-                  defaultValue={d.destination.type === "store" ? `store:${d.destination.storeId}` : d.destination.type}
-                >
-                  <NativeSelectOption value="home">Home</NativeSelectOption>
-                  {stores.map((s: Location) => (
-                    <NativeSelectOption key={s.id} value={`store:${s.id}`}>{s.name}</NativeSelectOption>
-                  ))}
-                  <NativeSelectOption value="holder">Stays with the Duty&apos;s User</NativeSelectOption>
-                </NativeSelect>
-                <SubmitButton size="sm">Set</SubmitButton>
-              </>
-            ) : (
-              <span>
-                {d.destination.type === "home"
-                  ? "Home"
-                  : d.destination.type === "holder"
-                    ? "Stays with the Duty's User"
-                    : (stores.find((s: Location) => s.id === (d.destination as { storeId: string }).storeId)?.name ?? "Store")}
-              </span>
-            )}
-          </form>
-        )}
-      </div>
-    );
-  }
+  const kitById = new Map(kitUnits.map((u: KitUnit) => [u.id, u]));
+  const storeName = (storeId: string | null) => stores.find((l: Location) => l.id === storeId)?.name ?? "a store";
+  const nameOf = (userId: string | null) => (userId === user.id ? "You" : userId ? (personName.get(userId) ?? "Someone") : null);
+  const slot = (d: Duty, homeId: string | null): DutySlot => ({
+    id: d.id,
+    direction: d.direction,
+    userId: d.userId,
+    person: nameOf(d.userId),
+    mine: d.userId === user.id,
+    confirmed: !!d.confirmedAt,
+    voided: !!d.voidedAt,
+    actions: dutyActions(
+      { direction: d.direction, userId: d.userId, confirmed: !!d.confirmedAt, voided: !!d.voidedAt },
+      { viewerId: user.id, committee },
+    ),
+    destination:
+      d.destination.type === "store" && d.destination.storeId !== homeId ? `store:${d.destination.storeId}` : d.destination.type === "holder" ? "holder" : "home",
+  });
+  const dutyKit: DutyKit[] = resolved.kitUnitIds.map((kid) => {
+    const unit = kitById.get(kid);
+    const homeId = unit?.homeId ?? null;
+    const from = dutyFor(kid, "from");
+    return {
+      kitUnitId: kid,
+      kitName: kitNames.get(kid) ?? "Kit",
+      now: !unit
+        ? ""
+        : unit.whereaboutsType === "store"
+          ? `In ${storeName(unit.storeId)}`
+          : unit.whereaboutsType === "holder"
+            ? `With ${unit.holderId === user.id ? "you" : nameOf(unit.holderId)}`
+            : "Nobody confirmed where it is",
+      goesBackTo:
+        from.destination.type === "store"
+          ? storeName(from.destination.storeId)
+          : from.destination.type === "holder"
+            ? `stays with ${from.userId === user.id ? "you" : (nameOf(from.userId) ?? "whoever takes it back")}`
+            : storeName(homeId),
+      places: [
+        { value: "home", label: `${storeName(homeId)} (its home)` },
+        ...stores.filter((l: Location) => l.id !== homeId).map((l: Location) => ({ value: `store:${l.id}`, label: l.name })),
+        { value: "holder", label: "Stays with whoever takes it back" },
+      ],
+      to: slot(dutyFor(kid, "to"), homeId),
+      from: slot(from, homeId),
+      headsUps: headsUps.filter((h) => h.kitUnitId === kid).map((h) => h.message),
+    };
+  });
   const summary = formatDutySummary({
     title: eventDetails.title,
     start: eventDetails.start,
@@ -247,9 +166,12 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
       from: dutyFor(kid, "from").userId ? (personName.get(dutyFor(kid, "from").userId!) ?? null) : null,
     })),
   });
-  const sourceLabel = { event: "this Event", series: "its Series", default: "the Default Checklist", none: "" }[
-    resolved.source
-  ];
+  const checklistSource = {
+    event: "This event's own list",
+    series: "From its series",
+    default: `The default for ${eventDetails.eventType}`,
+    none: "",
+  }[resolved.source];
 
   const venues = eventDetails.seriesId ? (await listLocations(db)).filter((l: Location) => l.isVenue) : [];
 
@@ -305,10 +227,10 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
             <form id={`cancel-event-${id}`} action={cancel} className="mt-3 self-start">
               <ConfirmSubmit
                 formId={`cancel-event-${id}`}
-                triggerLabel="Cancel Event"
-                title="Cancel Event?"
-                description="This voids all its Duties. The Event stays visible, marked as cancelled."
-                confirmLabel="Cancel Event"
+                triggerLabel="Cancel event"
+                title="Cancel this event?"
+                description="Nobody will need to bring kit to it. It stays in the calendar, marked as cancelled."
+                confirmLabel="Cancel event"
               />
             </form>
           )}
@@ -316,37 +238,28 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
       </Card>
 
       <ClashList clashes={clashes} />
-
-      <Card className="py-0">
-        <CardHeader className="pt-4">
-          <CardTitle>Duties</CardTitle>
-        </CardHeader>
-        <CardContent className="divide-y divide-border pb-4">
-          {resolved.kitUnitIds.map((kid) => (
-            <div key={kid} className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0">
-              <span className="font-medium">{kitNames.get(kid) ?? kid}</span>
-              <DutyRow d={dutyFor(kid, "to")} />
-              <DutyRow d={dutyFor(kid, "from")} />
-            </div>
-          ))}
-          {resolved.kitUnitIds.length === 0 && (
-            <p className="py-3 text-muted-foreground">No Duties yet.</p>
-          )}
-        </CardContent>
-      </Card>
+      <EventDuties
+        kit={dutyKit}
+        eventTitle={eventDetails.title}
+        soon={headsUps.some((h) => h.kind === "unfilled_duty")}
+        viewerId={user.id}
+        people={approved.map((p) => ({ id: p.id, name: displayName(p) }))}
+        act={act}
+      />
 
       <CopySummary text={summary} />
 
       {committee && (
         <Card>
           <CardHeader>
-            <CardTitle>Checklist{sourceLabel && ` (from ${sourceLabel})`}</CardTitle>
+            <CardTitle>Kit needed</CardTitle>
+            {checklistSource && <p className="text-sm text-muted-foreground">{checklistSource}</p>}
           </CardHeader>
           <CardContent>
             <ChecklistEditor
               target={{ scope: "event", scopeId: id }}
               path={`/events/${id}`}
-              inheritedFrom={sourceLabel ? `Checklist from ${sourceLabel}` : undefined}
+              inheritedFrom={eventDetails.seriesId ? "the series list" : "the default list"}
             />
           </CardContent>
         </Card>

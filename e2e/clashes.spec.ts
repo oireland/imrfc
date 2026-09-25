@@ -18,7 +18,7 @@ async function magicLink(email: string): Promise<string> {
   throw new Error("No magic link email arrived in Mailpit");
 }
 
-test("Clashes warn on the Event and the Kit Unit without blocking", async ({ page, baseURL }) => {
+test("Unfilled Duties get a heads-up, not a Clash, on the Event and the Kit Unit", async ({ page, baseURL }) => {
   const sql = postgres(process.env.DATABASE_URL ?? "postgres://imrfc:imrfc@localhost:5432/imrfc");
   const run = crypto.randomUUID().slice(0, 8);
   const [store, venue, kit, event, list] = Array.from({ length: 5 }, () => crypto.randomUUID());
@@ -40,13 +40,17 @@ test("Clashes warn on the Event and the Kit Unit without blocking", async ({ pag
   await expect(page.getByRole("link", { name: "Kit", exact: true })).toBeVisible();
 
   await page.goto(`/events/${event}`);
-  await expect(page.getByRole("alert").getByText(`${kitName}'s To Duty`, { exact: false })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Claim" }).first()).toBeVisible();
+  const headsUp = `Nobody is taking ${kitName} to or back from Clash training ${run}, and it starts within 48 hours.`;
+  // On the Event, the heads-up sits with the kit it is about.
+  const duties = page.getByRole("region", { name: "Who's bringing what" });
+  await expect(duties.getByText(headsUp)).toBeVisible();
+  await expect(duties.getByRole("button", { name: `Bring ${kitName}: nobody yet` })).toContainText("Needs someone");
+  await expect(page.getByText("Clashes")).toHaveCount(0);
   // Duty Summary previews the WhatsApp message with the unassigned Kit Unit flagged.
   await expect(page.getByText(`${kitName}: ❗unassigned`)).toBeVisible();
   await expect(page.getByRole("button", { name: "Copy WhatsApp message" })).toBeVisible();
 
   await page.goto(`/kit/${kit}`);
-  await expect(page.getByRole("alert").getByText("unfilled", { exact: false }).first()).toBeVisible();
+  await expect(page.getByRole("region", { name: "Heads up" }).getByText(headsUp)).toBeVisible();
   await sql.end();
 });

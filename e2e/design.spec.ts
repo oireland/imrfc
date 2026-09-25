@@ -110,6 +110,9 @@ test.describe("Design pass: every screen is accessible at phone width, light and
         await page.goto(screen);
         if (mode === "chosen dark") await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
         await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
+        // Native dropdowns and date pickers must open in the same theme as the page.
+        const colorScheme = await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme);
+        expect(colorScheme, screen).toBe(mode === "light" ? "light" : "dark");
         await assertNoHorizontalScroll(page);
         const report = await axeReport(page, screen);
         if (report) reports.push(report);

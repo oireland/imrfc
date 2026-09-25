@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { location } from "@/features/locations";
@@ -6,12 +7,14 @@ import { createKitUnit, getKitUnit, listMovementLog, recordMove } from "@/featur
 import { cancelEvent, createEvent } from "@/features/events";
 import { user } from "@/features/users";
 import {
+  actOnDuty,
   assignDuty,
   claimDuty,
   confirmDuty,
   ensureDuties,
   handOnDuty,
   listClashes,
+  listHeadsUps,
   listUpcomingDutiesForUser,
   setDestination,
   unassignDuty,
@@ -83,7 +86,7 @@ describe("Duties", () => {
     const { db, to } = await setup();
     await claimDuty(db, to.id, "tom");
 
-    expect(await claimDuty(db, to.id, "sam")).toEqual({ ok: false, error: "That Duty is already taken." });
+    expect(await claimDuty(db, to.id, "sam")).toEqual({ ok: false, error: "Someone is already doing that." });
   });
 
   it("Assigning a To Duty fills the From Duty but keeps one already handed to someone else", async () => {
@@ -112,7 +115,7 @@ describe("Duties", () => {
 
     expect(await handOnDuty(db, from.id, "sam", "priya")).toEqual({
       ok: false,
-      error: "You can only hand on your own Duty.",
+      error: "You can only hand on your own duties.",
     });
     expect(await handOnDuty(db, from.id, "tom", "priya")).toEqual({ ok: true });
 
@@ -147,7 +150,7 @@ describe("Duties", () => {
 
     expect(await setDestination(db, to.id, { type: "holder" })).toEqual({
       ok: false,
-      error: "Only a From Duty has a Destination.",
+      error: "Only the trip back has a destination.",
     });
   });
 
@@ -367,8 +370,62 @@ describe("listUpcomingDutiesForUser", () => {
   });
 });
 
-describe("Clashes", () => {
-  it("lists Clashes across upcoming Events from the database", async () => {
+describe("actOnDuty", () => {
+  const member = (id: string) => ({ id, role: "member" as const });
+  const committee = (id: string) => ({ id, role: "committee" as const });
+
+  it("does what the viewer is allowed to do", async () => {
+    const { db, reload } = await setup();
+    const { to } = await reload();
+
+    expect(await actOnDuty(db, to.id, member("sam"), { action: "claim" })).toEqual({ ok: true });
+    expect(await actOnDuty(db, to.id, member("sam"), { action: "handOn", userId: "tom" })).toEqual({ ok: true });
+
+    expect((await reload()).to.userId).toBe("tom");
+  });
+
+  it("refuses what the viewer isn't allowed to do", async () => {
+    const { db, reload } = await setup();
+    const { to, from } = await reload();
+
+    expect(await actOnDuty(db, to.id, member("sam"), { action: "assign", userId: "tom" })).toEqual({
+      ok: false,
+      error: "You can't do that on this duty.",
+    });
+    expect(
+      await actOnDuty(db, from.id, member("sam"), { action: "setDestination", destination: { type: "holder" } }),
+    ).toMatchObject({ ok: false });
+    expect((await reload()).to.userId).toBeNull();
+  });
+
+  it("lets Committee assign, set where kit goes back to, and unassign", async () => {
+    const { db, cupboard, reload } = await setup();
+    const { to, from } = await reload();
+
+    await actOnDuty(db, to.id, committee("priya"), { action: "assign", userId: "tom" });
+    await actOnDuty(db, from.id, committee("priya"), {
+      action: "setDestination",
+      destination: { type: "store", storeId: cupboard.id },
+    });
+    await actOnDuty(db, to.id, committee("priya"), { action: "unassign" });
+
+    const after = await reload();
+    expect(after.to.userId).toBeNull();
+    expect(after.from).toMatchObject({ userId: "tom", destination: { type: "store", storeId: cupboard.id } });
+  });
+
+  it("confirms a Duty", async () => {
+    const { db, reload } = await setup();
+    const { to } = await reload();
+    await actOnDuty(db, to.id, member("sam"), { action: "claim" });
+
+    expect(await actOnDuty(db, to.id, member("sam"), { action: "confirm" })).toEqual({ ok: true });
+    expect((await reload()).to.confirmedAt).not.toBeNull();
+  });
+});
+
+describe("Clashes and heads-ups", () => {
+  async function soonEventNeedingKit() {
     const { db, kit } = await setup();
     const { addToChecklist } = await import("@/features/checklists");
     const soon = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -381,11 +438,38 @@ describe("Clashes", () => {
     });
     if (!made.ok) throw new Error(made.error);
     await addToChecklist(db, { scope: "event", scopeId: made.event.id }, kit.id);
-    await ensureDuties(db, made.event.id, [kit.id]);
+    const duties = await ensureDuties(db, made.event.id, [kit.id]);
+    return { db, kit, event: made.event, duties };
+  }
 
-    const clashes = await listClashes(db);
+  it("doesn't count unfilled Duties as Clashes", async () => {
+    const { db } = await soonEventNeedingKit();
 
-    expect(clashes.map((c) => c.kind)).toEqual(["unfilled_duty", "unfilled_duty"]);
-    expect(clashes[0]).toMatchObject({ kitUnitId: kit.id, eventIds: [made.event.id] });
+    expect(await listClashes(db)).toEqual([]);
+  });
+
+  it("gives a heads-up about unfilled Duties across upcoming Events from the database", async () => {
+    const { db, kit, event } = await soonEventNeedingKit();
+
+    expect(await listHeadsUps(db)).toEqual([
+      {
+        kind: "unfilled_duty",
+        kitUnitId: kit.id,
+        eventIds: [event.id],
+        message: "Nobody is taking Balls to or back from Training, and it starts within 48 hours.",
+      },
+    ]);
+  });
+
+  it("names people in heads-ups", async () => {
+    const { db, kit, duties } = await soonEventNeedingKit();
+    await db.update(user).set({ name: "Sam Okafor" }).where(eq(user.id, "sam"));
+    await db.update(user).set({ name: "Tom Reed" }).where(eq(user.id, "tom"));
+    await recordMove(db, kit.id, "sam", { type: "holder", holderId: "sam" });
+    await assignDuty(db, duties.find((d) => d.direction === "to")!.id, "tom");
+
+    expect((await listHeadsUps(db)).map((h) => h.message)).toEqual([
+      "Sam Okafor needs to pass Balls to Tom Reed before Training.",
+    ]);
   });
 });

@@ -17,7 +17,7 @@ export default async function WaitingForApprovalPage() {
         </CardHeader>
         <CardContent>
           <p className="text-center text-sm text-muted-foreground">
-            Your account is Pending approval from a club Admin. Check back soon.
+            Thanks for signing up. A club admin needs to let you in. Check back soon.
           </p>
         </CardContent>
       </Card>

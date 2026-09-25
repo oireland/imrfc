@@ -255,7 +255,7 @@ function MonthCalendar({
 function Agenda({ events, now }: { events: CalendarEvent[]; now: number }) {
   const upcoming = events.filter((e) => Date.parse(e.end) > now).slice(0, 15);
   if (upcoming.length === 0) {
-    return <p className="rounded-3xl bg-card px-5 py-6 text-sm text-muted-foreground shadow-card">No upcoming Events.</p>;
+    return <p className="rounded-3xl bg-card px-5 py-6 text-sm text-muted-foreground shadow-card">Nothing coming up.</p>;
   }
   return (
     <ul className="flex flex-col divide-y divide-border rounded-3xl bg-card px-5 shadow-card">

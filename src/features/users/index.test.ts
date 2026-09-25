@@ -137,7 +137,7 @@ describe("setName", () => {
     await migrate(db);
     const u = await seedUser(db, { name: "Kept" });
 
-    expect(await setName(db, u.id, "   ")).toEqual({ ok: false, error: "Name is required" });
+    expect(await setName(db, u.id, "   ")).toEqual({ ok: false, error: "Please enter your name." });
 
     const [row] = await db.select().from(user).where(eq(user.id, u.id));
     expect(row.name).toBe("Kept");

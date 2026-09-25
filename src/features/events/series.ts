@@ -87,9 +87,9 @@ export async function extendSeries(
   newEndDate: string,
 ): Promise<{ ok: true } | Failure> {
   const [row]: Series[] = await db.select().from(series).where(eq(series.id, seriesId));
-  if (!row) return { ok: false, error: "Series not found." };
+  if (!row) return { ok: false, error: "That series no longer exists." };
   if (newEndDate <= row.endDate) {
-    return { ok: false, error: "The new end date must be later than the current end date." };
+    return { ok: false, error: "Pick a date after the current last date." };
   }
 
   const nextDay = new Date(Date.parse(`${row.endDate}T00:00:00Z`) + 86_400_000)
@@ -108,14 +108,14 @@ export async function editOccurrence(
   scope: "this" | "future",
 ): Promise<{ ok: true } | Failure> {
   const [target]: Occurrence[] = await db.select().from(event).where(eq(event.id, eventId));
-  if (!target?.seriesId) return { ok: false, error: "That Event isn't part of a Series." };
+  if (!target?.seriesId) return { ok: false, error: "That event isn't part of a series." };
 
   const current = { start: londonParts(target.start).time, end: londonParts(target.end).time };
   const startTime = changes.startTime ?? current.start;
   const endTime = changes.endTime ?? current.end;
-  if (endTime <= startTime) return { ok: false, error: "An Event can't end before it starts (end time)." };
+  if (endTime <= startTime) return { ok: false, error: "The end time must be after the start time." };
   if (changes.title !== undefined && !changes.title.trim()) {
-    return { ok: false, error: "An Event needs a title." };
+    return { ok: false, error: "Give the event a title." };
   }
 
   const apply = (row: Occurrence, edited: boolean) => {

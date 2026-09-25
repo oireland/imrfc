@@ -35,7 +35,7 @@ export default async function NewKitUnitPage() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
         <BackLink href="/kit">Kit</BackLink>
-        <h2 className="font-heading text-[40px] leading-none tracking-tight">New Kit Unit</h2>
+        <h2 className="font-heading text-[40px] leading-none tracking-tight">New kit</h2>
       </div>
 
       <Card>
@@ -48,16 +48,16 @@ export default async function NewKitUnitPage() {
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="kit-home">Home</Label>
               <NativeSelect id="kit-home" name="homeId" required className="w-full">
-                <NativeSelectOption value="">Choose a Store…</NativeSelectOption>
+                <NativeSelectOption value="">Choose a store…</NativeSelectOption>
                 {stores.map((s: Location) => (
                   <NativeSelectOption key={s.id} value={s.id}>
                     {s.name}
                   </NativeSelectOption>
                 ))}
               </NativeSelect>
-              <p className="text-xs text-muted-foreground">Where it lives, and where it returns after an Event.</p>
+              <p className="text-xs text-muted-foreground">Where it lives, and where it goes back to after an event.</p>
             </div>
-            <SubmitButton pendingLabel="Adding…">Add Kit Unit</SubmitButton>
+            <SubmitButton pendingLabel="Adding…">Add kit</SubmitButton>
           </form>
         </CardContent>
       </Card>

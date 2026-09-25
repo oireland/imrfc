@@ -43,7 +43,7 @@ export default async function LocationsPage() {
 
       <Card className="py-0">
         <div className="divide-y divide-border">
-          {locations.length === 0 && <p className="p-4 text-muted-foreground">No Locations yet.</p>}
+          {locations.length === 0 && <p className="p-4 text-muted-foreground">No locations yet.</p>}
           {locations.map((l: Location) => (
             <div key={l.id} className="flex items-center justify-between gap-3 p-4">
               <div className="flex flex-col gap-1">
@@ -67,7 +67,7 @@ export default async function LocationsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>New Location</CardTitle>
+          <CardTitle>Add a location</CardTitle>
         </CardHeader>
         <CardContent>
           <form action={create} className="flex flex-col gap-3">
