@@ -9,7 +9,9 @@ import { ConfirmSubmit } from "@/components/confirm-submit";
 import { SubmitButton } from "@/components/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { displayName, setName } from "@/features/users";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { RUGBY_POSITIONS, displayName, setName, type RugbyPosition } from "@/features/users";
+import { setPlayerPositions, setPlaying } from "@/features/players";
 import { getFeedToken, resetFeedToken } from "@/features/calendar-feed";
 import { requireApprovedUser } from "@/lib/session";
 
@@ -36,6 +38,22 @@ export default async function ProfilePage() {
     redirect("/profile?flash=name-saved");
   }
 
+  async function savePositions(formData: FormData) {
+    "use server";
+    const current = await requireApprovedUser();
+    const preferred = String(formData.get("preferred")) as RugbyPosition;
+    const other = formData.getAll("other") as RugbyPosition[];
+    await setPlayerPositions(db, current.id, preferred, other);
+    revalidatePath("/profile");
+  }
+
+  async function togglePlaying(formData: FormData) {
+    "use server";
+    const current = await requireApprovedUser();
+    await setPlaying(db, current.id, formData.get("playing") === "true");
+    revalidatePath("/profile");
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-0.5">
@@ -54,6 +72,48 @@ export default async function ProfilePage() {
               <Input id="profile-name" name="name" defaultValue={user.name} required autoComplete="name" className="flex-1" />
               <SubmitButton variant="secondary">Save</SubmitButton>
             </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h3 className="font-heading text-[22px] leading-tight">Playing</h3>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <form action={savePositions} className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="profile-preferred-position">Preferred Position</Label>
+              <NativeSelect id="profile-preferred-position" name="preferred" defaultValue={user.preferredPosition ?? ""} required>
+                <NativeSelectOption value="" disabled>
+                  Choose a position
+                </NativeSelectOption>
+                {RUGBY_POSITIONS.map((position) => (
+                  <NativeSelectOption key={position} value={position}>
+                    {position}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </div>
+            <fieldset className="flex flex-col gap-1.5">
+              <legend className="mb-0.5 text-sm font-medium">Other Positions</legend>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                {RUGBY_POSITIONS.map((position) => (
+                  <label key={position} className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="other" value={position} defaultChecked={user.otherPositions.includes(position)} />
+                    {position}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <SubmitButton variant="secondary" className="self-start">
+              Save positions
+            </SubmitButton>
+          </form>
+
+          <form action={togglePlaying}>
+            <input type="hidden" name="playing" value={(!user.playing).toString()} />
+            <SubmitButton variant="outline">{user.playing ? "Switch Playing off" : "Switch Playing on"}</SubmitButton>
           </form>
         </CardContent>
       </Card>

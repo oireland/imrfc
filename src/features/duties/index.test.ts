@@ -16,6 +16,7 @@ import {
   handOnDuty,
   leaveDuty,
   listClashes,
+  listDutyRecordForUser,
   listHeadsUps,
   listUpcomingDutiesForUser,
   setDestination,
@@ -840,5 +841,54 @@ describe("Query efficiency", () => {
     const manySelects = countSelects(nineDuties);
     await releaseDutiesOfBlockedUser(nineDuties, "tom");
     expect(manySelects()).toBe(selectsWithOneDuty);
+  });
+});
+
+describe("listDutyRecordForUser", () => {
+  async function pastEvent(db: Awaited<ReturnType<typeof setup>>["db"], title: string, end: Date) {
+    const made = await createEvent(db, { title, eventType: "training", start: new Date(end.getTime() - 3600_000), end, venue: "Harlington" });
+    if (!made.ok) throw new Error(made.error);
+    return made.event;
+  }
+
+  it("splits this season's Duties into done and never confirmed, leaves out Cancelled Events, and lists the last 5", async () => {
+    const { db, shed } = await setup();
+    const now = new Date("2025-11-01T12:00:00Z");
+
+    // Claiming a To Duty also joins its From Duty ("From follows To"); leave it again so
+    // each Event contributes a single Duty here, keeping the counts easy to read.
+    async function claimToOnly(eventId: string, kitUnitId: string) {
+      const [to, from] = await ensureDuties(db, eventId, [kitUnitId]);
+      await claimDuty(db, to.direction === "to" ? to.id : from.id, "tom");
+      await leaveDuty(db, to.direction === "from" ? to.id : from.id, "tom");
+      return to.direction === "to" ? to : from;
+    }
+
+    const done = await pastEvent(db, "Done", new Date("2025-10-01T12:00:00Z"));
+    const unitA = await createKitUnit(db, { name: "Balls A", homeId: shed.id });
+    if (!unitA.ok) throw new Error(unitA.error);
+    const toA = await claimToOnly(done.id, unitA.kitUnit.id);
+    await confirmDuty(db, toA.id, { id: "tom", role: "member" });
+
+    const neverConfirmed = await pastEvent(db, "Never confirmed", new Date("2025-10-08T12:00:00Z"));
+    const unitB = await createKitUnit(db, { name: "Balls B", homeId: shed.id });
+    if (!unitB.ok) throw new Error(unitB.error);
+    await claimToOnly(neverConfirmed.id, unitB.kitUnit.id);
+
+    const cancelled = await pastEvent(db, "Cancelled", new Date("2025-10-15T12:00:00Z"));
+    await cancelEvent(db, cancelled.id);
+    const unitC = await createKitUnit(db, { name: "Balls C", homeId: shed.id });
+    if (!unitC.ok) throw new Error(unitC.error);
+    await claimToOnly(cancelled.id, unitC.kitUnit.id);
+
+    const lastSeason = await pastEvent(db, "Last season", new Date("2024-10-01T12:00:00Z"));
+    const unitD = await createKitUnit(db, { name: "Balls D", homeId: shed.id });
+    if (!unitD.ok) throw new Error(unitD.error);
+    await claimToOnly(lastSeason.id, unitD.kitUnit.id);
+
+    const record = await listDutyRecordForUser(db, "tom", now);
+
+    expect(record.season).toEqual({ done: 1, neverConfirmed: 1 });
+    expect(record.last.map((r) => r.event.title)).toEqual(["Never confirmed", "Done", "Last season"]);
   });
 });

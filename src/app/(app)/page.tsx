@@ -144,7 +144,7 @@ export default async function Home() {
         )}
       </section>
 
-      <ComingUp {...comingUp} canAdd={isCommitteeOrAbove(user.role)} addAction={quickAddEvent} />
+      <ComingUp {...comingUp} canAdd={isCommitteeOrAbove(user.role)} addAction={quickAddEvent} seeAllHref="/events" />
     </div>
   );
 }

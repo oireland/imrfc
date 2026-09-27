@@ -18,8 +18,12 @@ export const user = pgTable("user", {
   theme: text("theme", { enum: ["system", "light", "dark"] })
     .notNull()
     .default("system"),
-  // Set during onboarding; the future `players` feature (PLAN slice 20) reads this as Preferred Position.
+  // Set during onboarding; the `players` feature reads this as Preferred Position.
   preferredPosition: text("preferred_position", { enum: RUGBY_POSITIONS }),
+  // Any number of further Positions, beyond the Preferred one.
+  otherPositions: text("other_positions", { enum: RUGBY_POSITIONS }).array().notNull().default([]),
+  // Whether this User counts as a Player; off for someone who's stopped playing but keeps their account.
+  playing: boolean("playing").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

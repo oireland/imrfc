@@ -89,21 +89,21 @@
     {
       "idx": 12,
       "version": "7",
-      "when": 1790604000000,
+      "when": 1790364194396,
       "tag": "0012_quantity-and-split-whereabouts",
       "breakpoints": true
     },
     {
       "idx": 13,
       "version": "7",
-      "when": 1790604100000,
+      "when": 1790364195396,
       "tag": "0013_checklist-item-counts",
       "breakpoints": true
     },
     {
       "idx": 14,
       "version": "7",
-      "when": 1790604200000,
+      "when": 1790364196396,
       "tag": "0014_shared-duties",
       "breakpoints": true
     },
@@ -119,6 +119,13 @@
       "version": "7",
       "when": 1790541106383,
       "tag": "0016_add-preferred-position",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790543478267,
+      "tag": "0017_nostalgic_karma",
       "breakpoints": true
     }
   ]

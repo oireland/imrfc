@@ -14,6 +14,7 @@ import { displayName, isCommitteeOrAbove, listApprovedUsers, type Role } from "@
 import { findClashes, type Clash } from "./clashes-rules";
 import { gatherConfirmSources, gatherFromDutyUsers, validateHolderSplit, type HolderPart, type SourcePart } from "./confirm-source-rules";
 import { dutyActions, type DutyAction } from "./duty-actions-rules";
+import { lastDuties, seasonCount } from "./duty-record-rules";
 import { findHeadsUps, type HeadsUp } from "./heads-up-rules";
 import { joinNames } from "./names-rules";
 import type { PlanEvent, PlanKit } from "./plan";
@@ -455,6 +456,58 @@ export async function listUpcomingDutiesForUser(db: Db, userId: string) {
         count: countFromResolved(checklistsByEvent.get(event.id), r.kitUnitId, kitUnitById.get(r.kitUnitId)?.quantity ?? 1),
       })),
   );
+}
+
+export type PastDutyRecord = {
+  dutyId: string;
+  direction: "to" | "from";
+  confirmedAt: Date | null;
+  kitUnitId: string;
+  event: { id: string; title: string; end: Date };
+};
+
+/**
+ * A User's duty record for the Player page: their Duties still to do, this season's
+ * Confirmed/never-confirmed split (1 Sep–31 Aug, Cancelled Events left out), and their
+ * last 5 past Duties.
+ */
+export async function listDutyRecordForUser(
+  db: Db,
+  userId: string,
+  now: Date = new Date(),
+): Promise<{
+  upcoming: Awaited<ReturnType<typeof listUpcomingDutiesForUser>>;
+  season: { done: number; neverConfirmed: number };
+  last: PastDutyRecord[];
+}> {
+  const upcoming = await listUpcomingDutiesForUser(db, userId);
+  const pastEvents = (await listEvents(db, { when: "past" })).filter((e) => !e.cancelled);
+  if (pastEvents.length === 0) return { upcoming, season: { done: 0, neverConfirmed: 0 }, last: [] };
+  const eventById = new Map(pastEvents.map((e) => [e.id, e]));
+  const rows: { id: string; eventId: string; kitUnitId: string; direction: "to" | "from"; confirmedAt: Date | null }[] = await db
+    .select({ id: duty.id, eventId: duty.eventId, kitUnitId: duty.kitUnitId, direction: duty.direction, confirmedAt: duty.confirmedAt })
+    .from(duty)
+    .innerJoin(dutyUser, eq(dutyUser.dutyId, duty.id))
+    .where(and(eq(dutyUser.userId, userId), inArray(duty.eventId, pastEvents.map((e) => e.id)), isNull(duty.voidedAt)));
+  const records: PastDutyRecord[] = rows
+    .map((r) => {
+      const event = eventById.get(r.eventId);
+      return event
+        ? {
+            dutyId: r.id,
+            direction: r.direction,
+            confirmedAt: r.confirmedAt,
+            kitUnitId: r.kitUnitId,
+            event: { id: event.id, title: event.title, end: event.end },
+          }
+        : undefined;
+    })
+    .filter((r): r is PastDutyRecord => !!r);
+  return {
+    upcoming,
+    season: seasonCount(records.map((r) => ({ eventEnd: r.event.end, confirmedAt: r.confirmedAt })), now),
+    last: lastDuties(records.map((r) => ({ ...r, eventEnd: r.event.end })), 5),
+  };
 }
 
 /** The kit plan for every upcoming, uncancelled Event. Read-only: it never creates Duties. */

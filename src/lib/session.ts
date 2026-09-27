@@ -11,12 +11,14 @@ export type CurrentUser = {
   accessState: AccessState;
   theme: ThemePreference;
   preferredPosition: RugbyPosition | null;
+  otherPositions: RugbyPosition[];
+  playing: boolean;
 };
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return null;
-  const { id, name, email, role, accessState, theme, preferredPosition } =
+  const { id, name, email, role, accessState, theme, preferredPosition, otherPositions, playing } =
     session.user as typeof session.user & CurrentUser;
   return {
     id,
@@ -26,6 +28,8 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     accessState,
     theme: theme ?? "system",
     preferredPosition: preferredPosition ?? null,
+    otherPositions: otherPositions ?? [],
+    playing: playing ?? true,
   };
 }
 

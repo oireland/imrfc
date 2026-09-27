@@ -41,7 +41,6 @@ function subscribeNever() {
 
 const GUIDE = [
   { label: "Home", body: "Your duties, what's coming up, and any kit you're holding." },
-  { label: "Events", body: "Every training, match and social — see who's bringing the kit." },
   { label: "Kit", body: "Where every kit unit is right now, and who's got it." },
   { label: "Profile", body: "Your name, position, calendar feed, and theme." },
 ] as const;
@@ -129,10 +128,15 @@ export function OnboardingDialog({
                 </p>
               ))}
               {showAdmin && (
-                <p className="text-sm">
-                  <span className="font-medium">Admin</span> — pending users, stores, kit units and
-                  event types.
-                </p>
+                <>
+                  <p className="text-sm">
+                    <span className="font-medium">Players</span> — everyone&apos;s position and duty record.
+                  </p>
+                  <p className="text-sm">
+                    <span className="font-medium">Admin</span> — pending users, stores, kit units, events and
+                    checklists.
+                  </p>
+                </>
               )}
             </CollapsibleContent>
           </Collapsible>

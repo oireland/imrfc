@@ -54,6 +54,17 @@ export async function setPreferredPosition(db: Db, userId: string, position: Rug
   await db.update(user).set({ preferredPosition: position }).where(eq(user.id, userId));
 }
 
+export async function setPositions(db: Db, userId: string, positions: { preferred: RugbyPosition; other: RugbyPosition[] }) {
+  await db
+    .update(user)
+    .set({ preferredPosition: positions.preferred, otherPositions: positions.other })
+    .where(eq(user.id, userId));
+}
+
+export async function setPlaying(db: Db, userId: string, playing: boolean) {
+  await db.update(user).set({ playing }).where(eq(user.id, userId));
+}
+
 export type ThemePreference = "system" | "light" | "dark";
 
 export async function setThemePreference(db: Db, userId: string, theme: ThemePreference) {
