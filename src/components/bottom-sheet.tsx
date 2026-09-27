@@ -24,7 +24,7 @@ export function BottomSheet({
       <button type="button" aria-label="Close" className="absolute inset-0 animate-in bg-black/50 backdrop-blur-sm fade-in" onClick={onClose} />
       <form
         onSubmit={onSubmit}
-        className="relative max-h-[92dvh] w-full max-w-2xl animate-in overflow-y-auto rounded-t-[28px] bg-popover px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+20px)] text-popover-foreground shadow-2xl duration-300 slide-in-from-bottom"
+        className="relative max-h-[92dvh] w-full max-w-2xl animate-in overflow-y-auto rounded-t-[28px] bg-popover px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+20px)] font-sans text-popover-foreground shadow-2xl duration-300 slide-in-from-bottom"
       >
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-border" />
         <div className="mb-4 flex items-start justify-between gap-3">
