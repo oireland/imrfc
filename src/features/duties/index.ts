@@ -1,10 +1,12 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { resolveEventChecklist } from "@/features/checklists";
+import { resolveEventChecklist, type ResolvedEventChecklist } from "@/features/checklists";
 import { getEvent, listEvents } from "@/features/events";
 import {
   getKitUnit,
   getPortions,
   listKitUnits,
+  listKitUnitsByIds,
+  listPortionsFor,
   recordSplitMove,
   setUnconfirmed,
 } from "@/features/kit";
@@ -203,6 +205,29 @@ async function checklistCountFor(
   return resolved.items.find((i) => i.kitUnitId === dutyRow.kitUnitId)?.count ?? fallbackQuantity;
 }
 
+/** Every given Event's resolved Checklist, once each — not once per Duty on it. */
+async function resolveChecklistsForEvents(
+  db: Db,
+  events: { id: string; seriesId: string | null; eventType: string }[],
+): Promise<Map<string, ResolvedEventChecklist>> {
+  const map = new Map<string, ResolvedEventChecklist>();
+  await Promise.all(
+    events.map(async (e) => {
+      map.set(e.id, await resolveEventChecklist(db, { eventId: e.id, seriesId: e.seriesId, eventType: e.eventType }));
+    }),
+  );
+  return map;
+}
+
+/** A Checklist line's effective count from an already-resolved Event Checklist. */
+function countFromResolved(
+  resolved: ResolvedEventChecklist | undefined,
+  kitUnitId: string,
+  fallbackQuantity: number,
+): number {
+  return resolved?.items.find((i) => i.kitUnitId === kitUnitId)?.count ?? fallbackQuantity;
+}
+
 /**
  * "Who has how many": when the Duty has one User, or the count is 1, there's only one
  * answer. Otherwise a given split is validated, and the default is everything with
@@ -337,22 +362,33 @@ export async function voidDutiesForEvent(db: Db, eventId: string) {
  * from whichever of them hold it (in order). The app never assumes a Move happened.
  */
 export async function markUnconfirmed(db: Db) {
-  const ended = (await listEvents(db, { when: "past" })).filter((e) => !e.cancelled).map((e) => e.id);
-  if (ended.length === 0) return;
+  const endedEvents = (await listEvents(db, { when: "past" })).filter((e) => !e.cancelled);
+  if (endedEvents.length === 0) return;
+  const ended = endedEvents.map((e) => e.id);
   const rows: (typeof duty.$inferSelect)[] = await db
     .select()
     .from(duty)
     .where(and(inArray(duty.eventId, ended), isNull(duty.voidedAt)));
-  const userIdsByDuty = await loadUserIdsFor(db, rows.map((r) => r.id));
-  for (const from of rows.filter((d) => d.direction === "from" && !d.confirmedAt)) {
+  const fromRows = rows.filter((d) => d.direction === "from" && !d.confirmedAt);
+  const kitUnitIds = [...new Set(fromRows.map((r) => r.kitUnitId))];
+  const [userIdsByDuty, checklistsByEvent, kitUnits, portions] = await Promise.all([
+    loadUserIdsFor(db, rows.map((r) => r.id)),
+    resolveChecklistsForEvents(db, endedEvents),
+    listKitUnitsByIds(db, kitUnitIds),
+    listPortionsFor(db, kitUnitIds),
+  ]);
+  const kitById = new Map(kitUnits.map((k) => [k.id, k]));
+  const portionsByKit = new Map<string, typeof portions>();
+  for (const p of portions) portionsByKit.set(p.kitUnitId, [...(portionsByKit.get(p.kitUnitId) ?? []), p]);
+
+  for (const from of fromRows) {
     const to = rows.find((d) => d.direction === "to" && d.eventId === from.eventId && d.kitUnitId === from.kitUnitId);
     const toUserIds = to ? (userIdsByDuty.get(to.id) ?? []) : [];
     if (!to?.confirmedAt || toUserIds.length === 0) continue;
-    const kit = await getKitUnit(db, from.kitUnitId);
+    const kit = kitById.get(from.kitUnitId);
     if (!kit) continue;
-    const count = await checklistCountFor(db, from, kit.quantity);
-    const portions = await getPortions(db, kit.id);
-    const held = gatherFromDutyUsers(portions, { userIds: toUserIds, count });
+    const count = countFromResolved(checklistsByEvent.get(from.eventId), from.kitUnitId, kit.quantity);
+    const held = gatherFromDutyUsers(portionsByKit.get(kit.id) ?? [], { userIds: toUserIds, count });
     for (const source of held.sources) {
       await setUnconfirmed(db, kit.id, from.eventId, source.place, source.count);
     }
@@ -367,10 +403,12 @@ export async function releaseDutiesOfBlockedUser(db: Db, userId: string) {
     .select()
     .from(duty)
     .where(and(inArray(duty.eventId, upcoming), isNull(duty.confirmedAt)));
-  for (const row of rows) {
-    const ids = await userIdsOf(db, row.id);
-    if (ids.includes(userId)) await removeUser(db, row, userId);
-  }
+  const userIdsByDuty = await loadUserIdsFor(db, rows.map((r) => r.id));
+  await Promise.all(
+    rows
+      .filter((row) => (userIdsByDuty.get(row.id) ?? []).includes(userId))
+      .map((row) => removeUser(db, row, userId)),
+  );
 }
 
 /** The User's Duties still to do on upcoming, uncancelled Events, soonest Event first. */
@@ -402,19 +440,21 @@ export async function listUpcomingDutiesForUser(db: Db, userId: string) {
         isNull(duty.voidedAt),
       ),
     );
-  const userIdsByDuty = await loadUserIdsFor(db, rows.map((r) => r.id));
-  const results = await Promise.all(
-    events.flatMap((event) =>
-      rows
-        .filter((r) => r.eventId === event.id)
-        .map(async (r) => ({
-          duty: toDuty(r, userIdsByDuty.get(r.id) ?? []),
-          event,
-          count: await checklistCountFor(db, r, (await getKitUnit(db, r.kitUnitId))?.quantity ?? 1),
-        })),
-    ),
+  const [userIdsByDuty, checklistsByEvent, kitUnits] = await Promise.all([
+    loadUserIdsFor(db, rows.map((r) => r.id)),
+    resolveChecklistsForEvents(db, events),
+    listKitUnitsByIds(db, rows.map((r) => r.kitUnitId)),
+  ]);
+  const kitUnitById = new Map(kitUnits.map((k) => [k.id, k]));
+  return events.flatMap((event) =>
+    rows
+      .filter((r) => r.eventId === event.id)
+      .map((r) => ({
+        duty: toDuty(r, userIdsByDuty.get(r.id) ?? []),
+        event,
+        count: countFromResolved(checklistsByEvent.get(event.id), r.kitUnitId, kitUnitById.get(r.kitUnitId)?.quantity ?? 1),
+      })),
   );
-  return results;
 }
 
 /** The kit plan for every upcoming, uncancelled Event. Read-only: it never creates Duties. */
@@ -449,12 +489,9 @@ async function loadPlan(db: Db): Promise<{ kit: PlanKit[]; events: PlanEvent[] }
         .map((d) => ({ kitUnitId: d.kitUnitId, direction: d.direction, userIds: userIdsByDuty.get(d.id) ?? [] })),
     })),
   );
-  const portionsByUnit = new Map<string, Awaited<ReturnType<typeof getPortions>>>();
-  await Promise.all(
-    kit.map(async (k) => {
-      portionsByUnit.set(k.id, await getPortions(db, k.id));
-    }),
-  );
+  const portions = await listPortionsFor(db, kit.map((k) => k.id));
+  const portionsByUnit = new Map<string, typeof portions>();
+  for (const p of portions) portionsByUnit.set(p.kitUnitId, [...(portionsByUnit.get(p.kitUnitId) ?? []), p]);
   return {
     kit: kit.map((k) => ({
       id: k.id,

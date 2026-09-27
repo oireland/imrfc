@@ -110,3 +110,39 @@ describe("renderFeed", () => {
     expect((await renderFeed(db, token)).status).toBe(410);
   });
 });
+
+describe("Query efficiency", () => {
+  /** Counts the db's `select` calls from here on, so a fix can't reintroduce a query per row. */
+  function countSelects(db: { select: (...args: unknown[]) => unknown }): () => number {
+    const original = db.select.bind(db);
+    let count = 0;
+    (db as { select: (...args: unknown[]) => unknown }).select = (...args: unknown[]) => {
+      count++;
+      return original(...args);
+    };
+    return () => count;
+  }
+
+  it("renders a feed without one query per Duty in it", async () => {
+    const { db, event } = await setup();
+    const { addToChecklist } = await import("@/features/checklists");
+    const addClaimedDuty = async (name: string) => {
+      const unit = await createKitUnit(db, { name, homeId: "shed" });
+      if (!unit.ok) throw new Error(unit.error);
+      await addToChecklist(db, { scope: "event", scopeId: event.id }, unit.kitUnit.id);
+      const [dutyRow] = (await ensureDuties(db, event.id, [unit.kitUnit.id])).filter((d) => d.direction === "to");
+      await claimDuty(db, dutyRow.id, "tom");
+    };
+    const token = await getFeedToken(db, "tom");
+
+    await addClaimedDuty("Kit A");
+    const fewSelects = countSelects(db);
+    await renderFeed(db, token);
+    const selectsWithOneDuty = fewSelects();
+
+    for (let i = 0; i < 8; i++) await addClaimedDuty(`Kit ${i}`);
+    const manySelects = countSelects(db);
+    await renderFeed(db, token);
+    expect(manySelects()).toBe(selectsWithOneDuty);
+  });
+});

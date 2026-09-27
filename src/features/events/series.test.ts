@@ -206,3 +206,33 @@ describe("cancelling an Occurrence", () => {
     expect(after.map((o) => o.cancelled)).toEqual([false, true, false, false]);
   });
 });
+
+describe("Query efficiency", () => {
+  /** Counts the db's `insert` calls from here on, so a fix can't reintroduce one insert per Occurrence. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function countInserts(db: any): () => number {
+    const original = db.insert.bind(db);
+    let count = 0;
+    db.insert = (...args: unknown[]) => {
+      count++;
+      return original(...args);
+    };
+    return () => count;
+  }
+
+  it("creates a Series' Occurrences and their Teams in a fixed number of inserts, however many Occurrences", async () => {
+    const { db, pattern } = await setup();
+    const teams = await listTeams(db);
+
+    const fewInserts = countInserts(db);
+    const short = await createSeries(db, { ...pattern, endDate: pattern.startDate, teamIds: [teams[0].id] });
+    if (!short.ok) throw new Error(short.error);
+    const insertsForOneOccurrence = fewInserts();
+
+    const manyInserts = countInserts(db);
+    const long = await createSeries(db, { ...pattern, endDate: "2999-03-27", teamIds: [teams[0].id] });
+    if (!long.ok) throw new Error(long.error);
+    expect(await listOccurrences(db, long.series.id)).toHaveLength(12);
+    expect(manyInserts()).toBe(insertsForOneOccurrence);
+  });
+});

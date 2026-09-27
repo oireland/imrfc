@@ -98,8 +98,9 @@ async function insertEvent(db: Db, input: NewEvent): Promise<Event> {
     });
   }
 
-  for (const teamId of input.teamIds ?? []) {
-    await db.insert(eventTeam).values({ id: crypto.randomUUID(), eventId: row.id, teamId });
+  const teamIds = input.teamIds ?? [];
+  if (teamIds.length > 0) {
+    await db.insert(eventTeam).values(teamIds.map((teamId) => ({ id: crypto.randomUUID(), eventId: row.id, teamId })));
   }
 
   return row;
@@ -129,8 +130,13 @@ export async function listVenues(db: Db): Promise<string[]> {
 
 /** The next few upcoming Events that are still happening, soonest first. */
 export async function listNextEvents(db: Db, limit: number): Promise<Event[]> {
-  const upcoming = await listEvents(db, { when: "upcoming" });
-  return upcoming.filter((e) => !e.cancelled).slice(0, limit);
+  const now = new Date();
+  return db
+    .select()
+    .from(event)
+    .where(and(gte(event.end, now), eq(event.cancelled, false)))
+    .orderBy(asc(event.start))
+    .limit(limit);
 }
 
 export async function getEvent(db: Db, id: string): Promise<EventWithDetails | undefined> {
@@ -193,8 +199,9 @@ export async function editEvent(
   }
 
   await db.delete(eventTeam).where(eq(eventTeam.eventId, id));
-  for (const teamId of input.teamIds ?? []) {
-    await db.insert(eventTeam).values({ id: crypto.randomUUID(), eventId: id, teamId });
+  const teamIds = input.teamIds ?? [];
+  if (teamIds.length > 0) {
+    await db.insert(eventTeam).values(teamIds.map((teamId) => ({ id: crypto.randomUUID(), eventId: id, teamId })));
   }
 
   return { ok: true };

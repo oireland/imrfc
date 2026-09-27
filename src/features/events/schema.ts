@@ -1,4 +1,4 @@
-import { boolean, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 export const team = pgTable("team", {
   id: text("id").primaryKey(),
@@ -28,21 +28,29 @@ export const seriesTeam = pgTable("series_team", {
     .references(() => team.id),
 });
 
-export const event = pgTable("event", {
-  id: text("id").primaryKey(),
-  title: text("title").notNull(),
-  eventType: text("event_type", { enum: ["training", "match", "social"] }).notNull(),
-  start: timestamp("start", { withTimezone: true }).notNull(),
-  end: timestamp("end", { withTimezone: true }).notNull(),
-  // Free text (e.g. "Harlington" or an away ground's address); Venues aren't stored separately.
-  venue: text("venue").notNull(),
-  notes: text("notes").notNull().default(""),
-  cancelled: boolean("cancelled").notNull().default(false),
-  // Set for Occurrences; `edited` marks an Occurrence changed on its own, which
-  // "this and future" edits must not overwrite.
-  seriesId: text("series_id").references(() => series.id),
-  edited: boolean("edited").notNull().default(false),
-});
+export const event = pgTable(
+  "event",
+  {
+    id: text("id").primaryKey(),
+    title: text("title").notNull(),
+    eventType: text("event_type", { enum: ["training", "match", "social"] }).notNull(),
+    start: timestamp("start", { withTimezone: true }).notNull(),
+    end: timestamp("end", { withTimezone: true }).notNull(),
+    // Free text (e.g. "Harlington" or an away ground's address); Venues aren't stored separately.
+    venue: text("venue").notNull(),
+    notes: text("notes").notNull().default(""),
+    cancelled: boolean("cancelled").notNull().default(false),
+    // Set for Occurrences; `edited` marks an Occurrence changed on its own, which
+    // "this and future" edits must not overwrite.
+    seriesId: text("series_id").references(() => series.id),
+    edited: boolean("edited").notNull().default(false),
+  },
+  (t) => [
+    index("event_series_id_idx").on(t.seriesId),
+    index("event_start_idx").on(t.start),
+    index("event_end_idx").on(t.end),
+  ],
+);
 
 export const eventTeam = pgTable("event_team", {
   id: text("id").primaryKey(),
