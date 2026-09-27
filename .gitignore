@@ -9,3 +9,7 @@ playwright-report/
 *.tsbuildinfo
 next-env.d.ts
 .vercel/
+
+# Claude Code: personal settings and agent worktrees
+.claude/settings.local.json
+.claude/worktrees/
