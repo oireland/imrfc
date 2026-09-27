@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronDown, Loader2, X } from "lucide-react";
+import { ChevronDown } from "lucide-react";
+import { BottomSheet, SheetSaveButton } from "@/components/bottom-sheet";
 import { VenueInput } from "@/components/venue-input";
 import { cn } from "cn";
 import type { QuickEventInput } from "@/features/events";
@@ -130,32 +131,7 @@ export function QuickAddSheet({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="quick-add-title">
-      <button type="button" aria-label="Close" className="absolute inset-0 animate-in bg-black/50 backdrop-blur-sm fade-in" onClick={onClose} />
-      <form
-        onSubmit={save}
-        className="relative max-h-[92dvh] w-full max-w-2xl animate-in overflow-y-auto rounded-t-[28px] bg-popover px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+20px)] text-popover-foreground shadow-2xl duration-300 slide-in-from-bottom"
-      >
-        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-border" />
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <p
-              id={dateLabel ? undefined : "quick-add-title"}
-              className="text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase"
-            >
-              New event
-            </p>
-            {dateLabel && (
-              <p id="quick-add-title" className="text-lg font-semibold">
-                {dateLabel}
-              </p>
-            )}
-          </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded-full bg-muted p-2">
-            <X className="size-4" />
-          </button>
-        </div>
-
+    <BottomSheet eyebrow="New event" title={dateLabel} onSubmit={save} onClose={onClose}>
         <input
           autoFocus={!!fixedDate}
           value={title}
@@ -300,15 +276,7 @@ export function QuickAddSheet({
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={pending}
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-base font-semibold text-primary-foreground disabled:opacity-60"
-        >
-          {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-          Save
-        </button>
-      </form>
-    </div>
+        <SheetSaveButton pending={pending} />
+    </BottomSheet>
   );
 }

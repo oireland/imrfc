@@ -6,7 +6,6 @@ import { toast } from "sonner";
 
 const MESSAGES: Record<string, string> = {
   "event-created": "Event created",
-  "kit-created": "Kit added",
   "name-saved": "Name saved",
 };
 

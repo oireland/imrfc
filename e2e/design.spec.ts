@@ -100,7 +100,6 @@ test.describe("Design pass: every screen is accessible at phone width, light and
         "/admin",
         "/admin/kit",
         "/events/import",
-        "/kit/new",
         "/admin/series",
         "/admin/checklists",
         "/admin/users",
