@@ -2,7 +2,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { ChevronRight, CircleHelp, User, Warehouse } from "lucide-react";
 import { db } from "@/db/client";
-import { AddLink } from "@/components/add-link";
+import { AddKitButton } from "@/components/add-kit-button";
 import { Card } from "@/components/ui/card";
 import { SubmitButton } from "@/components/submit-button";
 import {
@@ -19,6 +19,7 @@ import { getEvent } from "@/features/events";
 import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
 import { listStores, type Store } from "@/features/stores";
 import { requireApprovedUser } from "@/lib/session";
+import { addKitUnit } from "./actions";
 
 export default async function KitViewPage() {
   const user = await requireApprovedUser();
@@ -160,7 +161,7 @@ export default async function KitViewPage() {
         </section>
       )}
 
-      {isCommitteeOrAbove(user.role) && <AddLink href="/kit/new">Add kit</AddLink>}
+      {isCommitteeOrAbove(user.role) && <AddKitButton stores={stores.map((s: Store) => ({ id: s.id, name: s.name }))} action={addKitUnit} />}
     </div>
   );
 }

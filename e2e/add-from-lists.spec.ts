@@ -42,14 +42,13 @@ test("Committee add Kit Units and Events from the Kit and Events pages, with a c
 
   const kitName = `Cones ${run}`;
   await page.goto("/kit");
-  await page.getByRole("link", { name: "Add kit" }).click();
-  await page.getByLabel("Name").fill(kitName);
-  await page.getByLabel("Home").selectOption({ label: storeName });
   await page.getByRole("button", { name: "Add kit" }).click();
+  const kitSheet = page.getByRole("dialog");
+  await kitSheet.getByLabel("Name").fill(kitName);
+  await kitSheet.getByLabel("Home").selectOption({ label: storeName });
+  await kitSheet.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("Kit added")).toBeVisible();
-  await expect(page.getByRole("heading", { name: kitName })).toBeVisible();
-
-  await page.getByRole("link", { name: "Kit", exact: true }).first().click();
+  await expect(page).toHaveURL(/\/kit$/);
   await page.getByRole("button", { name: `I've got ${kitName}` }).click();
   await expect(page.getByRole("region", { name: "With you" }).getByRole("link", { name: kitName })).toBeVisible();
 
