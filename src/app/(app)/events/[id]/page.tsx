@@ -23,7 +23,7 @@ import { formatWhen } from "@/lib/format-time";
 import { mapsSearchUrl } from "@/lib/maps";
 import { VenueInput } from "@/components/venue-input";
 import { resolveEventChecklist } from "@/features/checklists";
-import { listKitUnits, type KitUnit } from "@/features/kit";
+import { describeWhereabouts, listKitUnits, listPortionsFor, type KitUnit, type Portion } from "@/features/kit";
 import {
   actOnDuty,
   dutyActions,
@@ -108,8 +108,22 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     duties.find((d) => d.kitUnitId === kid && d.direction === direction)!;
 
   const kitById = new Map(kitUnits.map((u: KitUnit) => [u.id, u]));
+  const portions = await listPortionsFor(db, resolved.kitUnitIds);
+  const portionsByUnit = new Map<string, Portion[]>();
+  for (const p of portions) portionsByUnit.set(p.kitUnitId, [...(portionsByUnit.get(p.kitUnitId) ?? []), p]);
+  const eventTitleFor = async (eventId: string) => (await getEvent(db, eventId))?.title ?? "an event";
+  const eventNames = new Map<string, string>();
+  for (const eventId of new Set(portions.flatMap((p) => (p.lastSeenEventId ? [p.lastSeenEventId] : [])))) {
+    eventNames.set(eventId, await eventTitleFor(eventId));
+  }
   const storeName = (storeId: string | null) => stores.find((s: Store) => s.id === storeId)?.name ?? "a store";
   const nameOf = (userId: string | null) => (userId === user.id ? "You" : userId ? (personName.get(userId) ?? "Someone") : null);
+  const whereaboutsNow = (kitUnitId: string) =>
+    describeWhereabouts(portionsByUnit.get(kitUnitId) ?? [], {
+      storeName: (sid) => storeName(sid),
+      personName: (holderId) => (holderId === user.id ? "you" : (nameOf(holderId) ?? "someone")),
+      eventName: (eventId) => eventNames.get(eventId) ?? "an event",
+    });
   const slot = (d: Duty, homeId: string | null): DutySlot => ({
     id: d.id,
     direction: d.direction,
@@ -132,13 +146,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     return {
       kitUnitId: kid,
       kitName: kitNames.get(kid) ?? "Kit",
-      now: !unit
-        ? ""
-        : unit.whereaboutsType === "store"
-          ? `In ${storeName(unit.storeId)}`
-          : unit.whereaboutsType === "holder"
-            ? `With ${unit.holderId === user.id ? "you" : nameOf(unit.holderId)}`
-            : "Nobody confirmed where it is",
+      now: !unit ? "" : whereaboutsNow(kid),
       goesBackTo:
         from.destination.type === "store"
           ? storeName(from.destination.storeId)

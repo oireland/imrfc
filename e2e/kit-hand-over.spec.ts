@@ -26,7 +26,8 @@ test("Anyone can hand a Kit Unit to a teammate from its page", async ({ page, ba
   const kitName = `First aid kit ${run}`;
   const teammateName = `Priya ${run}`;
   await sql`insert into store (id, name, address) values (${store}, ${`Locker ${run}`}, 'x')`;
-  await sql`insert into kit_unit (id, name, home_id, store_id) values (${kit}, ${kitName}, ${store}, ${store})`;
+  await sql`insert into kit_unit (id, name, home_id) values (${kit}, ${kitName}, ${store})`;
+  await sql`insert into kit_portion (id, kit_unit_id, count, whereabouts_type, store_id) values (${crypto.randomUUID()}, ${kit}, 1, 'store', ${store})`;
   await sql`insert into "user" (id, name, email, access_state) values (${teammate}, ${teammateName}, ${`${run}@example.com`}, 'approved')`;
 
   await page.goto("/sign-in");
@@ -46,6 +47,7 @@ test("Anyone can hand a Kit Unit to a teammate from its page", async ({ page, ba
 
   // Test people would otherwise pile up in every person picker on the dev database.
   await sql`delete from movement_log_entry where kit_unit_id = ${kit}`;
+  await sql`delete from kit_portion where kit_unit_id = ${kit}`;
   await sql`delete from kit_unit where id = ${kit}`;
   await sql`delete from store where id = ${store}`;
   await sql`delete from "user" where id = ${teammate}`;

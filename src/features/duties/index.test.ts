@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { store } from "@/features/stores";
-import { createKitUnit, getKitUnit, listMovementLog, recordMove } from "@/features/kit";
+import { createKitUnit, getPortions, listMovementLog, recordMove } from "@/features/kit";
 import { cancelEvent, createEvent } from "@/features/events";
 import { user } from "@/features/users";
 import {
@@ -46,6 +46,11 @@ async function setup() {
   });
   const reload = async () => pair(await ensureDuties(db, "e1", [made.kitUnit.id]));
   return { db, shed, cupboard, kit: made.kitUnit, ...pair(duties), reload };
+}
+
+async function whereaboutsOf(db: Awaited<ReturnType<typeof setup>>["db"], kitUnitId: string) {
+  const [portion] = await getPortions(db, kitUnitId);
+  return portion;
 }
 
 describe("Duties", () => {
@@ -161,7 +166,7 @@ describe("Duties", () => {
 
       expect(await confirmDuty(db, to.id, { id: "tom", role: "member" })).toEqual({ ok: true });
 
-      expect(await getKitUnit(db, kit.id)).toMatchObject({ whereaboutsType: "holder", holderId: "tom", storeId: null });
+      expect(await whereaboutsOf(db, kit.id)).toMatchObject({ whereaboutsType: "holder", holderId: "tom", storeId: null });
       expect(await listMovementLog(db, kit.id)).toMatchObject([{ kind: "move", reason: "duty", userId: "tom", toHolderId: "tom" }]);
     });
 
@@ -172,7 +177,7 @@ describe("Duties", () => {
 
       await confirmDuty(db, from.id, { id: "tom", role: "member" });
 
-      expect(await getKitUnit(db, kit.id)).toMatchObject({ whereaboutsType: "store", storeId: shed.id, holderId: null });
+      expect(await whereaboutsOf(db, kit.id)).toMatchObject({ whereaboutsType: "store", storeId: shed.id, holderId: null });
     });
 
     it("a Confirmed From Duty honours a Store Destination or staying with the Duty's User", async () => {
@@ -181,14 +186,14 @@ describe("Duties", () => {
 
       await setDestination(db, from.id, { type: "store", storeId: cupboard.id });
       await confirmDuty(db, from.id, { id: "tom", role: "member" });
-      expect(await getKitUnit(db, kit.id)).toMatchObject({ whereaboutsType: "store", storeId: cupboard.id });
+      expect(await whereaboutsOf(db, kit.id)).toMatchObject({ whereaboutsType: "store", storeId: cupboard.id });
 
       const other = await ensureDuties(db, "e2", [kit.id]);
       const from2 = other.find((d) => d.direction === "from")!;
       await claimDuty(db, other.find((d) => d.direction === "to")!.id, "sam");
       await setDestination(db, from2.id, { type: "holder" });
       await confirmDuty(db, from2.id, { id: "sam", role: "member" });
-      expect(await getKitUnit(db, kit.id)).toMatchObject({ whereaboutsType: "holder", holderId: "sam" });
+      expect(await whereaboutsOf(db, kit.id)).toMatchObject({ whereaboutsType: "holder", holderId: "sam" });
     });
 
     it("lets Committee Confirm any Duty but not another member", async () => {
@@ -196,10 +201,10 @@ describe("Duties", () => {
       await claimDuty(db, to.id, "tom");
 
       expect(await confirmDuty(db, to.id, { id: "sam", role: "member" })).toMatchObject({ ok: false });
-      expect(await getKitUnit(db, kit.id)).toMatchObject({ whereaboutsType: "store" });
+      expect(await whereaboutsOf(db, kit.id)).toMatchObject({ whereaboutsType: "store" });
 
       expect(await confirmDuty(db, to.id, { id: "sam", role: "committee" })).toEqual({ ok: true });
-      expect(await getKitUnit(db, kit.id)).toMatchObject({ holderId: "tom" });
+      expect(await whereaboutsOf(db, kit.id)).toMatchObject({ holderId: "tom" });
     });
 
     it("refuses an unfilled or already Confirmed Duty", async () => {
@@ -221,7 +226,7 @@ describe("Duties", () => {
     await voidDutiesForEvent(db, "e1");
 
     expect(await confirmDuty(db, to.id, { id: "tom", role: "member" })).toMatchObject({ ok: false });
-    expect(await getKitUnit(db, kit.id)).toMatchObject({ whereaboutsType: "store" });
+    expect(await whereaboutsOf(db, kit.id)).toMatchObject({ whereaboutsType: "store" });
   });
 
   describe("Unconfirmed", () => {
@@ -246,7 +251,7 @@ describe("Duties", () => {
 
       await markUnconfirmed(db);
 
-      expect(await getKitUnit(db, kit.id)).toMatchObject({
+      expect(await whereaboutsOf(db, kit.id)).toMatchObject({
         whereaboutsType: "unconfirmed",
         lastSeenEventId: ev.id,
         holderId: null,
@@ -281,7 +286,7 @@ describe("Duties", () => {
 
       await markUnconfirmed(db);
 
-      expect(await getKitUnit(db, kit.id)).toMatchObject({ whereaboutsType: "holder", holderId: "sam" });
+      expect(await whereaboutsOf(db, kit.id)).toMatchObject({ whereaboutsType: "holder", holderId: "sam" });
     });
 
     it("is resolved by a later Move", async () => {
@@ -295,7 +300,7 @@ describe("Duties", () => {
       await recordMove(db, kit.id, "sam", { type: "holder", holderId: "sam" });
       await markUnconfirmed(db);
 
-      expect(await getKitUnit(db, kit.id)).toMatchObject({ whereaboutsType: "holder", holderId: "sam", lastSeenEventId: null });
+      expect(await whereaboutsOf(db, kit.id)).toMatchObject({ whereaboutsType: "holder", holderId: "sam", lastSeenEventId: null });
     });
   });
 

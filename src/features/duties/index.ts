@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { resolveEventChecklist } from "@/features/checklists";
 import { listEvents } from "@/features/events";
-import { getKitUnit, listKitUnits, recordMove, setUnconfirmed } from "@/features/kit";
+import { getKitUnit, getPortions, listKitUnits, recordMove, setUnconfirmed, singlePlace } from "@/features/kit";
 import { displayName, isCommitteeOrAbove, listApprovedUsers, type Role } from "@/features/users";
 import { findClashes, type Clash } from "./clashes-rules";
 import { dutyActions, type DutyAction } from "./duty-actions-rules";
@@ -217,7 +217,9 @@ export async function markUnconfirmed(db: Db) {
     const to = rows.find((d) => d.direction === "to" && d.eventId === from.eventId && d.kitUnitId === from.kitUnitId);
     if (!to?.confirmedAt || !to.userId) continue;
     const kit = await getKitUnit(db, from.kitUnitId);
-    if (kit?.whereaboutsType === "holder" && kit.holderId === to.userId) {
+    if (!kit) continue;
+    const place = singlePlace(await getPortions(db, kit.id));
+    if (place?.type === "holder" && place.holderId === to.userId) {
       await setUnconfirmed(db, kit.id, from.eventId);
     }
   }
@@ -286,13 +288,22 @@ async function loadPlan(db: Db): Promise<{ kit: PlanKit[]; events: PlanEvent[] }
       duties: dutyRows.filter((d) => d.eventId === e.id),
     })),
   );
+  const portionsByUnit = new Map<string, Awaited<ReturnType<typeof getPortions>>>();
+  await Promise.all(
+    kit.map(async (k) => {
+      portionsByUnit.set(k.id, await getPortions(db, k.id));
+    }),
+  );
   return {
-    kit: kit.map((k) => ({
-      id: k.id,
-      name: k.name,
-      status: k.status,
-      holderId: k.whereaboutsType === "holder" ? k.holderId : null,
-    })),
+    kit: kit.map((k) => {
+      const place = singlePlace(portionsByUnit.get(k.id) ?? []);
+      return {
+        id: k.id,
+        name: k.name,
+        status: k.status,
+        holderId: place?.type === "holder" ? place.holderId : null,
+      };
+    }),
     events: planEvents,
   };
 }

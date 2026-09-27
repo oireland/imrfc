@@ -5,12 +5,16 @@ import { store } from "@/features/stores";
 import { user } from "@/features/users";
 import {
   createKitUnit,
+  getPortions,
   listKitHeldBy,
   listKitUnits,
   listMovementLog,
+  lowerQuantity,
+  raiseQuantity,
   recordMove,
   setConditionNote,
   setKitStatus,
+  setUnconfirmed,
 } from "./index";
 
 async function seedHome(db: Awaited<ReturnType<typeof createTestDb>>) {
@@ -38,7 +42,7 @@ async function seedUser(db: Awaited<ReturnType<typeof createTestDb>>) {
 }
 
 describe("createKitUnit", () => {
-  it("creates an Active Kit Unit with a Home", async () => {
+  it("creates an Active Kit Unit with a Home, Quantity 1 by default, and one Portion", async () => {
     const db = await createTestDb();
     await migrate(db);
     const home = await seedHome(db);
@@ -47,14 +51,25 @@ describe("createKitUnit", () => {
 
     expect(result.ok).toBe(true);
     const units = await listKitUnits(db);
-    expect(units).toMatchObject([
-      {
-        name: "Ball bag A",
-        status: "active",
-        homeId: home.id,
-        whereaboutsType: "store",
-        storeId: home.id,
-      },
+    expect(units).toMatchObject([{ name: "Ball bag A", status: "active", homeId: home.id, quantity: 1 }]);
+    if (!result.ok) return;
+    expect(await getPortions(db, result.kitUnit.id)).toMatchObject([
+      { count: 1, whereaboutsType: "store", storeId: home.id },
+    ]);
+  });
+
+  it("creates a Kit Unit with a Quantity greater than 1, all at Home", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+
+    const result = await createKitUnit(db, { name: "Tackle shields", homeId: home.id, quantity: 8 });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.kitUnit.quantity).toBe(8);
+    expect(await getPortions(db, result.kitUnit.id)).toMatchObject([
+      { count: 8, whereaboutsType: "store", storeId: home.id },
     ]);
   });
 
@@ -146,12 +161,12 @@ describe("recordMove", () => {
 
     await recordMove(db, created.kitUnit.id, alex.id, { type: "holder", holderId: alex.id });
 
-    const [unit] = await listKitUnits(db);
-    expect(unit).toMatchObject({ whereaboutsType: "holder", holderId: alex.id, storeId: null });
+    const portions = await getPortions(db, created.kitUnit.id);
+    expect(portions).toMatchObject([{ whereaboutsType: "holder", holderId: alex.id, storeId: null }]);
 
     const log = await listMovementLog(db, created.kitUnit.id);
     expect(log).toMatchObject([
-      { kind: "move", reason: "ad_hoc", toType: "holder", toHolderId: alex.id },
+      { kind: "move", reason: "ad_hoc", count: 1, toType: "holder", toHolderId: alex.id },
     ]);
   });
 
@@ -170,38 +185,146 @@ describe("recordMove", () => {
       storeId: otherStore.id,
     });
 
-    const [unit] = await listKitUnits(db);
-    expect(unit).toMatchObject({
-      whereaboutsType: "store",
-      storeId: otherStore.id,
-      holderId: null,
+    const portions = await getPortions(db, created.kitUnit.id);
+    expect(portions).toMatchObject([{ whereaboutsType: "store", storeId: otherStore.id, holderId: null }]);
+  });
+
+  it("moves only the given count from the given Place, for a split Kit Unit", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const sam = await seedUser(db);
+    const tom = await seedUser(db);
+    const created = await createKitUnit(db, { name: "Tackle shields", homeId: home.id, quantity: 8 });
+    if (!created.ok) throw new Error("expected Kit Unit to be created");
+    const kitUnitId = created.kitUnit.id;
+    await recordMove(db, kitUnitId, sam.id, { type: "holder", holderId: sam.id }, "ad_hoc", {
+      count: 4,
+      from: { type: "store", storeId: home.id },
     });
+
+    await recordMove(db, kitUnitId, sam.id, { type: "holder", holderId: tom.id }, "ad_hoc", {
+      count: 2,
+      from: { type: "holder", holderId: sam.id },
+    });
+
+    const portions = await getPortions(db, kitUnitId);
+    expect(portions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ count: 4, whereaboutsType: "store", storeId: home.id }),
+        expect.objectContaining({ count: 2, whereaboutsType: "holder", holderId: sam.id }),
+        expect.objectContaining({ count: 2, whereaboutsType: "holder", holderId: tom.id }),
+      ]),
+    );
+    expect(portions).toHaveLength(3);
+  });
+});
+
+describe("setUnconfirmed", () => {
+  it("moves the whole Quantity to Unconfirmed with no source given", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const created = await createKitUnit(db, { name: "Ball bag A", homeId: home.id });
+    if (!created.ok) throw new Error("expected Kit Unit to be created");
+
+    await setUnconfirmed(db, created.kitUnit.id, "event-1");
+
+    const portions = await getPortions(db, created.kitUnit.id);
+    expect(portions).toMatchObject([{ whereaboutsType: "unconfirmed", lastSeenEventId: "event-1", count: 1 }]);
+  });
+});
+
+describe("raiseQuantity", () => {
+  it("raises the Quantity and adds the extra count at Home, logging why", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const alex = await seedUser(db);
+    const created = await createKitUnit(db, { name: "Tackle shields", homeId: home.id, quantity: 6 });
+    if (!created.ok) throw new Error("expected Kit Unit to be created");
+
+    const result = await raiseQuantity(db, created.kitUnit.id, alex.id, 2);
+
+    expect(result.ok).toBe(true);
+    const units = await listKitUnits(db);
+    expect(units[0].quantity).toBe(8);
+    const portions = await getPortions(db, created.kitUnit.id);
+    expect(portions).toMatchObject([{ count: 8, whereaboutsType: "store", storeId: home.id }]);
+    const log = await listMovementLog(db, created.kitUnit.id);
+    expect(log[0]).toMatchObject({ count: 2, conditionNote: "Bought 2" });
+  });
+});
+
+describe("lowerQuantity", () => {
+  it("lowers the Quantity, removing count from the only Place automatically", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const alex = await seedUser(db);
+    const created = await createKitUnit(db, { name: "Tackle shields", homeId: home.id, quantity: 8 });
+    if (!created.ok) throw new Error("expected Kit Unit to be created");
+
+    const result = await lowerQuantity(db, created.kitUnit.id, alex.id, 2);
+
+    expect(result.ok).toBe(true);
+    const units = await listKitUnits(db);
+    expect(units[0].quantity).toBe(6);
+    const portions = await getPortions(db, created.kitUnit.id);
+    expect(portions).toMatchObject([{ count: 6 }]);
+    const log = await listMovementLog(db, created.kitUnit.id);
+    expect(log[0]).toMatchObject({ count: 2, conditionNote: "Lost 2" });
+  });
+
+  it("rejects lowering below 1", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const alex = await seedUser(db);
+    const created = await createKitUnit(db, { name: "Ball bag A", homeId: home.id });
+    if (!created.ok) throw new Error("expected Kit Unit to be created");
+
+    const result = await lowerQuantity(db, created.kitUnit.id, alex.id, 1);
+
+    expect(result).toEqual({ ok: false, error: "Can't lower a kit unit's quantity below 1." });
   });
 });
 
 describe("listKitHeldBy", () => {
-  it("lists the non-retired Kit Units whose Holder is the User", async () => {
+  it("lists the non-retired Kit Units whose Holder is the User, with the count held", async () => {
     const db = await createTestDb();
     await migrate(db);
     const home = await seedHome(db);
     const me = await seedUser(db);
     const other = await seedUser(db);
-    const make = async (name: string) => {
-      const made = await createKitUnit(db, { name, homeId: home.id });
+    const make = async (name: string, quantity?: number) => {
+      const made = await createKitUnit(db, { name, homeId: home.id, quantity });
       if (!made.ok) throw new Error(made.error);
       return made.kitUnit;
     };
     const mine = await make("Mine");
     const retired = await make("Retired");
     const theirs = await make("Theirs");
+    const split = await make("Split", 8);
     await make("In store");
     await recordMove(db, mine.id, me.id, { type: "holder", holderId: me.id });
     await recordMove(db, retired.id, me.id, { type: "holder", holderId: me.id });
     await setKitStatus(db, retired.id, "retired");
     await recordMove(db, theirs.id, other.id, { type: "holder", holderId: other.id });
+    await recordMove(db, split.id, me.id, { type: "holder", holderId: me.id }, "ad_hoc", {
+      count: 4,
+      from: { type: "store", storeId: home.id },
+    });
 
     const held = await listKitHeldBy(db, me.id);
 
-    expect(held.map((k) => k.name)).toEqual(["Mine"]);
+    expect(held.map((k) => ({ name: k.name, count: k.count }))).toEqual(
+      expect.arrayContaining([
+        { name: "Mine", count: 1 },
+        { name: "Split", count: 4 },
+      ]),
+    );
+    expect(held.map((k) => k.name)).not.toContain("Retired");
+    expect(held.map((k) => k.name)).not.toContain("Theirs");
   });
 });

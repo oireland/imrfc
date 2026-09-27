@@ -58,6 +58,7 @@ export default async function Home() {
                   {i > 0 && (i === shown.length - 1 && held.length <= HELD_SHOWN ? " & " : ", ")}
                   <Link href={`/kit/${unit.id}`} className="text-foreground underline-offset-4 hover:underline">
                     {unit.name}
+                    {unit.count > 1 && ` ×${unit.count}`}
                   </Link>
                 </Fragment>
               ))}

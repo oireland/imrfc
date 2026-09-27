@@ -1,12 +1,24 @@
-import { and, desc, eq, ne } from "drizzle-orm";
-import { kitUnit, movementLogEntry } from "./schema";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
+import { kitPortion, kitUnit, movementLogEntry } from "./schema";
 import { validateKitUnit, type NewKitUnit } from "./rules";
+import {
+  lowerQuantity as lowerQuantityRule,
+  movePortion,
+  raiseQuantity as raiseQuantityRule,
+  singlePlace,
+  totalQuantity,
+  wholeQuantityMove,
+  type Place,
+  type Portion,
+} from "./portions";
 
-export { kitUnit } from "./schema";
+export { kitUnit, kitPortion } from "./schema";
 export { validateKitUnit } from "./rules";
 export type { NewKitUnit } from "./rules";
-export { groupByWhereabouts, quickMoveFor } from "./whereabouts";
-export type { QuickMove, WhereaboutsGroup } from "./whereabouts";
+export { describeWhereabouts, groupByWhereabouts, quickMoveFor } from "./whereabouts";
+export type { KitRow, QuickMove, WhereaboutsGroup, WhereaboutsNames } from "./whereabouts";
+export { singlePlace, totalQuantity } from "./portions";
+export type { Place, Portion } from "./portions";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
@@ -15,6 +27,28 @@ export type KitUnit = typeof kitUnit.$inferSelect;
 export type KitStatus = KitUnit["status"];
 export type MovementLogEntry = typeof movementLogEntry.$inferSelect;
 export type MoveTarget = { type: "store"; storeId: string } | { type: "holder"; holderId: string };
+export type MoveSource = Place;
+
+async function loadPortions(db: Db, kitUnitId: string): Promise<Portion[]> {
+  return db.select().from(kitPortion).where(eq(kitPortion.kitUnitId, kitUnitId));
+}
+
+/** Replaces every Portion of a Kit Unit with the given set. */
+async function savePortions(db: Db, kitUnitId: string, portions: Portion[]) {
+  await db.delete(kitPortion).where(eq(kitPortion.kitUnitId, kitUnitId));
+  if (portions.length === 0) return;
+  await db.insert(kitPortion).values(
+    portions.map((p) => ({
+      id: crypto.randomUUID(),
+      kitUnitId,
+      count: p.count,
+      whereaboutsType: p.whereaboutsType,
+      storeId: p.storeId,
+      holderId: p.holderId,
+      lastSeenEventId: p.lastSeenEventId,
+    })),
+  );
+}
 
 export async function listKitUnits(
   db: Db,
@@ -31,15 +65,23 @@ export async function createKitUnit(
   const result = validateKitUnit(input);
   if (!result.ok) return result;
 
+  const quantity = input.quantity ?? 1;
   const [row] = await db
     .insert(kitUnit)
     .values({
       id: crypto.randomUUID(),
-      ...input,
-      whereaboutsType: "store",
-      storeId: input.homeId,
+      name: input.name,
+      homeId: input.homeId,
+      quantity,
     })
     .returning();
+  await db.insert(kitPortion).values({
+    id: crypto.randomUUID(),
+    kitUnitId: row.id,
+    count: quantity,
+    whereaboutsType: "store",
+    storeId: input.homeId,
+  });
   return { ok: true, kitUnit: row };
 }
 
@@ -63,22 +105,55 @@ export async function setConditionNote(
   });
 }
 
-/** Records an ad-hoc Move: "I've got it" (Holder) or "put it in [Store]". */
+function logTarget(target: MoveTarget) {
+  return {
+    toType: target.type,
+    toStoreId: target.type === "store" ? target.storeId : null,
+    toHolderId: target.type === "holder" ? target.holderId : null,
+  };
+}
+
+function logSource(from: Place) {
+  return {
+    fromType: from.type,
+    fromStoreId: from.type === "store" ? from.storeId : null,
+    fromHolderId: from.type === "holder" ? from.holderId : null,
+  };
+}
+
+/**
+ * Records a Move. With no `count`/`from`, the whole Quantity moves (every Portion
+ * consolidates into one, at the target) — how Duties confirm today. With `from`
+ * (and optionally a `count`, defaulting to everything there), only that Portion moves —
+ * an ad-hoc Move on a counted Kit Unit that is split across places.
+ */
 export async function recordMove(
   db: Db,
   kitUnitId: string,
   userId: string,
   target: MoveTarget,
   reason: "ad_hoc" | "duty" = "ad_hoc",
-) {
-  await db
-    .update(kitUnit)
-    .set(
-      target.type === "store"
-        ? { whereaboutsType: "store", storeId: target.storeId, holderId: null, lastSeenEventId: null }
-        : { whereaboutsType: "holder", holderId: target.holderId, storeId: null, lastSeenEventId: null },
-    )
-    .where(eq(kitUnit.id, kitUnitId));
+  options?: { count?: number; from?: Place },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const portions = await loadPortions(db, kitUnitId);
+
+  let nextPortions: Portion[];
+  let movedCount: number;
+  let from: Place;
+
+  if (options?.from) {
+    from = options.from;
+    movedCount = options.count ?? portionCountAt(portions, from);
+    const moved = movePortion(portions, { count: movedCount, from, to: target });
+    if (!moved.ok) return moved;
+    nextPortions = moved.portions;
+  } else {
+    from = singlePlace(portions) ?? { type: "store", storeId: "" };
+    movedCount = totalQuantity(portions);
+    nextPortions = wholeQuantityMove(portions, target);
+  }
+
+  await savePortions(db, kitUnitId, nextPortions);
 
   await db.insert(movementLogEntry).values({
     id: crypto.randomUUID(),
@@ -86,23 +161,113 @@ export async function recordMove(
     kind: "move",
     userId,
     reason,
-    toType: target.type,
-    toStoreId: target.type === "store" ? target.storeId : null,
-    toHolderId: target.type === "holder" ? target.holderId : null,
+    count: movedCount,
+    ...logSource(from),
+    ...logTarget(target),
   });
+  return { ok: true };
 }
 
-/** The Kit Unit's Whereabouts is unknown: it was last seen at the given Event. No Move is recorded. */
-export async function setUnconfirmed(db: Db, kitUnitId: string, lastSeenEventId: string) {
-  await db
-    .update(kitUnit)
-    .set({ whereaboutsType: "unconfirmed", storeId: null, holderId: null, lastSeenEventId })
-    .where(eq(kitUnit.id, kitUnitId));
+function portionCountAt(portions: Portion[], place: Place): number {
+  return (
+    portions.find((p) => {
+      if (place.type === "store") return p.whereaboutsType === "store" && p.storeId === place.storeId;
+      if (place.type === "holder") return p.whereaboutsType === "holder" && p.holderId === place.holderId;
+      return p.whereaboutsType === "unconfirmed" && p.lastSeenEventId === place.lastSeenEventId;
+    })?.count ?? 0
+  );
+}
+
+/**
+ * The Kit Unit's Whereabouts is unknown: the count at the given source Place (or the
+ * whole Quantity, with no `from`) was last seen at the given Event. No Move is recorded.
+ */
+export async function setUnconfirmed(db: Db, kitUnitId: string, lastSeenEventId: string, from?: Place) {
+  const portions = await loadPortions(db, kitUnitId);
+  const target: Place = { type: "unconfirmed", lastSeenEventId };
+  let nextPortions: Portion[];
+  if (from) {
+    const count = portionCountAt(portions, from);
+    const moved = movePortion(portions, { count, from, to: target });
+    nextPortions = moved.ok ? moved.portions : portions;
+  } else {
+    nextPortions = wholeQuantityMove(portions, target);
+  }
+  await savePortions(db, kitUnitId, nextPortions);
 }
 
 export async function getKitUnit(db: Db, id: string): Promise<KitUnit | undefined> {
   const [row] = await db.select().from(kitUnit).where(eq(kitUnit.id, id));
   return row;
+}
+
+/** A Kit Unit's Portions: where it is right now, split by count. */
+export async function getPortions(db: Db, kitUnitId: string): Promise<Portion[]> {
+  return loadPortions(db, kitUnitId);
+}
+
+/** Every Portion of the given Kit Units, for building the Kit view in one query. */
+export async function listPortionsFor(db: Db, kitUnitIds: string[]): Promise<Portion[]> {
+  if (kitUnitIds.length === 0) return [];
+  return db.select().from(kitPortion).where(inArray(kitPortion.kitUnitId, kitUnitIds));
+}
+
+/** Raises a Kit Unit's Quantity; the extra count starts at Home. Logged in the Movement Log. */
+export async function raiseQuantity(
+  db: Db,
+  kitUnitId: string,
+  userId: string,
+  addCount: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!Number.isInteger(addCount) || addCount < 1) return { ok: false, error: "Enter how many were bought." };
+  const [unit, portions] = await Promise.all([getKitUnit(db, kitUnitId), loadPortions(db, kitUnitId)]);
+  if (!unit) return { ok: false, error: "That kit no longer exists." };
+
+  const nextPortions = raiseQuantityRule(portions, { storeId: unit.homeId, addCount });
+  await db.update(kitUnit).set({ quantity: unit.quantity + addCount }).where(eq(kitUnit.id, kitUnitId));
+  await savePortions(db, kitUnitId, nextPortions);
+  await db.insert(movementLogEntry).values({
+    id: crypto.randomUUID(),
+    kitUnitId,
+    kind: "move",
+    userId,
+    reason: "ad_hoc",
+    count: addCount,
+    toType: "store",
+    toStoreId: unit.homeId,
+    conditionNote: `Bought ${addCount}`,
+  });
+  return { ok: true };
+}
+
+/** Lowers a Kit Unit's Quantity; Committee picks the Place when split. Logged in the Movement Log. */
+export async function lowerQuantity(
+  db: Db,
+  kitUnitId: string,
+  userId: string,
+  removeCount: number,
+  from?: Place,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!Number.isInteger(removeCount) || removeCount < 1) return { ok: false, error: "Enter how many were lost." };
+  const [unit, portions] = await Promise.all([getKitUnit(db, kitUnitId), loadPortions(db, kitUnitId)]);
+  if (!unit) return { ok: false, error: "That kit no longer exists." };
+
+  const result = lowerQuantityRule(portions, { removeCount, from });
+  if (!result.ok) return result;
+
+  await db.update(kitUnit).set({ quantity: unit.quantity - removeCount }).where(eq(kitUnit.id, kitUnitId));
+  await savePortions(db, kitUnitId, result.portions);
+  await db.insert(movementLogEntry).values({
+    id: crypto.randomUUID(),
+    kitUnitId,
+    kind: "move",
+    userId,
+    reason: "ad_hoc",
+    count: removeCount,
+    ...(from ? logSource(from) : {}),
+    conditionNote: `Lost ${removeCount}`,
+  });
+  return { ok: true };
 }
 
 export async function listMovementLog(db: Db, kitUnitId: string): Promise<MovementLogEntry[]> {
@@ -113,10 +278,17 @@ export async function listMovementLog(db: Db, kitUnitId: string): Promise<Moveme
     .orderBy(desc(movementLogEntry.createdAt));
 }
 
-/** Kit Units currently with this User as Holder (Retired ones are out of circulation). */
-export async function listKitHeldBy(db: Db, userId: string): Promise<KitUnit[]> {
-  return db
+/** Kit Units currently with this User as Holder (Retired ones are out of circulation), with the count held. */
+export async function listKitHeldBy(db: Db, userId: string): Promise<(KitUnit & { count: number })[]> {
+  const held: (Portion & { kitUnitId: string })[] = await db
+    .select()
+    .from(kitPortion)
+    .where(and(eq(kitPortion.whereaboutsType, "holder"), eq(kitPortion.holderId, userId)));
+  if (held.length === 0) return [];
+  const units: KitUnit[] = await db
     .select()
     .from(kitUnit)
-    .where(and(eq(kitUnit.whereaboutsType, "holder"), eq(kitUnit.holderId, userId), ne(kitUnit.status, "retired")));
+    .where(and(inArray(kitUnit.id, held.map((p) => p.kitUnitId)), ne(kitUnit.status, "retired")));
+  const countByUnit = new Map(held.map((p) => [p.kitUnitId, p.count]));
+  return units.map((u) => ({ ...u, count: countByUnit.get(u.id) ?? 0 }));
 }

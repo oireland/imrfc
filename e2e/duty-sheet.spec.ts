@@ -29,7 +29,8 @@ test("Committee give a Duty to a teammate and choose where the kit goes back to,
   const teammateName = `Tom ${run}`;
   await sql`insert into store (id, name, address) values (${store}, ${`Shed ${run}`}, 'x')`;
   await sql`insert into store (id, name, address) values (${otherStore}, ${`Locker ${run}`}, 'x')`;
-  await sql`insert into kit_unit (id, name, home_id, store_id) values (${kit}, ${kitName}, ${store}, ${store})`;
+  await sql`insert into kit_unit (id, name, home_id) values (${kit}, ${kitName}, ${store})`;
+  await sql`insert into kit_portion (id, kit_unit_id, count, whereabouts_type, store_id) values (${crypto.randomUUID()}, ${kit}, 1, 'store', ${store})`;
   await sql`insert into event (id, title, event_type, start, "end", venue)
     values (${event}, ${`Sheet training ${run}`}, 'training', now() + interval '5 days', now() + interval '5 days 2 hours', 'Harlington')`;
   await sql`insert into checklist (id, scope, scope_id) values (${list}, 'event', ${event})`;
@@ -72,6 +73,7 @@ test("Committee give a Duty to a teammate and choose where the kit goes back to,
   await sql`delete from checklist_item where checklist_id = ${list}`;
   await sql`delete from checklist where id = ${list}`;
   await sql`delete from event where id = ${event}`;
+  await sql`delete from kit_portion where kit_unit_id = ${kit}`;
   await sql`delete from kit_unit where id = ${kit}`;
   await sql`delete from store where id in (${store}, ${otherStore}, 'Harlington')`;
   await sql`delete from "user" where id = ${teammate}`;
