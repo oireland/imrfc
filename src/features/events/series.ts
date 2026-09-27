@@ -20,22 +20,22 @@ type Db = any;
 type Failure = { ok: false; error: string };
 
 async function insertOccurrences(db: Db, s: Series, dates: string[], teamIds: string[]) {
-  for (const date of dates) {
-    const id = crypto.randomUUID();
-    await db.insert(event).values({
-      id,
-      title: s.title,
-      eventType: "training",
-      start: londonToUtc(date, s.startTime),
-      end: londonToUtc(date, s.endTime),
-      venue: s.venue,
-      notes: s.notes,
-      seriesId: s.id,
-    });
-    for (const teamId of teamIds) {
-      await db.insert(eventTeam).values({ id: crypto.randomUUID(), eventId: id, teamId });
-    }
-  }
+  if (dates.length === 0) return;
+  const rows = dates.map((date) => ({
+    id: crypto.randomUUID(),
+    title: s.title,
+    eventType: "training" as const,
+    start: londonToUtc(date, s.startTime),
+    end: londonToUtc(date, s.endTime),
+    venue: s.venue,
+    notes: s.notes,
+    seriesId: s.id,
+  }));
+  await db.insert(event).values(rows);
+  if (teamIds.length === 0) return;
+  await db.insert(eventTeam).values(
+    rows.flatMap((row) => teamIds.map((teamId) => ({ id: crypto.randomUUID(), eventId: row.id, teamId }))),
+  );
 }
 
 async function seriesTeamIds(db: Db, seriesId: string): Promise<string[]> {
@@ -66,8 +66,8 @@ export async function createSeries(
     .returning();
 
   const teamIds = input.teamIds ?? [];
-  for (const teamId of teamIds) {
-    await db.insert(seriesTeam).values({ id: crypto.randomUUID(), seriesId: row.id, teamId });
+  if (teamIds.length > 0) {
+    await db.insert(seriesTeam).values(teamIds.map((teamId) => ({ id: crypto.randomUUID(), seriesId: row.id, teamId })));
   }
   await insertOccurrences(db, row, occurrenceDates(input), teamIds);
   return { ok: true, series: row };
@@ -142,9 +142,7 @@ export async function editOccurrence(
     .select()
     .from(event)
     .where(and(eq(event.seriesId, target.seriesId), gte(event.start, target.start)));
-  for (const row of later) {
-    if (row.id === target.id || !row.edited) await apply(row, false);
-  }
+  await Promise.all(later.filter((row) => row.id === target.id || !row.edited).map((row) => apply(row, false)));
   await db
     .update(series)
     .set({

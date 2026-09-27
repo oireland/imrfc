@@ -704,3 +704,141 @@ describe("Clashes and heads-ups", () => {
     ]);
   });
 });
+
+describe("Query efficiency", () => {
+  /** Counts the db's `select` calls from here on, so a fix can't reintroduce a query per row. */
+  function countSelects(db: { select: (...args: unknown[]) => unknown }): () => number {
+    const original = db.select.bind(db);
+    let count = 0;
+    (db as { select: (...args: unknown[]) => unknown }).select = (...args: unknown[]) => {
+      count++;
+      return original(...args);
+    };
+    return () => count;
+  }
+
+  it("resolves the kit plan's portions in one query, however many kit units there are", async () => {
+    const { db, shed } = await setup();
+    const soon = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const made = await createEvent(db, {
+      title: "Training",
+      eventType: "training",
+      start: soon,
+      end: new Date(soon.getTime() + 2 * 60 * 60 * 1000),
+      venue: "Harlington",
+    });
+    if (!made.ok) throw new Error(made.error);
+    const addUnit = async (name: string) => {
+      const unit = await createKitUnit(db, { name, homeId: shed.id });
+      if (!unit.ok) throw new Error(unit.error);
+    };
+
+    const fewSelects = countSelects(db);
+    await listClashes(db);
+    const selectsWithOneUnit = fewSelects();
+
+    for (let i = 0; i < 8; i++) await addUnit(`Bulk ${i}`);
+    const manySelects = countSelects(db);
+    await listClashes(db);
+    expect(manySelects()).toBe(selectsWithOneUnit);
+  });
+
+  it("resolves a user's upcoming duties without one checklist/kit query per duty", async () => {
+    const { db, shed } = await setup();
+    const { addToChecklist } = await import("@/features/checklists");
+    const soon = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const made = await createEvent(db, {
+      title: "Training",
+      eventType: "training",
+      start: soon,
+      end: new Date(soon.getTime() + 2 * 60 * 60 * 1000),
+      venue: "Harlington",
+    });
+    if (!made.ok) throw new Error(made.error);
+    // Several Kit Units on the same Event's Checklist, each giving Sam a Duty:
+    // this isolates "one query per duty" from the (expected) one resolve per Event.
+    const addClaimedDuty = async (name: string) => {
+      const unit = await createKitUnit(db, { name, homeId: shed.id });
+      if (!unit.ok) throw new Error(unit.error);
+      await addToChecklist(db, { scope: "event", scopeId: made.event.id }, unit.kitUnit.id);
+      const [dutyRow] = await ensureDuties(db, made.event.id, [unit.kitUnit.id]);
+      await claimDuty(db, dutyRow.id, "sam");
+    };
+
+    await addClaimedDuty("Kit A");
+    const fewSelects = countSelects(db);
+    await listUpcomingDutiesForUser(db, "sam");
+    const selectsWithOneDuty = fewSelects();
+
+    for (let i = 0; i < 8; i++) await addClaimedDuty(`Kit ${i}`);
+    const manySelects = countSelects(db);
+    await listUpcomingDutiesForUser(db, "sam");
+    expect(manySelects()).toBe(selectsWithOneDuty);
+  });
+
+  async function makeEndedPickedUpDutiesDb(count: number) {
+    const { db, shed } = await setup();
+    const ev = await createEvent(db, {
+      title: "Training",
+      eventType: "training",
+      start: new Date(Date.now() - 3 * 3600_000),
+      end: new Date(Date.now() - 3600_000),
+      venue: "Harlington",
+    });
+    if (!ev.ok) throw new Error(ev.error);
+    for (let i = 0; i < count; i++) {
+      const unit = await createKitUnit(db, { name: `Kit ${i}`, homeId: shed.id });
+      if (!unit.ok) throw new Error(unit.error);
+      const [to] = (await ensureDuties(db, ev.event.id, [unit.kitUnit.id])).filter((d) => d.direction === "to");
+      await claimDuty(db, to.id, "tom");
+      await confirmDuty(db, to.id, { id: "tom", role: "member" });
+    }
+    return db;
+  }
+
+  it("marks Kit Units Unconfirmed after an ended Event without one checklist/kit query per Duty", async () => {
+    const oneDuty = await makeEndedPickedUpDutiesDb(1);
+    const fewSelects = countSelects(oneDuty);
+    await markUnconfirmed(oneDuty);
+    const selectsWithOneDuty = fewSelects();
+
+    const nineDuties = await makeEndedPickedUpDutiesDb(9);
+    const manySelects = countSelects(nineDuties);
+    await markUnconfirmed(nineDuties);
+    // Each Kit Unit still needs its own portions reloaded right before `setUnconfirmed`
+    // writes it — that's one query per write, not the ~7 per Duty this used to cost.
+    expect(manySelects() - selectsWithOneDuty).toBeLessThanOrEqual(8);
+  });
+
+  async function makeUpcomingClaimedDutiesDb(count: number, claimant: string) {
+    const { db, shed } = await setup();
+    const ev = await createEvent(db, {
+      title: "Training",
+      eventType: "training",
+      start: new Date(Date.now() + 3600_000),
+      end: new Date(Date.now() + 7200_000),
+      venue: "Harlington",
+    });
+    if (!ev.ok) throw new Error(ev.error);
+    for (let i = 0; i < count; i++) {
+      const unit = await createKitUnit(db, { name: `Kit ${i}`, homeId: shed.id });
+      if (!unit.ok) throw new Error(unit.error);
+      const [to] = (await ensureDuties(db, ev.event.id, [unit.kitUnit.id])).filter((d) => d.direction === "to");
+      await claimDuty(db, to.id, claimant);
+    }
+    return db;
+  }
+
+  it("checks each upcoming Duty for a Blocked User without one query per Duty", async () => {
+    // Nobody here is "tom", so `removeUser` is never called — this isolates the filter step's cost.
+    const oneDuty = await makeUpcomingClaimedDutiesDb(1, "sam");
+    const fewSelects = countSelects(oneDuty);
+    await releaseDutiesOfBlockedUser(oneDuty, "tom");
+    const selectsWithOneDuty = fewSelects();
+
+    const nineDuties = await makeUpcomingClaimedDutiesDb(9, "sam");
+    const manySelects = countSelects(nineDuties);
+    await releaseDutiesOfBlockedUser(nineDuties, "tom");
+    expect(manySelects()).toBe(selectsWithOneDuty);
+  });
+});

@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { index, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { kitUnit } from "@/features/kit";
 import { store } from "@/features/stores";
 import { user } from "@/features/users";
@@ -23,7 +23,11 @@ export const duty = pgTable(
     // Set when the Event is Cancelled: a voided Duty can no longer be Confirmed.
     voidedAt: timestamp("voided_at", { withTimezone: true }),
   },
-  (t) => [unique().on(t.eventId, t.kitUnitId, t.direction)],
+  (t) => [
+    unique().on(t.eventId, t.kitUnitId, t.direction),
+    index("duty_event_id_idx").on(t.eventId),
+    index("duty_kit_unit_id_idx").on(t.kitUnitId),
+  ],
 );
 
 // Slice 18 — Shared Duties: a Duty can have several Users. Replaces the single
@@ -39,5 +43,5 @@ export const dutyUser = pgTable(
       .notNull()
       .references(() => user.id),
   },
-  (t) => [unique().on(t.dutyId, t.userId)],
+  (t) => [unique().on(t.dutyId, t.userId), index("duty_user_user_id_idx").on(t.userId)],
 );
