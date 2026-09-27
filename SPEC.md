@@ -151,10 +151,10 @@ Every signed-in screen is checked with axe in light, dark (device) and Dark chos
 | DB | Postgres — Neon (prod), Docker (dev), PGlite (tests) |
 | ORM | Drizzle |
 | Auth | Better Auth: Google, magic link, admin plugin (ban/unban) — see [ADR 0001](docs/adr/0001-better-auth-and-neon-over-supabase.md) |
-| Email | Pluggable mail sender: Mailpit (dev), console (tests), club Gmail over SMTP with an app password (prod) — the club has no domain, so Resend is out |
+| Email | Pluggable mail sender: Mailpit (dev), console (tests), Resend over SMTP from `noreply@imrfc.co.uk` (prod) |
 | UI | Tailwind, shadcn/ui |
 | Tests | Vitest (unit + integration on PGlite), Playwright (E2E) |
-| Hosting | Vercel (later) |
+| Hosting | Vercel (`lhr1`) at `app.imrfc.co.uk`, Neon Postgres (London); DNS at IONOS |
 
 ### Architecture
 
@@ -179,5 +179,4 @@ Other planned extensions: duty reminders (email/web push — iOS supports push f
 
 ## Open items
 
-- Create the club Gmail account for sending magic links (needed at deploy, not locally).
 - Enable Docker Desktop → Settings → Resources → WSL integration for this distro (needed for `pnpm dev`, not for tests).

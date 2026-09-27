@@ -11,7 +11,7 @@ export const consoleMailSender: MailSender = {
   },
 };
 
-/** Sends over SMTP — Mailpit in dev, the club Gmail (app password) in production. */
+/** Sends over SMTP — Mailpit in dev, Resend SMTP in production. */
 function smtpMailSender(): MailSender {
   const transport = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
@@ -23,7 +23,7 @@ function smtpMailSender(): MailSender {
   });
   return {
     async send(message) {
-      await transport.sendMail({ from: "IMRFC Club Hub <noreply@imrfc.club>", ...message });
+      await transport.sendMail({ from: "IMRFC <noreply@imrfc.co.uk>", ...message });
     },
   };
 }
