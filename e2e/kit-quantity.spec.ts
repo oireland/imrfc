@@ -51,13 +51,27 @@ test("A split Kit Unit shows its count in each Whereabouts group, and moving a p
   await expect(now).toContainText(`5 at Shed ${run}`);
   await expect(now).toContainText(`3 with ${teammateName}`);
 
-  // Taking the Shed's portion (from the Kit view) moves only that count, leaving the other Portion alone.
+  // Taking some of the Shed's portion (from the Kit view's sheet) moves only that many, leaving the rest alone.
   await page.goto("/kit");
   await page.getByRole("button", { name: `I've got ${kitName} ×5` }).click();
+  const sheet = page.getByRole("dialog");
+  await sheet.getByRole("button", { name: "One fewer" }).click();
+  await sheet.getByRole("button", { name: "One fewer" }).click();
+  await sheet.getByRole("button", { name: "One fewer" }).click();
+  await sheet.getByRole("button", { name: "I've got 2" }).click();
+  await expect(page.getByText(`${kitName} ×2`, { exact: true })).toBeVisible();
   await page.goto(`/kit/${kit}`);
   const after = page.locator("dd.font-medium");
-  await expect(after).toContainText("5 with you");
+  await expect(after).toContainText(`3 at Shed ${run}`);
+  await expect(after).toContainText("2 with you");
   await expect(after).toContainText(`3 with ${teammateName}`);
+
+  // On the detail page, the count sits beside the button: take 1 more of the Shed's 3.
+  const shedPortion = page.locator("div.rounded-2xl", { has: page.getByText(`3 in Shed ${run}`, { exact: true }) });
+  await shedPortion.getByRole("spinbutton", { name: "How many" }).first().fill("1");
+  await shedPortion.getByRole("button", { name: "I've got 1" }).click();
+  await expect(page.locator("dd.font-medium")).toContainText("2 at Shed");
+  await expect(page.locator("dd.font-medium")).toContainText("3 with you");
 
   // Test people would otherwise pile up in every person picker on the dev database.
   await sql`delete from movement_log_entry where kit_unit_id = ${kit}`;

@@ -1,22 +1,22 @@
 # IMRFC Club Hub
 
-The shared vocabulary for Imperial Medicals RFC's events and kit-tracking app: where the club's kit is, who is bringing it to and from each event, and when events happen.
+The shared vocabulary for Imperial Medicals RFC's events and kit-tracking app: where the club's kit is, who is bringing it to and from each event, when events happen, and who is injured.
 
 ## People
 
 **User**:
 A person with an account in the app. Every user has exactly one Role and one Access State.
-_Avoid_: Account, player (not every user plays), member (that is a Role)
+_Avoid_: Account, player (not every User is a Player), member (that is a Role)
 
 **Role**:
 A user's club-wide permission level: Member, Committee or Admin, each including everything below it.
 _Avoid_: Permission, rank
 
 **Member**:
-The base Role: can see everything, claim Duties, Confirm their own Duties and record Moves.
+The base Role: can see everything except other Players' Injuries, claim Duties, Confirm their own Duties, record Moves and report their own Injuries.
 
 **Committee**:
-The Role that runs things: creates and edits Events, Series, Kit Units, Stores and Checklists, and assigns or Confirms any Duty. Captains are Committee.
+The Role that runs things: creates and edits Events, Series, Kit Units, Stores and Checklists, assigns or Confirms any Duty, and sees every Player's Injuries. Captains are Committee.
 _Avoid_: Captain, organiser, kit manager (as system concepts)
 
 **Admin**:
@@ -25,6 +25,46 @@ The Role that controls access: approves and blocks Users and changes Roles.
 **Access State**:
 Whether a User may use the app: Pending (signed up, awaiting approval), Approved, or Blocked.
 _Avoid_: Status (reserved for Kit Units), active/inactive
+
+## Players
+
+**Player**:
+A User who plays: every User unless they have switched Playing off.
+_Avoid_: Squad member, athlete
+
+**Playing**:
+Whether a User counts as a Player. On unless the User or Committee switches it off.
+
+**Position**:
+Where a Player plays, from a fixed list of specific positions (Loosehead Prop (1) … Fullback (15)). Each Player has one **Preferred Position** and any number of **Other Positions**.
+_Avoid_: Role (that is a permission level)
+
+**Injury**:
+Something a Player has hurt, reported by them or by Committee, with a body area, description, the date it happened and an Injury Status. Kept as history once Cleared; one entered in error is Logged by mistake, never deleted.
+_Avoid_: Knock, niggle
+
+**Injury Status**:
+Where an Injury stands: Out (can't play), Playing through it (can play, still carrying it) or Cleared (over).
+_Avoid_: Status on its own
+
+**Expected Return**:
+The date a Player expects to stop being Out with an Injury. Optional.
+
+**Fitness**:
+A Player's state on a given date, taken from their worst open Injury: Out, Playing through it, or Fit.
+_Avoid_: Availability (whether someone can make an Event, for any reason, is a separate concept)
+
+**Concussion**:
+An Injury flagged as a concussion. It follows the RFU's graduated return, shows an Earliest Match, and only Committee can Clear it.
+
+**Symptom-free Date**:
+The day since which a concussed Player has had no symptoms at rest. Cleared if symptoms come back.
+
+**Earliest Match**:
+The first date a concussed Player may play a match under the graduated return; there is also an earliest date for contact training. Guidance only; it never clears the Concussion.
+
+**Physio Summary**:
+Text listing the club's current and recently Cleared Injuries, formatted for sending to the physio before a Match.
 
 ## Places
 

@@ -53,10 +53,8 @@ test("Committee add Kit Units and Events from the Kit and Events pages, with a c
   await expect(page.getByRole("region", { name: "With you" }).getByRole("link", { name: kitName })).toBeVisible();
 
   const title = `Training ${run}`;
-  // A random far-future day, so repeated runs don't Clash with each other.
-  const day = new Date(Date.UTC(2031 + Math.floor(Math.random() * 20), 4, 1 + Math.floor(Math.random() * 28)))
-    .toISOString()
-    .slice(0, 10);
+  // A near-future day, so it lands in the Agenda tab's soonest-15 list, distinct from other tests' events.
+  const day = new Date(Date.now() + (1 + Math.floor(Math.random() * 3)) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   await page.goto("/events");
   await page.getByRole("button", { name: "Add event" }).click();
   const sheet = page.getByRole("dialog");
@@ -67,6 +65,7 @@ test("Committee add Kit Units and Events from the Kit and Events pages, with a c
   await sheet.getByLabel("Venue").fill(venueName);
   await sheet.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("Event created")).toBeVisible();
+  await page.getByRole("tab", { name: "Agenda" }).click();
   await expect(page.getByText(title, { exact: true })).toBeVisible();
 
   await page.getByRole("link", { name: "Events" }).first().click();

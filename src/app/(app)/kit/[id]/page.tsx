@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { BackLink } from "@/components/back-link";
 import { SubmitButton } from "@/components/submit-button";
+import { QuickMoveBlockButton } from "@/components/quick-move-button";
 import { ClashList } from "@/components/clash-list";
 import { HeadsUpList } from "@/components/heads-up-list";
 import { formatWhen } from "@/lib/format-time";
@@ -14,10 +15,9 @@ import {
   getKitUnit,
   getPortions,
   listMovementLog,
-  lowerQuantity,
   quickMoveFor,
-  raiseQuantity,
   recordMove,
+  setQuantity,
   type MovementLogEntry,
   type Place,
   type Portion,
@@ -109,7 +109,8 @@ export default async function KitUnitDetailPage({ params }: PageProps<"/kit/[id]
     const [current, currentPortions] = await Promise.all([getKitUnit(db, id), getPortions(db, id)]);
     const portion = currentPortions.find((p) => p.id === portionId) ?? currentPortions[0];
     if (!current || !portion) return;
-    const move = quickMoveFor({ unit: current, portion }, userId);
+    const count = formData.get("count");
+    const move = quickMoveFor({ unit: current, portion }, userId, count ? Number(count) : undefined);
     await recordMove(db, id, userId, move.to, "ad_hoc", { count: move.count, from: move.from });
     revalidatePath(`/kit/${id}`);
     revalidatePath("/kit");
@@ -142,25 +143,13 @@ export default async function KitUnitDetailPage({ params }: PageProps<"/kit/[id]
     revalidatePath("/kit");
   }
 
-  async function bought(formData: FormData) {
+  async function changeQuantity(formData: FormData) {
     "use server";
-    const { id: userId } = await requireApprovedUser();
-    if (!isCommitteeOrAbove((await requireApprovedUser()).role)) return;
-    const addCount = Number(formData.get("addCount"));
-    if (!addCount) return;
-    await raiseQuantity(db, id, userId, addCount);
-    revalidatePath(`/kit/${id}`);
-    revalidatePath("/kit");
-  }
-
-  async function lost(formData: FormData) {
-    "use server";
-    const { id: userId } = await requireApprovedUser();
-    if (!isCommitteeOrAbove((await requireApprovedUser()).role)) return;
-    const removeCount = Number(formData.get("removeCount"));
+    const { id: userId, role } = await requireApprovedUser();
+    if (!isCommitteeOrAbove(role)) return;
+    const quantity = Number(formData.get("quantity"));
     const fromValue = String(formData.get("from") ?? "");
-    if (!removeCount) return;
-    await lowerQuantity(db, id, userId, removeCount, fromValue ? parsePlace(fromValue) : undefined);
+    await setQuantity(db, id, userId, quantity, fromValue ? parsePlace(fromValue) : undefined);
     revalidatePath(`/kit/${id}`);
     revalidatePath("/kit");
   }
@@ -181,12 +170,12 @@ export default async function KitUnitDetailPage({ params }: PageProps<"/kit/[id]
               : `not confirmed — last seen at ${eventNames.get(portion.lastSeenEventId ?? "") ?? "an event"}`}
         </p>
 
-        <form action={quickMove}>
-          <input type="hidden" name="portionId" value={portion.id} />
-          <SubmitButton size="lg" className="h-11 w-full" variant={move.to.type === "holder" ? "default" : "outline"}>
-            {move.to.type === "holder" ? "I've got it" : `Return to ${storeName(move.to.storeId)}`}
-          </SubmitButton>
-        </form>
+        <QuickMoveBlockButton
+          action={quickMove}
+          fields={{ portionId: portion.id }}
+          available={split ? portion.count : 1}
+          returnTo={move.to.type === "store" ? storeName(move.to.storeId) : null}
+        />
 
         {giveable.length > 0 && (
           <form action={giveTo} className="flex flex-col gap-1.5">
@@ -291,54 +280,45 @@ export default async function KitUnitDetailPage({ params }: PageProps<"/kit/[id]
             <h3 className={CARD_TITLE_CLASS}>Quantity</h3>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            <form action={bought} className="flex items-end gap-2">
-              <div className="flex flex-1 flex-col gap-1.5">
-                <label htmlFor="addCount" className="text-xs text-muted-foreground">
-                  Bought more
-                </label>
-                <input
-                  id="addCount"
-                  type="number"
-                  name="addCount"
-                  min={1}
-                  placeholder="How many"
-                  className="h-10 rounded-md border border-border bg-transparent px-3 text-sm"
-                />
-              </div>
-              <SubmitButton variant="secondary">Add</SubmitButton>
-            </form>
-            <form action={lost} className="flex items-end gap-2">
-              <div className="flex flex-1 flex-col gap-1.5">
-                <label htmlFor="removeCount" className="text-xs text-muted-foreground">
-                  Lost some
-                </label>
-                <input
-                  id="removeCount"
-                  type="number"
-                  name="removeCount"
-                  min={1}
-                  max={unit.quantity - 1}
-                  placeholder="How many"
-                  className="h-10 rounded-md border border-border bg-transparent px-3 text-sm"
-                />
+            <form action={changeQuantity} className="flex flex-col gap-3">
+              <div className="flex items-end gap-2">
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <label htmlFor="quantity" className="text-xs text-muted-foreground">
+                    How many there are now
+                  </label>
+                  <input
+                    id="quantity"
+                    type="number"
+                    name="quantity"
+                    min={1}
+                    required
+                    defaultValue={unit.quantity}
+                    className="h-10 rounded-md border border-border bg-transparent px-3 text-sm"
+                  />
+                </div>
+                <SubmitButton variant="secondary">Save</SubmitButton>
               </div>
               {portions.length > 1 && (
-                <NativeSelect name="from" aria-label="From where" className="w-32" defaultValue="">
-                  <NativeSelectOption value="" disabled>
-                    From where…
-                  </NativeSelectOption>
-                  {portions.map((p) => (
-                    <NativeSelectOption key={p.id} value={placeValue(p)}>
-                      {p.whereaboutsType === "store"
-                        ? storeName(p.storeId)
-                        : p.whereaboutsType === "holder"
-                          ? personName(p.holderId)
-                          : "Unconfirmed"}
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="quantity-from" className="text-xs text-muted-foreground">
+                    If some were lost, which ones?
+                  </label>
+                  <NativeSelect id="quantity-from" name="from" defaultValue="">
+                    <NativeSelectOption value="" disabled>
+                      Choose where from…
                     </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                    {portions.map((p) => (
+                      <NativeSelectOption key={p.id} value={placeValue(p)}>
+                        {p.whereaboutsType === "store"
+                          ? storeName(p.storeId)
+                          : p.whereaboutsType === "holder"
+                            ? capitalised(personName(p.holderId))
+                            : "Not confirmed"}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </div>
               )}
-              <SubmitButton variant="secondary">Remove</SubmitButton>
             </form>
           </CardContent>
         </Card>

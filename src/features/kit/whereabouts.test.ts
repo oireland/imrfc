@@ -117,4 +117,16 @@ describe("quickMoveFor", () => {
     const withSam = row({ quantity: 8 }, { whereaboutsType: "holder", storeId: null, holderId: "sam", count: 4 });
     expect(quickMoveFor(withSam, "sam")).toMatchObject({ count: 4, from: { type: "holder", holderId: "sam" } });
   });
+
+  it("takes just some of a Portion when asked for fewer", () => {
+    const inShed = row({ quantity: 8 }, { whereaboutsType: "store", storeId: "store-1", count: 5 });
+    expect(quickMoveFor(inShed, "me", 2)).toMatchObject({ count: 2, to: { type: "holder", holderId: "me" } });
+  });
+
+  it("never moves more than the Portion holds, or fewer than 1", () => {
+    const inShed = row({ quantity: 8 }, { whereaboutsType: "store", storeId: "store-1", count: 5 });
+    expect(quickMoveFor(inShed, "me", 9).count).toBe(5);
+    expect(quickMoveFor(inShed, "me", 0).count).toBe(1);
+    expect(quickMoveFor(inShed, "me", Number.NaN).count).toBe(5);
+  });
 });

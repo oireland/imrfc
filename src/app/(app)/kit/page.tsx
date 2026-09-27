@@ -4,7 +4,7 @@ import { ChevronRight, CircleHelp, User, Warehouse } from "lucide-react";
 import { db } from "@/db/client";
 import { AddKitButton } from "@/components/add-kit-button";
 import { Card } from "@/components/ui/card";
-import { SubmitButton } from "@/components/submit-button";
+import { QuickMoveRowButton } from "@/components/quick-move-button";
 import {
   getKitUnit,
   getPortions,
@@ -57,7 +57,8 @@ export default async function KitViewPage() {
     const [unit, unitPortions] = await Promise.all([getKitUnit(db, kitUnitId), getPortions(db, kitUnitId)]);
     const portion = unitPortions.find((p) => p.id === portionId);
     if (!unit || !portion) return;
-    const move = quickMoveFor({ unit, portion }, userId);
+    const count = formData.get("count");
+    const move = quickMoveFor({ unit, portion }, userId, count ? Number(count) : undefined);
     await recordMove(db, kitUnitId, userId, move.to, "ad_hoc", { count: move.count, from: move.from });
     revalidatePath("/kit");
   }
@@ -96,19 +97,13 @@ export default async function KitViewPage() {
           <span className="truncate font-medium">{name}</span>
           {detail && <span className="truncate text-xs text-muted-foreground">{detail}</span>}
         </Link>
-        <form action={quickMove} className="relative z-10 shrink-0">
-          <input type="hidden" name="kitUnitId" value={unit.id} />
-          <input type="hidden" name="portionId" value={portion.id} />
-          <SubmitButton
-            size="sm"
-            variant={move.to.type === "holder" ? "default" : "outline"}
-            aria-label={
-              move.to.type === "holder" ? `I've got ${name}` : `Return ${name} to ${storeName(move.to.storeId)}`
-            }
-          >
-            {move.to.type === "holder" ? "I've got it" : `Return to ${storeName(move.to.storeId)}`}
-          </SubmitButton>
-        </form>
+        <QuickMoveRowButton
+          action={quickMove}
+          fields={{ kitUnitId: unit.id, portionId: portion.id }}
+          available={split ? portion.count : 1}
+          returnTo={move.to.type === "store" ? storeName(move.to.storeId) : null}
+          name={name}
+        />
         <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       </li>
     );

@@ -60,14 +60,18 @@ function placeOf(portion: Portion): Place {
   return { type: "unconfirmed", lastSeenEventId: portion.lastSeenEventId! };
 }
 
-/** The one-tap Move offered on a Portion row: return a Kit Unit I hold to its Home, otherwise "I've got it". */
-export function quickMoveFor(row: KitRow, userId: string): QuickMove {
+/**
+ * The one-tap Move offered on a Portion row: return a Kit Unit I hold to its Home, otherwise "I've got it".
+ * Moves the whole Portion unless asked for fewer (`count`, kept between 1 and what's there).
+ */
+export function quickMoveFor(row: KitRow, userId: string, count?: number): QuickMove {
   const { unit, portion } = row;
   const from = placeOf(portion);
+  const moved = count === undefined || Number.isNaN(count) ? portion.count : Math.min(Math.max(Math.trunc(count), 1), portion.count);
   if (portion.whereaboutsType === "holder" && portion.holderId === userId) {
-    return { count: portion.count, from, to: { type: "store", storeId: unit.homeId } };
+    return { count: moved, from, to: { type: "store", storeId: unit.homeId } };
   }
-  return { count: portion.count, from, to: { type: "holder", holderId: userId } };
+  return { count: moved, from, to: { type: "holder", holderId: userId } };
 }
 
 export type WhereaboutsNames = {

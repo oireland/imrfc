@@ -83,7 +83,7 @@ export async function ChecklistEditor({
                     )}
                     <form action={remove}>
                       <input type="hidden" name="kitUnitId" value={item.kitUnitId} />
-                      <SubmitButton variant="link" size="sm" className="text-destructive">
+                      <SubmitButton variant="link" size="sm" className="text-destructive-text">
                         Remove
                       </SubmitButton>
                     </form>

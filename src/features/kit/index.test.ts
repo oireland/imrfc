@@ -14,6 +14,7 @@ import {
   recordMove,
   setConditionNote,
   setKitStatus,
+  setQuantity,
   setUnconfirmed,
 } from "./index";
 
@@ -347,6 +348,55 @@ describe("lowerQuantity", () => {
     if (!created.ok) throw new Error("expected Kit Unit to be created");
 
     const result = await lowerQuantity(db, created.kitUnit.id, alex.id, 1);
+
+    expect(result).toEqual({ ok: false, error: "Can't lower a kit unit's quantity below 1." });
+  });
+});
+
+describe("setQuantity", () => {
+  async function seedShields(quantity: number) {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const alex = await seedUser(db);
+    const created = await createKitUnit(db, { name: "Tackle shields", homeId: home.id, quantity });
+    if (!created.ok) throw new Error("expected Kit Unit to be created");
+    return { db, alex, id: created.kitUnit.id };
+  }
+
+  it("raises to the new Quantity, logged as bought", async () => {
+    const { db, alex, id } = await seedShields(6);
+
+    const result = await setQuantity(db, id, alex.id, 8);
+
+    expect(result.ok).toBe(true);
+    expect((await listKitUnits(db))[0].quantity).toBe(8);
+    expect((await listMovementLog(db, id))[0]).toMatchObject({ count: 2, conditionNote: "Bought 2" });
+  });
+
+  it("lowers to the new Quantity, logged as lost", async () => {
+    const { db, alex, id } = await seedShields(8);
+
+    const result = await setQuantity(db, id, alex.id, 5);
+
+    expect(result.ok).toBe(true);
+    expect((await listKitUnits(db))[0].quantity).toBe(5);
+    expect((await listMovementLog(db, id))[0]).toMatchObject({ count: 3, conditionNote: "Lost 3" });
+  });
+
+  it("does nothing when the Quantity is unchanged", async () => {
+    const { db, alex, id } = await seedShields(8);
+
+    const result = await setQuantity(db, id, alex.id, 8);
+
+    expect(result.ok).toBe(true);
+    expect(await listMovementLog(db, id)).toEqual([]);
+  });
+
+  it("rejects anything below 1", async () => {
+    const { db, alex, id } = await seedShields(8);
+
+    const result = await setQuantity(db, id, alex.id, 0);
 
     expect(result).toEqual({ ok: false, error: "Can't lower a kit unit's quantity below 1." });
   });

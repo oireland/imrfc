@@ -339,6 +339,27 @@ export async function lowerQuantity(
   return { ok: true };
 }
 
+/**
+ * Sets a Kit Unit's Quantity to a new total: raising logs it as bought, lowering as lost
+ * (Committee picks the Place when split). An unchanged Quantity does nothing.
+ */
+export async function setQuantity(
+  db: Db,
+  kitUnitId: string,
+  userId: string,
+  quantity: number,
+  from?: Place,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!Number.isInteger(quantity)) return { ok: false, error: "Enter how many there are now." };
+  if (quantity < 1) return { ok: false, error: "Can't lower a kit unit's quantity below 1." };
+  const unit = await getKitUnit(db, kitUnitId);
+  if (!unit) return { ok: false, error: "That kit no longer exists." };
+
+  if (quantity > unit.quantity) return raiseQuantity(db, kitUnitId, userId, quantity - unit.quantity);
+  if (quantity < unit.quantity) return lowerQuantity(db, kitUnitId, userId, unit.quantity - quantity, from);
+  return { ok: true };
+}
+
 export async function listMovementLog(db: Db, kitUnitId: string): Promise<MovementLogEntry[]> {
   return db
     .select()
