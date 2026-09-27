@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   lowerQuantity,
   mergePortions,
+  moveMultiple,
   movePortion,
   raiseQuantity,
   singlePlace,
@@ -125,6 +126,56 @@ describe("movePortion", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.portions).toEqual([expect.objectContaining({ count: 4, holderId: "sam" })]);
+  });
+});
+
+describe("moveMultiple", () => {
+  it("gathers a count from several source places into one target", () => {
+    const shed = portion({ count: 2, storeId: "shed" });
+    const cupboard = portion({ count: 3, storeId: "cupboard" });
+    const result = moveMultiple([shed, cupboard], {
+      sources: [
+        { from: { type: "store", storeId: "shed" }, count: 2 },
+        { from: { type: "store", storeId: "cupboard" }, count: 2 },
+      ],
+      targets: [{ to: { type: "holder", holderId: "tom" }, count: 4 }],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.portions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ count: 1, whereaboutsType: "store", storeId: "cupboard" }),
+        expect.objectContaining({ count: 4, whereaboutsType: "holder", holderId: "tom" }),
+      ]),
+    );
+  });
+
+  it("splits a count across several target places", () => {
+    const shed = portion({ count: 4, storeId: "shed" });
+    const result = moveMultiple([shed], {
+      sources: [{ from: { type: "store", storeId: "shed" }, count: 4 }],
+      targets: [
+        { to: { type: "holder", holderId: "tom" }, count: 2 },
+        { to: { type: "holder", holderId: "sam" }, count: 2 },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.portions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ count: 2, whereaboutsType: "holder", holderId: "tom" }),
+        expect.objectContaining({ count: 2, whereaboutsType: "holder", holderId: "sam" }),
+      ]),
+    );
+  });
+
+  it("rejects a source place that doesn't have enough", () => {
+    const shed = portion({ count: 1, storeId: "shed" });
+    const result = moveMultiple([shed], {
+      sources: [{ from: { type: "store", storeId: "shed" }, count: 2 }],
+      targets: [{ to: { type: "holder", holderId: "tom" }, count: 2 }],
+    });
+    expect(result).toEqual({ ok: false, error: "There aren't 2 there to move." });
   });
 });
 

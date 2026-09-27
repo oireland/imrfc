@@ -18,13 +18,14 @@ export type PlanEvent = {
   end: Date;
   /** The Event's resolved Checklist: each Kit Unit it needs, with its effective count. */
   items: { kitUnitId: string; count: number }[];
-  duties: { kitUnitId: string; direction: "to" | "from"; userId: string | null }[];
+  duties: { kitUnitId: string; direction: "to" | "from"; userIds: string[] }[];
 };
 
 export const HOUR = 60 * 60 * 1000;
 
-export const dutyUser = (e: PlanEvent, kitUnitId: string, direction: "to" | "from") =>
-  e.duties.find((d) => d.kitUnitId === kitUnitId && d.direction === direction)?.userId ?? null;
+/** Everyone on the Duty for this Kit Unit and direction (empty when nobody is). */
+export const dutyUsers = (e: PlanEvent, kitUnitId: string, direction: "to" | "from") =>
+  e.duties.find((d) => d.kitUnitId === kitUnitId && d.direction === direction)?.userIds ?? [];
 
 /** The count a Checklist line asks the Event for, or 0 if the Kit Unit isn't on it. */
 export const itemCount = (e: PlanEvent, kitUnitId: string) =>

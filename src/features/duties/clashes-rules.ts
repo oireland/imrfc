@@ -1,5 +1,5 @@
 // Clash rules: pure functions over plain data, no database or Next.js.
-import { byStart, dutyUser, itemCount, needsUnit, HOUR, type PlanEvent, type PlanKit } from "./plan";
+import { byStart, dutyUsers, itemCount, needsUnit, HOUR, type PlanEvent, type PlanKit } from "./plan";
 
 /** Events closer together than this count as back-to-back. */
 const BACK_TO_BACK_GAP = 2 * HOUR;
@@ -80,7 +80,7 @@ export function findClashes({ kit, events }: { kit: PlanKit[]; events: PlanEvent
       const [a, b] = [needing[i], needing[i + 1]];
       if (overlaps(a, b)) continue; // already covered above
       const gap = b.start.getTime() - a.end.getTime();
-      if (gap >= BACK_TO_BACK_GAP || dutyUser(a, unit.id, "from")) continue;
+      if (gap >= BACK_TO_BACK_GAP || dutyUsers(a, unit.id, "from").length > 0) continue;
       const total = itemCount(a, unit.id) + itemCount(b, unit.id);
       if (total > unit.quantity) {
         clashes.push({

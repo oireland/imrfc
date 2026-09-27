@@ -20,8 +20,8 @@ const event = (over: Partial<PlanEvent> = {}): PlanEvent => ({
   end: at("2026-10-20T21:00:00Z"),
   items: [{ kitUnitId: "balls", count: 1 }],
   duties: [
-    { kitUnitId: "balls", direction: "to", userId: "tom" },
-    { kitUnitId: "balls", direction: "from", userId: "tom" },
+    { kitUnitId: "balls", direction: "to", userIds: ["tom"] },
+    { kitUnitId: "balls", direction: "from", userIds: ["tom"] },
   ],
   ...over,
 });
@@ -46,8 +46,8 @@ describe("findClashes", () => {
     const a = event({
       id: "a",
       duties: [
-        { kitUnitId: "balls", direction: "to", userId: "tom" },
-        { kitUnitId: "balls", direction: "from", userId: null },
+        { kitUnitId: "balls", direction: "to", userIds: ["tom"] },
+        { kitUnitId: "balls", direction: "from", userIds: [] },
       ],
     });
     const b = event({ id: "b", start: at("2026-10-20T21:30:00Z"), end: at("2026-10-20T23:00:00Z") });
@@ -73,7 +73,7 @@ describe("findClashes", () => {
       start: at("2026-10-20T23:00:00Z"),
       end: at("2026-10-21T01:00:00Z"),
     });
-    const unfilledFrom = { ...b, duties: [{ kitUnitId: "balls", direction: "to" as const, userId: "tom" }] };
+    const unfilledFrom = { ...b, duties: [{ kitUnitId: "balls", direction: "to" as const, userIds: ["tom"] }] };
 
     expect(findClashes({ kit: [kit()], events: [a, unfilledFrom, c] }).map((x) => x.message)).toEqual([
       "Training and Match overlap, and both need Balls.",
@@ -152,12 +152,12 @@ describe("findClashes", () => {
     });
 
     it("clashes back-to-back Events only when their counts add up to more than the Quantity", () => {
-      const noFrom = { direction: "from" as const, kitUnitId: "shields", userId: null };
+      const noFrom = { direction: "from" as const, kitUnitId: "shields", userIds: [] };
       const a = event({
         id: "a",
         title: "A",
         items: [{ kitUnitId: "shields", count: 4 }],
-        duties: [{ kitUnitId: "shields", direction: "to", userId: "tom" }, noFrom],
+        duties: [{ kitUnitId: "shields", direction: "to", userIds: ["tom"] }, noFrom],
       });
       const fine = event({
         id: "b",

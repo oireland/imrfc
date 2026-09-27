@@ -6,7 +6,7 @@ import { ChecklistEditor } from "@/components/checklist-editor";
 import { ClashList } from "@/components/clash-list";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { CopySummary } from "@/components/copy-summary";
-import { EventDuties, type DutyKit, type DutySlot } from "@/components/event-duties";
+import { EventDuties, type DutyKit, type DutySlot, type HolderOption, type SourceOption } from "@/components/event-duties";
 import { SubmitButton } from "@/components/submit-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,8 +30,11 @@ import {
   voidDutiesForEvent,
   ensureDuties,
   formatDutySummary,
+  gatherConfirmSources,
+  joinNames,
   listClashes,
   listHeadsUps,
+  needsSourceChoice,
   type Duty,
   type DutyRequest,
 } from "@/features/duties";
@@ -126,44 +129,79 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
       personName: (holderId) => (holderId === user.id ? "you" : (nameOf(holderId) ?? "someone")),
       eventName: (eventId) => eventNames.get(eventId) ?? "an event",
     });
-  const slot = (d: Duty, homeId: string | null): DutySlot => ({
-    id: d.id,
-    direction: d.direction,
-    userId: d.userId,
-    person: nameOf(d.userId),
-    mine: d.userId === user.id,
-    confirmed: !!d.confirmedAt,
-    voided: !!d.voidedAt,
-    actions: dutyActions(
-      { direction: d.direction, userId: d.userId, confirmed: !!d.confirmedAt, voided: !!d.voidedAt },
-      { viewerId: user.id, committee },
-    ),
-    destination:
-      d.destination.type === "store" && d.destination.storeId !== homeId ? `store:${d.destination.storeId}` : d.destination.type === "holder" ? "holder" : "home",
-  });
+  const namesOf = (userIds: string[]) => joinNames(userIds.map((uid) => (uid === user.id ? "You" : (nameOf(uid) ?? "Someone"))));
   const dutyKit: DutyKit[] = kitUnitIds.map((kid) => {
     const unit = kitById.get(kid);
     const homeId = unit?.homeId ?? null;
-    const from = dutyFor(kid, "from");
+    const count = countByUnit.get(kid) ?? 1;
+    const kitPortions = portionsByUnit.get(kid) ?? [];
+    const toDuty = dutyFor(kid, "to");
+    const fromDuty = dutyFor(kid, "from");
+
+    const slot = (d: Duty): DutySlot => {
+      const needsSource = d.direction === "to" && needsSourceChoice(kitPortions, { dutyUserIds: d.userIds, count });
+      const sourceOptions: SourceOption[] = needsSource
+        ? gatherConfirmSources(kitPortions, { dutyUserIds: d.userIds, homeStoreId: homeId ?? "", count }).sources.map((s) => ({
+            value:
+              s.place.type === "store"
+                ? `store:${s.place.storeId}`
+                : s.place.type === "holder"
+                  ? `holder:${s.place.holderId}`
+                  : `store:${homeId}`,
+            label:
+              s.place.type === "store"
+                ? storeName(s.place.storeId)
+                : s.place.type === "holder"
+                  ? (nameOf(s.place.holderId) ?? "Someone")
+                  : "Not confirmed",
+            count: s.count,
+          }))
+        : [];
+      const needsHolder = d.userIds.length > 1 && count > 1 && (d.direction === "to" || d.destination.type === "holder");
+      const holderOptions: HolderOption[] = needsHolder
+        ? d.userIds.map((uid) => ({ userId: uid, name: uid === user.id ? "You" : (nameOf(uid) ?? "Someone"), count: uid === user.id ? count : 0 }))
+        : [];
+      if (needsHolder && !holderOptions.some((h) => h.count > 0)) holderOptions[0].count = count;
+      return {
+        id: d.id,
+        direction: d.direction,
+        userIds: d.userIds,
+        people: d.userIds.map((uid) => (uid === user.id ? "You" : (nameOf(uid) ?? "Someone"))),
+        mine: d.userIds.includes(user.id),
+        confirmed: !!d.confirmedAt,
+        voided: !!d.voidedAt,
+        actions: dutyActions(
+          { direction: d.direction, userIds: d.userIds, confirmed: !!d.confirmedAt, voided: !!d.voidedAt },
+          { viewerId: user.id, committee },
+        ),
+        destination:
+          d.destination.type === "store" && d.destination.storeId !== homeId ? `store:${d.destination.storeId}` : d.destination.type === "holder" ? "holder" : "home",
+        needsSourceChoice: needsSource,
+        sourceOptions,
+        needsHolderChoice: needsHolder,
+        holderOptions,
+      };
+    };
+
     return {
       kitUnitId: kid,
       kitName: kitNames.get(kid) ?? "Kit",
-      count: countByUnit.get(kid) ?? 1,
+      count,
       quantity: unit?.quantity ?? 1,
       now: !unit ? "" : whereaboutsNow(kid),
       goesBackTo:
-        from.destination.type === "store"
-          ? storeName(from.destination.storeId)
-          : from.destination.type === "holder"
-            ? `stays with ${from.userId === user.id ? "you" : (nameOf(from.userId) ?? "whoever takes it back")}`
+        fromDuty.destination.type === "store"
+          ? storeName(fromDuty.destination.storeId)
+          : fromDuty.destination.type === "holder"
+            ? `stays with ${namesOf(fromDuty.userIds) || "whoever takes it back"}`
             : storeName(homeId),
       places: [
         { value: "home", label: `${storeName(homeId)} (its home)` },
         ...stores.filter((s: Store) => s.id !== homeId).map((s: Store) => ({ value: `store:${s.id}`, label: s.name })),
         { value: "holder", label: "Stays with whoever takes it back" },
       ],
-      to: slot(dutyFor(kid, "to"), homeId),
-      from: slot(from, homeId),
+      to: slot(toDuty),
+      from: slot(fromDuty),
       headsUps: headsUps.filter((h) => h.kitUnitId === kid).map((h) => h.message),
     };
   });
@@ -175,8 +213,8 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
       kitName: kitNames.get(kid) ?? kid,
       count: countByUnit.get(kid) ?? 1,
       quantity: kitById.get(kid)?.quantity ?? 1,
-      to: dutyFor(kid, "to").userId ? (personName.get(dutyFor(kid, "to").userId!) ?? null) : null,
-      from: dutyFor(kid, "from").userId ? (personName.get(dutyFor(kid, "from").userId!) ?? null) : null,
+      to: dutyFor(kid, "to").userIds.length > 0 ? joinNames(dutyFor(kid, "to").userIds.map((uid) => personName.get(uid) ?? "Someone")) : null,
+      from: dutyFor(kid, "from").userIds.length > 0 ? joinNames(dutyFor(kid, "from").userIds.map((uid) => personName.get(uid) ?? "Someone")) : null,
     })),
   });
   const checklistSource = {

@@ -87,6 +87,31 @@ export function wholeQuantityMove(portions: Portion[], to: Place): Portion[] {
   return [{ id: crypto.randomUUID(), kitUnitId: portions[0]?.kitUnitId ?? "", count: total, ...placeFields(to) }];
 }
 
+/**
+ * Moves counts from several source Places to several target Places in one go (Shared
+ * Duties: gathering a count from more than one Place, and/or splitting it across more
+ * than one final Holder). The pairing between a given source and target is arbitrary —
+ * only the totals at each Place matter — so this just debits every source and credits
+ * every target, then merges.
+ */
+export function moveMultiple(
+  portions: Portion[],
+  { sources, targets }: { sources: { from: Place; count: number }[]; targets: { to: Place; count: number }[] },
+): { ok: true; portions: Portion[] } | { ok: false; error: string } {
+  let working = portions;
+  for (const { from, count } of sources) {
+    if (count <= 0) continue;
+    const available = countAt(working, from);
+    if (count > available) return { ok: false, error: `There aren't ${count} there to move.` };
+    const key = placeKey(placeFields(from));
+    working = working.map((p) => (placeKey(p) === key ? { ...p, count: p.count - count } : p));
+  }
+  const added = targets
+    .filter(({ count }) => count > 0)
+    .map(({ to, count }) => ({ id: crypto.randomUUID(), kitUnitId: portions[0]?.kitUnitId ?? "", count, ...placeFields(to) }));
+  return { ok: true, portions: mergePortions([...working, ...added]) };
+}
+
 /** Raising a Kit Unit's Quantity: the extra count starts at Home. */
 export function raiseQuantity(portions: Portion[], { storeId, addCount }: { storeId: string; addCount: number }): Portion[] {
   const added: Portion = {

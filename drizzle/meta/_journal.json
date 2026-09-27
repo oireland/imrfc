@@ -99,6 +99,13 @@
       "when": 1790604100000,
       "tag": "0013_checklist-item-counts",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790604200000,
+      "tag": "0014_shared-duties",
+      "breakpoints": true
     }
   ]
 }

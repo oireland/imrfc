@@ -3,6 +3,7 @@ import { kitPortion, kitUnit, movementLogEntry } from "./schema";
 import { validateKitUnit, type NewKitUnit } from "./rules";
 import {
   lowerQuantity as lowerQuantityRule,
+  moveMultiple,
   movePortion,
   raiseQuantity as raiseQuantityRule,
   singlePlace,
@@ -165,6 +166,67 @@ export async function recordMove(
     ...logSource(from),
     ...logTarget(target),
   });
+  return { ok: true };
+}
+
+function samePlace(a: Place, b: MoveTarget): boolean {
+  if (a.type === "store" && b.type === "store") return a.storeId === b.storeId;
+  if (a.type === "holder" && b.type === "holder") return a.holderId === b.holderId;
+  return false;
+}
+
+/** Pairs sources with targets into loggable flows (the pairing is arbitrary — see `moveMultiple`). */
+function pairFlows(
+  sources: { from: Place; count: number }[],
+  targets: { to: MoveTarget; count: number }[],
+): { from: Place; to: MoveTarget; count: number }[] {
+  const flows: { from: Place; to: MoveTarget; count: number }[] = [];
+  let si = 0;
+  let ti = 0;
+  let sRemain = sources[0]?.count ?? 0;
+  let tRemain = targets[0]?.count ?? 0;
+  while (si < sources.length && ti < targets.length) {
+    const take = Math.min(sRemain, tRemain);
+    if (take > 0) flows.push({ from: sources[si].from, to: targets[ti].to, count: take });
+    sRemain -= take;
+    tRemain -= take;
+    if (sRemain === 0) sRemain = sources[++si]?.count ?? 0;
+    if (tRemain === 0) tRemain = targets[++ti]?.count ?? 0;
+  }
+  return flows;
+}
+
+/**
+ * Records a Move gathered from several source Places and/or split across several
+ * target Places (Shared Duties: several People bringing or holding a Kit Unit).
+ * Logs one Movement Log entry per source/target flow (skipping any that are a no-op —
+ * the same Place on both ends).
+ */
+export async function recordSplitMove(
+  db: Db,
+  kitUnitId: string,
+  userId: string,
+  reason: "ad_hoc" | "duty",
+  { sources, targets }: { sources: { from: Place; count: number }[]; targets: { to: MoveTarget; count: number }[] },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const portions = await loadPortions(db, kitUnitId);
+  const moved = moveMultiple(portions, { sources, targets });
+  if (!moved.ok) return moved;
+  await savePortions(db, kitUnitId, moved.portions);
+
+  const flows = pairFlows(sources, targets).filter((f) => !samePlace(f.from, f.to));
+  for (const f of flows) {
+    await db.insert(movementLogEntry).values({
+      id: crypto.randomUUID(),
+      kitUnitId,
+      kind: "move",
+      userId,
+      reason,
+      count: f.count,
+      ...logSource(f.from),
+      ...logTarget(f.to),
+    });
+  }
   return { ok: true };
 }
 

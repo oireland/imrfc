@@ -52,12 +52,14 @@ test("Committee give a Duty to a teammate and choose where the kit goes back to,
 
   await duties.getByRole("button", { name: `Take back ${kitName}: nobody yet` }).click();
   const sheet = page.getByRole("dialog");
-  await sheet.getByRole("button", { name: "Give it to someone" }).click();
+  await sheet.getByRole("button", { name: "Manage who's doing it" }).click();
   const results = await new AxeBuilder({ page }).include("[role=dialog]").withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(results.violations.map((v) => v.id)).toEqual([]);
   const search = sheet.getByLabel("Search people");
   if (await search.count()) await search.fill(run);
   await sheet.getByRole("button", { name: teammateName }).click();
+  await expect(sheet.getByLabel("On it")).toBeVisible(); // toggled on, sheet stays open — several People can be added
+  await page.keyboard.press("Escape");
   await expect(sheet).toBeHidden();
   await expect(duties.getByRole("button", { name: `Take back ${kitName}: ${teammateName}` })).toBeVisible();
 
@@ -69,6 +71,7 @@ test("Committee give a Duty to a teammate and choose where the kit goes back to,
   await expect(sheet).toContainText(`Goes back to Locker ${run}`);
 
   // Test people would otherwise pile up in every person picker on the dev database.
+  await sql`delete from duty_user where duty_id in (select id from duty where event_id = ${event})`;
   await sql`delete from duty where event_id = ${event}`;
   await sql`delete from checklist_item where checklist_id = ${list}`;
   await sql`delete from checklist where id = ${list}`;

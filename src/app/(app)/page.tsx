@@ -3,9 +3,9 @@ import Link from "next/link";
 import { db } from "@/db/client";
 import { ComingUp } from "@/components/coming-up";
 import { CrestThemePicker } from "@/components/crest-theme-picker";
-import { listUpcomingDutiesForUser, markUnconfirmed } from "@/features/duties";
+import { joinNames, listUpcomingDutiesForUser, markUnconfirmed } from "@/features/duties";
 import { listKitHeldBy, listKitUnits } from "@/features/kit";
-import { displayName, isCommitteeOrAbove } from "@/features/users";
+import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
 import { greeting, londonDay, londonTime } from "@/lib/calendar";
 import { requireApprovedUser } from "@/lib/session";
 import { cn } from "cn";
@@ -29,13 +29,20 @@ export default async function Home() {
   const user = await requireApprovedUser();
 
   await markUnconfirmed(db);
-  const [duties, held, comingUp, allKit] = await Promise.all([
+  const [duties, held, comingUp, allKit, people] = await Promise.all([
     listUpcomingDutiesForUser(db, user.id),
     listKitHeldBy(db, user.id),
     loadComingUp(user.id),
     listKitUnits(db, { includeRetired: true }),
+    listApprovedUsers(db),
   ]);
   const kitNames = new Map(allKit.map((k) => [k.id, k.name]));
+  const names = new Map(people.map((p) => [p.id, displayName(p)]));
+  // A shared Duty is yours for everyone on it: "with Sam".
+  const withOthers = (userIds: string[]) => {
+    const others = userIds.filter((id) => id !== user.id).map((id) => names.get(id) ?? "Someone");
+    return others.length > 0 ? `with ${joinNames(others)}` : null;
+  };
   const firstName = displayName(user).split(" ")[0];
 
   return (
@@ -123,6 +130,11 @@ export default async function Home() {
                       <span className={cn("block truncate text-xs", next ? "text-lead-foreground/70" : "text-muted-foreground")}>
                         {duty.direction === "to" ? "to" : "from"} {event.title}
                       </span>
+                      {withOthers(duty.userIds) && (
+                        <span className={cn("block truncate text-xs", next ? "text-lead-foreground/70" : "text-muted-foreground")}>
+                          {withOthers(duty.userIds)}
+                        </span>
+                      )}
                     </span>
                   </Link>
                 </li>

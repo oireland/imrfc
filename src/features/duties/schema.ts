@@ -14,8 +14,7 @@ export const duty = pgTable(
       .notNull()
       .references(() => kitUnit.id),
     direction: text("direction", { enum: ["to", "from"] }).notNull(),
-    userId: text("user_id").references(() => user.id),
-    // From Duties only: Home (default), a specific Store, or the Duty's User as Holder.
+    // From Duties only: Home (default), a specific Store, or the Duty's Users as Holders.
     destinationType: text("destination_type", { enum: ["home", "store", "holder"] })
       .notNull()
       .default("home"),
@@ -25,4 +24,20 @@ export const duty = pgTable(
     voidedAt: timestamp("voided_at", { withTimezone: true }),
   },
   (t) => [unique().on(t.eventId, t.kitUnitId, t.direction)],
+);
+
+// Slice 18 — Shared Duties: a Duty can have several Users. Replaces the single
+// `duty.user_id` column (migration 0014 copies existing rows across).
+export const dutyUser = pgTable(
+  "duty_user",
+  {
+    id: text("id").primaryKey(),
+    dutyId: text("duty_id")
+      .notNull()
+      .references(() => duty.id),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id),
+  },
+  (t) => [unique().on(t.dutyId, t.userId)],
 );

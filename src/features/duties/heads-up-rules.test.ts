@@ -23,8 +23,8 @@ const event = (over: Partial<PlanEvent> = {}): PlanEvent => ({
   end: at("2026-10-20T17:00:00Z"),
   items: [{ kitUnitId: "shields", count: 1 }],
   duties: [
-    { kitUnitId: "shields", direction: "to", userId: "tom" },
-    { kitUnitId: "shields", direction: "from", userId: "tom" },
+    { kitUnitId: "shields", direction: "to", userIds: ["tom"] },
+    { kitUnitId: "shields", direction: "from", userIds: ["tom"] },
   ],
   ...over,
 });
@@ -39,7 +39,7 @@ describe("findHeadsUps", () => {
   });
 
   it("says nobody is taking the kit to the Event when it starts within 48 hours", () => {
-    const soon = event({ ...tomorrow, duties: [{ kitUnitId: "shields", direction: "from", userId: "tom" }] });
+    const soon = event({ ...tomorrow, duties: [{ kitUnitId: "shields", direction: "from", userIds: ["tom"] }] });
 
     expect(findHeadsUps({ now, kit: [kit()], events: [soon], personName })).toEqual([
       {
@@ -52,7 +52,7 @@ describe("findHeadsUps", () => {
   });
 
   it("says nobody is taking the kit back from the Event", () => {
-    const soon = event({ ...tomorrow, duties: [{ kitUnitId: "shields", direction: "to", userId: "tom" }] });
+    const soon = event({ ...tomorrow, duties: [{ kitUnitId: "shields", direction: "to", userIds: ["tom"] }] });
 
     expect(messages([kit()], [soon])).toEqual([
       "Nobody is taking Tackle Shields back from Alumni Day, and it starts within 48 hours.",

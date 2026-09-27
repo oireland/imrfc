@@ -220,6 +220,68 @@ describe("recordMove", () => {
   });
 });
 
+describe("recordSplitMove", () => {
+  it("gathers from several sources and splits across several targets, logging one entry per flow", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const sam = await seedUser(db);
+    const tom = await seedUser(db);
+    const created = await createKitUnit(db, { name: "Tackle shields", homeId: home.id, quantity: 4 });
+    if (!created.ok) throw new Error("expected Kit Unit to be created");
+    const kitUnitId = created.kitUnit.id;
+    await recordMove(db, kitUnitId, sam.id, { type: "holder", holderId: sam.id }, "ad_hoc", {
+      count: 2,
+      from: { type: "store", storeId: home.id },
+    });
+    // Now split 2 at Home, 2 with Sam.
+
+    const { recordSplitMove } = await import("./index");
+    const result = await recordSplitMove(db, kitUnitId, sam.id, "duty", {
+      sources: [
+        { from: { type: "holder", holderId: sam.id }, count: 2 },
+        { from: { type: "store", storeId: home.id }, count: 2 },
+      ],
+      targets: [
+        { to: { type: "holder", holderId: sam.id }, count: 2 },
+        { to: { type: "holder", holderId: tom.id }, count: 2 },
+      ],
+    });
+
+    expect(result).toEqual({ ok: true });
+    const portions = await getPortions(db, kitUnitId);
+    expect(portions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ count: 2, whereaboutsType: "holder", holderId: sam.id }),
+        expect.objectContaining({ count: 2, whereaboutsType: "holder", holderId: tom.id }),
+      ]),
+    );
+    expect(portions).toHaveLength(2);
+    const log = await listMovementLog(db, kitUnitId);
+    // No log entry for Sam's own portion (it stayed with them) — only Home → Tom is a real Move,
+    // on top of the ad-hoc setup Move from the top of the test.
+    expect(log).toHaveLength(2);
+    expect(log[0]).toMatchObject({ kind: "move", reason: "duty", count: 2, fromType: "store", toHolderId: tom.id });
+  });
+
+  it("rejects when a source place doesn't have enough", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const sam = await seedUser(db);
+    const created = await createKitUnit(db, { name: "Ball bag A", homeId: home.id });
+    if (!created.ok) throw new Error("expected Kit Unit to be created");
+
+    const { recordSplitMove } = await import("./index");
+    const result = await recordSplitMove(db, created.kitUnit.id, sam.id, "duty", {
+      sources: [{ from: { type: "holder", holderId: sam.id }, count: 1 }],
+      targets: [{ to: { type: "holder", holderId: sam.id }, count: 1 }],
+    });
+
+    expect(result).toEqual({ ok: false, error: "There aren't 1 there to move." });
+  });
+});
+
 describe("setUnconfirmed", () => {
   it("moves the whole Quantity to Unconfirmed with no source given", async () => {
     const db = await createTestDb();

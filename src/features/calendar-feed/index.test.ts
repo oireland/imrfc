@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { store } from "@/features/stores";
@@ -72,6 +73,17 @@ describe("renderFeed", () => {
     const theirs = await renderFeed(db, await getFeedToken(db, "sam"));
     expect(mine.status === 200 && mine.body).toContain("You're bringing: Ball bag A");
     expect(theirs.status === 200 && theirs.body).not.toContain("Ball bag A");
+  });
+
+  it("names the others sharing a Duty: 'with Sam'", async () => {
+    const { db, kit, event } = await setup();
+    await db.update(user).set({ name: "Sam Okafor" }).where(eq(user.id, "sam"));
+    const [toDuty] = (await ensureDuties(db, event.id, [kit.id])).filter((d) => d.direction === "to");
+    await claimDuty(db, toDuty.id, "tom");
+    await claimDuty(db, toDuty.id, "sam");
+
+    const mine = await renderFeed(db, await getFeedToken(db, "tom"));
+    expect(mine.status === 200 && mine.body).toContain("You're bringing: Ball bag A with Sam Okafor");
   });
 
   it("shows the count in the description when the Kit Unit's Quantity is more than 1", async () => {
