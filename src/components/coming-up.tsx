@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { Beer, ChevronLeft, ChevronRight, Dumbbell, MapPin, Plus, Trophy } from "lucide-react";
 import { cn } from "cn";
@@ -120,6 +120,7 @@ function MonthCalendar({
 }) {
   const [selected, setSelected] = useState(today);
   const [view, setView] = useState(() => ({ year: Number(today.slice(0, 4)), month: Number(today.slice(5, 7)) - 1 }));
+  const selectedDayRef = useRef<HTMLDivElement>(null);
   const byDay = new Map<string, CalendarEvent[]>();
   for (const e of events) {
     const day = londonDay(new Date(e.start));
@@ -134,8 +135,18 @@ function MonthCalendar({
   }
 
   function tapDay(ymd: string) {
-    if (canAdd && (ymd === selected || !byDay.has(ymd))) onAdd(ymd);
+    const hasEvents = byDay.has(ymd);
+    if (canAdd && (ymd === selected || !hasEvents)) onAdd(ymd);
     setSelected(ymd);
+    if (hasEvents) {
+      const el = selectedDayRef.current;
+      if (el) {
+        // Clear the fixed bottom tab bar, not just the viewport edge.
+        const bottomBarClearance = 96;
+        const distance = el.getBoundingClientRect().bottom - window.innerHeight + bottomBarClearance;
+        if (distance > 0) window.scrollBy({ top: distance, behavior: "smooth" });
+      }
+    }
   }
 
   return (
@@ -223,7 +234,7 @@ function MonthCalendar({
         </span>
       </div>
 
-      <div className="mx-5 mt-4 border-t border-border pt-4 pb-5">
+      <div ref={selectedDayRef} className="mx-5 mt-4 border-t border-border pt-4 pb-5">
         <div className="mb-2 flex items-center justify-between">
           <p className="text-sm font-semibold">{selected === today ? "Today" : longDate(selected)}</p>
           {canAdd && (

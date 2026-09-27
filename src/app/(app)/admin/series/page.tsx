@@ -28,6 +28,7 @@ export default async function AdminSeriesPage() {
     "use server";
     await createSeries(db, {
       title: String(formData.get("title")),
+      eventType: formData.get("eventType") === "social" ? "social" : "training",
       weekdays: formData.getAll("weekdays").map(Number),
       startTime: String(formData.get("startTime")),
       endTime: String(formData.get("endTime")),
@@ -65,6 +66,15 @@ export default async function AdminSeriesPage() {
               <Label htmlFor="series-title">Title</Label>
               <Input id="series-title" name="title" required />
             </div>
+            <fieldset className="flex gap-3 text-sm">
+              <legend className="mb-1 font-medium">Event type</legend>
+              <label className="flex items-center gap-1">
+                <input type="radio" name="eventType" value="training" defaultChecked className="size-4" /> Training
+              </label>
+              <label className="flex items-center gap-1">
+                <input type="radio" name="eventType" value="social" className="size-4" /> Social
+              </label>
+            </fieldset>
             <fieldset className="flex flex-wrap gap-3 text-sm">
               <legend className="mb-1 font-medium">Weekdays</legend>
               {WEEKDAYS.map((name, i) => (
@@ -119,7 +129,9 @@ export default async function AdminSeriesPage() {
               const extendFormId = `extend-date-${s.id}`;
               return (
                 <div key={s.id} className="flex flex-col gap-2 p-4 text-sm">
-                  <p className="font-medium">{s.title}</p>
+                  <p className="font-medium">
+                    {s.title} <span className="font-normal text-muted-foreground capitalize">· {s.eventType}</span>
+                  </p>
                   <p className="text-muted-foreground">
                     {s.weekdays.map((d) => WEEKDAYS[d]).join(", ")} {s.startTime}–{s.endTime},{" "}
                     {s.startDate} to {s.endDate}

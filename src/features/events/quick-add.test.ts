@@ -97,6 +97,7 @@ describe("buildQuickSeries", () => {
 
     expect(s).toEqual({
       title: "Fitness",
+      eventType: "training",
       weekdays: [6],
       startTime: "19:00",
       endTime: "21:00",
@@ -110,5 +111,12 @@ describe("buildQuickSeries", () => {
 
   it("names an untitled Series Training", () => {
     expect(buildQuickSeries({ ...base, type: "training", repeatUntil: "2026-12-10" }).title).toBe("Training");
+  });
+
+  it("also repeats a Social Event weekly, as a Social Series", () => {
+    const s = buildQuickSeries({ ...base, type: "social", repeatUntil: "2026-12-10" });
+
+    expect(s.eventType).toBe("social");
+    expect(s.title).toBe("Social");
   });
 });

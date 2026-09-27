@@ -24,7 +24,7 @@ async function insertOccurrences(db: Db, s: Series, dates: string[], teamIds: st
   const rows = dates.map((date) => ({
     id: crypto.randomUUID(),
     title: s.title,
-    eventType: "training" as const,
+    eventType: s.eventType,
     start: londonToUtc(date, s.startTime),
     end: londonToUtc(date, s.endTime),
     venue: s.venue,
@@ -55,6 +55,7 @@ export async function createSeries(
     .values({
       id: crypto.randomUUID(),
       title: input.title,
+      eventType: input.eventType ?? "training",
       weekdays: input.weekdays,
       startTime: input.startTime,
       endTime: input.endTime,

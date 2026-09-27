@@ -8,6 +8,8 @@ export const team = pgTable("team", {
 export const series = pgTable("series", {
   id: text("id").primaryKey(),
   title: text("title").notNull(),
+  // Match isn't a Series Event Type: it needs an opponent and other Match-only details.
+  eventType: text("event_type", { enum: ["training", "social"] }).notNull().default("training"),
   weekdays: integer("weekdays").array().notNull(),
   startTime: text("start_time").notNull(),
   endTime: text("end_time").notNull(),

@@ -100,14 +100,15 @@ export function QuickAddSheet({
         venue,
         notes,
         teamIds,
-        ...(type === "training" && repeatUntil ? { repeatUntil } : {}),
+        ...((type === "training" || type === "social") && repeatUntil ? { repeatUntil } : {}),
         ...(type === "match" ? { opponent, homeAway, competition, meetTime: meetTime || undefined } : {}),
       });
       if (!result.ok) {
         toast.error(result.error);
         return;
       }
-      toast.success(type === "training" && repeatUntil ? "Weekly training created" : "Event created");
+      const repeating = (type === "training" || type === "social") && repeatUntil;
+      toast.success(repeating ? "Weekly event created" : "Event created");
       onClose();
       router.refresh();
     });
@@ -251,7 +252,7 @@ export function QuickAddSheet({
                 />
               </label>
             )}
-            {type === "training" && (
+            {(type === "training" || type === "social") && (
               <label className="flex items-center gap-3 text-sm">
                 <span className="text-muted-foreground">Repeat weekly until</span>
                 <input

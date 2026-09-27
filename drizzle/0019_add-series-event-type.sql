@@ -1,0 +1,1 @@
+ALTER TABLE "series" ADD COLUMN "event_type" text DEFAULT 'training' NOT NULL;

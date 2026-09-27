@@ -1,5 +1,9 @@
+// Match isn't a Series Event Type: it needs an opponent and other Match-only details a Series pattern doesn't model.
+export type SeriesEventType = "training" | "social";
+
 export type SeriesPattern = {
   title: string;
+  eventType?: SeriesEventType; // defaults to "training"
   weekdays: number[]; // 0 = Sunday … 6 = Saturday
   startTime: string; // "HH:MM", Europe/London
   endTime: string;

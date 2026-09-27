@@ -18,8 +18,8 @@ export async function setTheme(theme: ThemePreference) {
 export async function quickAddEvent(input: QuickEventInput): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const user = await requireApprovedUser();
   if (!isCommitteeOrAbove(user.role)) return { ok: false, error: "Only Committee can add Events." };
-  if (input.type === "training" && input.repeatUntil) {
-    const series = await createSeries(db, buildQuickSeries({ ...input, repeatUntil: input.repeatUntil }));
+  if ((input.type === "training" || input.type === "social") && input.repeatUntil) {
+    const series = await createSeries(db, buildQuickSeries({ ...input, type: input.type, repeatUntil: input.repeatUntil }));
     if (!series.ok) return series;
     revalidatePath("/");
     revalidatePath("/events");

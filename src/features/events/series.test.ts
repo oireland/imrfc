@@ -85,6 +85,16 @@ describe("createSeries", () => {
 
     expect(result.ok).toBe(false);
   });
+
+  it("creates every Occurrence as a Social Event when the Series is Social", async () => {
+    const { db, pattern } = await setup();
+
+    const result = await createSeries(db, { ...pattern, eventType: "social" });
+
+    if (!result.ok) throw new Error(result.error);
+    const occurrences = await listOccurrences(db, result.series.id);
+    expect(occurrences.every((o) => o.eventType === "social")).toBe(true);
+  });
 });
 
 describe("editOccurrence", () => {

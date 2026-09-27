@@ -16,7 +16,7 @@ export type QuickEventInput = {
   travelMeetPoint?: string; // Matches only
   notes?: string;
   teamIds?: string[]; // none means the whole club
-  repeatUntil?: string; // YYYY-MM-DD, London; Training only — repeat weekly on this day up to and including this date
+  repeatUntil?: string; // YYYY-MM-DD, London; Training and Social only — repeat weekly on this day up to and including this date
 };
 
 const DEFAULT_TITLE: Record<EventType, string> = { training: "Training", match: "Match", social: "Social" };
@@ -61,9 +61,12 @@ export function buildQuickEvent(input: QuickEventInput): NewEvent {
 }
 
 /** Turns a quick-add form with "repeat weekly until" set into a Series starting on its date. */
-export function buildQuickSeries(input: QuickEventInput & { repeatUntil: string }): SeriesPattern {
+export function buildQuickSeries(
+  input: QuickEventInput & { repeatUntil: string; type: "training" | "social" },
+): SeriesPattern {
   return {
-    title: input.title.trim() || DEFAULT_TITLE.training,
+    title: input.title.trim() || DEFAULT_TITLE[input.type],
+    eventType: input.type,
     weekdays: [new Date(`${input.date}T12:00:00Z`).getUTCDay()],
     startTime: input.startTime,
     endTime: input.endTime,
