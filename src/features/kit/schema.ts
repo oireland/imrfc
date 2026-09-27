@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { store } from "@/features/stores";
 import { user } from "@/features/users";
 
@@ -13,10 +13,20 @@ export const kitUnit = pgTable("kit_unit", {
     .notNull()
     .default("active"),
   conditionNote: text("condition_note").notNull().default(""),
-  // Whereabouts is exactly one of a Store, a Holder, or Unconfirmed (last seen at an Event).
-  whereaboutsType: text("whereabouts_type", { enum: ["store", "holder", "unconfirmed"] })
+  // How many of this Kit Unit the club has; hidden in the UI when 1.
+  quantity: integer("quantity").notNull().default(1),
+});
+
+// Whereabouts as portions: each is a count at exactly one Place (a Store, a Holder, or
+// Unconfirmed — last seen at an Event). Portions at the same Place merge; their counts
+// always add up to the Kit Unit's Quantity.
+export const kitPortion = pgTable("kit_portion", {
+  id: text("id").primaryKey(),
+  kitUnitId: text("kit_unit_id")
     .notNull()
-    .default("store"),
+    .references(() => kitUnit.id),
+  count: integer("count").notNull(),
+  whereaboutsType: text("whereabouts_type", { enum: ["store", "holder", "unconfirmed"] }).notNull(),
   storeId: text("store_id").references(() => store.id),
   holderId: text("holder_id").references(() => user.id),
   // Plain Event id (kit never imports events); set only while Unconfirmed.
@@ -34,6 +44,11 @@ export const movementLogEntry = pgTable("movement_log_entry", {
     .references(() => user.id),
   // Move fields (kind = "move")
   reason: text("reason", { enum: ["ad_hoc", "duty"] }),
+  // How many moved, and where from — only meaningful for a counted Kit Unit.
+  count: integer("count"),
+  fromType: text("from_type", { enum: ["store", "holder", "unconfirmed"] }),
+  fromStoreId: text("from_store_id").references(() => store.id),
+  fromHolderId: text("from_holder_id").references(() => user.id),
   toType: text("to_type", { enum: ["store", "holder"] }),
   toStoreId: text("to_store_id").references(() => store.id),
   toHolderId: text("to_holder_id").references(() => user.id),

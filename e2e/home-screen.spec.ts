@@ -26,7 +26,8 @@ test("Home shows my Duties, what's coming up and the Kit I hold", async ({ page,
   const kitName = `Tackle shield ${run}`;
   const eventTitle = `Home training ${run}`;
   await sql`insert into store (id, name, address) values (${store}, ${`Shed ${run}`}, 'x')`;
-  await sql`insert into kit_unit (id, name, home_id, store_id) values (${kit}, ${kitName}, ${store}, ${store})`;
+  await sql`insert into kit_unit (id, name, home_id) values (${kit}, ${kitName}, ${store})`;
+  await sql`insert into kit_portion (id, kit_unit_id, count, whereabouts_type, store_id) values (${crypto.randomUUID()}, ${kit}, 1, 'store', ${store})`;
   await sql`insert into event (id, title, event_type, start, "end", venue)
     values (${event}, ${eventTitle}, 'training', now() + interval '1 hour', now() + interval '3 hours', 'Harlington')`;
   await sql`insert into checklist (id, scope, scope_id) values (${list}, 'event', ${event})`;

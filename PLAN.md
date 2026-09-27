@@ -19,6 +19,14 @@ Vertical slices, built in order, each test-first (red → green → refactor). A
 - [x] **14. Calendar Feed** — Feed Token, ICS with my Duties, reset, dead for Blocked Users.
 - [x] **15. Design pass** — sweep every screen: replace raw HTML controls with shadcn/ui components, apply the crest palette theme tokens (SPEC → Look and feel), consistent mobile-first layout, light/dark check.
 - [x] **15a. Clubhouse redesign** — warm light/dark theme with the crest as theme menu (saved per User); no app name; Home with 2-up Duty cards and What’s coming up (month Calendar with readable Events and tap-a-day quick add, Agenda); Events uses the same view; add Kit Units and Events from their own pages; toasts on create; back links; clearer Kit view.
-- [ ] **16. PWA** — manifest, icons, iOS home-screen meta.
+- [x] **16. Quantity & split Whereabouts** — Quantity on Kit Units (default 1, hidden at 1, raise/lower logged); Whereabouts as portions with counts; ad-hoc Moves with a count and a source; Kit view shows split units in each group; migrate existing units to one portion.
+- [x] **17. Checklist counts & Clashes by total** — Checklist lines ask for a count (default "all", capped at Quantity) at every level; Clashes fire only when overlapping/back-to-back Events need more than the Quantity; counts in Who's bringing what and the Duty Summary.
+- [x] **18. Shared Duties** — several Users per Duty (Claim joins, Assign multi-select, leave / hand on your own place, From follows To); Confirm by any of them; confirm sheet asks where from (split unit) and who has how many (several Users, count > 1); Unconfirmed per portion; heads-ups, Blocking, Home, Duty Summary and Calendar Feed copy for several Users.
+- [ ] **19. Tabs** — drop the Events tab; "See all" from What's coming up on Home to Events; Members get Home · Kit · Profile, Committee add Players (placeholder until 20) and Admin.
+- [ ] **20. Players & Positions** — `players` feature: Playing (default on; switched off by the User or Committee), Preferred and Other Positions; Playing section in Profile; Players tab (position order, name search, Not playing section); Player page with Positions and the duty record (upcoming, season count, last 5). Clubhouse mock-up of the list and Player page first.
+- [ ] **21. Injuries** — `injuries` feature: report/update from Profile or the Player page, Injury Status history with who/when, Logged by mistake, Fitness (worst open Injury) on the list with the summary line and Injured-only filter, check-in flags, Home card for my open Injuries, privacy line.
+- [ ] **22. Concussion timeline** — Concussion flag, Symptom-free Date, Earliest contact training / Earliest Match, GRAS stages, NHS 111 / GP prompts, Committee-only Clear.
+- [ ] **23. Physio Summary** — "Copy for physio" on the Players page and on Matches.
+- [ ] **24. PWA** — manifest, icons, iOS home-screen meta.
 
 After v1: deploy to Vercel + Neon, choose production mail sender, then Availability/RSVP as the first extension.

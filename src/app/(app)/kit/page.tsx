@@ -4,13 +4,16 @@ import { ChevronRight, CircleHelp, User, Warehouse } from "lucide-react";
 import { db } from "@/db/client";
 import { AddKitButton } from "@/components/add-kit-button";
 import { Card } from "@/components/ui/card";
-import { SubmitButton } from "@/components/submit-button";
+import { QuickMoveRowButton } from "@/components/quick-move-button";
 import {
   getKitUnit,
+  getPortions,
   groupByWhereabouts,
   listKitUnits,
+  listPortionsFor,
   quickMoveFor,
   recordMove,
+  type KitRow,
   type KitUnit,
   type WhereaboutsGroup,
 } from "@/features/kit";
@@ -31,22 +34,32 @@ export default async function KitViewPage() {
     listApprovedUsers(db),
   ]);
   const personById = new Map(people.map((p) => [p.id, p]));
+  const activeUnits = allUnits.filter((u: KitUnit) => u.status === "active");
+  const inactiveUnits = allUnits.filter((u: KitUnit) => u.status !== "active");
+  const portions = await listPortionsFor(db, activeUnits.map((u: KitUnit) => u.id));
   const lastSeen = new Map<string, string>();
-  for (const eventId of new Set(allUnits.flatMap((u: KitUnit) => (u.lastSeenEventId ? [u.lastSeenEventId] : [])))) {
-    lastSeen.set(eventId as string, (await getEvent(db, eventId as string))?.title ?? "an event");
+  for (const eventId of new Set(portions.flatMap((p) => (p.lastSeenEventId ? [p.lastSeenEventId] : [])))) {
+    lastSeen.set(eventId, (await getEvent(db, eventId))?.title ?? "an event");
   }
   const storesById = new Map(stores.map((s: Store) => [s.id, s]));
   const storeName = (id: string) => storesById.get(id)?.name ?? "Store";
-  const activeUnits = allUnits.filter((u: KitUnit) => u.status === "active");
-  const inactiveUnits = allUnits.filter((u: KitUnit) => u.status !== "active");
-  const groups = groupByWhereabouts(activeUnits, user.id);
+  const unitsById = new Map(activeUnits.map((u: KitUnit) => [u.id, u]));
+  const rows: KitRow[] = portions
+    .filter((p) => unitsById.has(p.kitUnitId))
+    .map((p) => ({ unit: unitsById.get(p.kitUnitId)!, portion: p }));
+  const groups = groupByWhereabouts(rows, user.id);
 
   async function quickMove(formData: FormData) {
     "use server";
     const { id: userId } = await requireApprovedUser();
-    const unit = await getKitUnit(db, String(formData.get("kitUnitId")));
-    if (!unit) return;
-    await recordMove(db, unit.id, userId, quickMoveFor(unit, userId));
+    const kitUnitId = String(formData.get("kitUnitId"));
+    const portionId = String(formData.get("portionId"));
+    const [unit, unitPortions] = await Promise.all([getKitUnit(db, kitUnitId), getPortions(db, kitUnitId)]);
+    const portion = unitPortions.find((p) => p.id === portionId);
+    if (!unit || !portion) return;
+    const count = formData.get("count");
+    const move = quickMoveFor({ unit, portion }, userId, count ? Number(count) : undefined);
+    await recordMove(db, kitUnitId, userId, move.to, "ad_hoc", { count: move.count, from: move.from });
     revalidatePath("/kit");
   }
 
@@ -66,11 +79,14 @@ export default async function KitViewPage() {
     };
   }
 
-  function KitRow({ unit }: { unit: KitUnit }) {
-    const move = quickMoveFor(unit, user.id);
+  function KitRowItem({ row }: { row: KitRow }) {
+    const { unit, portion } = row;
+    const move = quickMoveFor(row, user.id);
+    const split = unit.quantity > 1;
+    const name = split ? `${unit.name} ×${portion.count}` : unit.name;
     const detail =
-      unit.whereaboutsType === "unconfirmed" && unit.lastSeenEventId
-        ? `Last seen at ${lastSeen.get(unit.lastSeenEventId)}`
+      portion.whereaboutsType === "unconfirmed" && portion.lastSeenEventId
+        ? `Last seen at ${lastSeen.get(portion.lastSeenEventId)}`
         : unit.conditionNote || null;
     return (
       <li className="relative flex items-center gap-3 px-4 py-3 has-[a:hover]:bg-muted/60">
@@ -78,21 +94,16 @@ export default async function KitViewPage() {
           href={`/kit/${unit.id}`}
           className="flex min-w-0 flex-1 flex-col after:absolute after:inset-0 after:content-['']"
         >
-          <span className="truncate font-medium">{unit.name}</span>
+          <span className="truncate font-medium">{name}</span>
           {detail && <span className="truncate text-xs text-muted-foreground">{detail}</span>}
         </Link>
-        <form action={quickMove} className="relative z-10 shrink-0">
-          <input type="hidden" name="kitUnitId" value={unit.id} />
-          <SubmitButton
-            size="sm"
-            variant={move.type === "holder" ? "default" : "outline"}
-            aria-label={
-              move.type === "holder" ? `I've got ${unit.name}` : `Return ${unit.name} to ${storeName(move.storeId)}`
-            }
-          >
-            {move.type === "holder" ? "I've got it" : `Return to ${storeName(move.storeId)}`}
-          </SubmitButton>
-        </form>
+        <QuickMoveRowButton
+          action={quickMove}
+          fields={{ kitUnitId: unit.id, portionId: portion.id }}
+          available={split ? portion.count : 1}
+          returnTo={move.to.type === "store" ? storeName(move.to.storeId) : null}
+          name={name}
+        />
         <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       </li>
     );
@@ -123,14 +134,14 @@ export default async function KitViewPage() {
                   {title}
                 </h3>
                 <span className={blocked ? "text-xs font-semibold text-destructive" : "text-xs text-muted-foreground"}>
-                  {kind && `${kind} · `}{group.units.length} {group.units.length === 1 ? "item" : "items"}
+                  {kind && `${kind} · `}{group.rows.length} {group.rows.length === 1 ? "item" : "items"}
                 </span>
               </div>
             </div>
             <Card className="py-0">
               <ul className="divide-y divide-border">
-                {group.units.map((unit: KitUnit) => (
-                  <KitRow key={unit.id} unit={unit} />
+                {group.rows.map((row) => (
+                  <KitRowItem key={`${row.unit.id}:${row.portion.id}`} row={row} />
                 ))}
               </ul>
             </Card>

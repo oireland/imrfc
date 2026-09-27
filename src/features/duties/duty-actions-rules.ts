@@ -1,24 +1,28 @@
 // What a User may do with one Duty. Pure, no database or Next.js.
 
-export type DutyAction = "claim" | "confirm" | "handOn" | "assign" | "unassign" | "setDestination";
+export type DutyAction = "claim" | "leave" | "handOn" | "assign" | "confirm" | "setDestination";
 
 export type DutyState = {
   direction: "to" | "from";
-  userId: string | null;
+  userIds: string[];
   confirmed: boolean;
   voided: boolean;
 };
 
-/** The actions open to the viewer, in the order the Duty sheet offers them. Committee assign rather than hand on. */
+/**
+ * The actions open to the viewer, in the order the Duty sheet offers them. `claim`
+ * joins the Duty whether it's empty or already has other People on it. Committee
+ * assign (a multi-select, can take anyone off) rather than hand on.
+ */
 export function dutyActions(duty: DutyState, { viewerId, committee }: { viewerId: string; committee: boolean }): DutyAction[] {
   if (duty.confirmed || duty.voided) return [];
-  const mine = duty.userId === viewerId;
+  const mine = duty.userIds.includes(viewerId);
   const actions: DutyAction[] = [];
-  if (!duty.userId) actions.push("claim");
-  if (duty.userId && (mine || committee)) actions.push("confirm");
+  if (!mine) actions.push("claim");
+  if (duty.userIds.length > 0 && (mine || committee)) actions.push("confirm");
+  if (mine) actions.push("leave");
   if (mine && !committee) actions.push("handOn");
   if (committee) actions.push("assign");
-  if (committee && duty.userId) actions.push("unassign");
   if (committee && duty.direction === "from") actions.push("setDestination");
   return actions;
 }

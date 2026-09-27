@@ -2,8 +2,15 @@ import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { store } from "@/features/stores";
-import { createKitUnit, setKitStatus } from "@/features/kit";
-import { addToChecklist, getChecklist, removeFromChecklist, resolveEventChecklist } from "./index";
+import { createKitUnit, raiseQuantity, setKitStatus } from "@/features/kit";
+import { user } from "@/features/users";
+import {
+  addToChecklist,
+  getChecklist,
+  removeFromChecklist,
+  resolveEventChecklist,
+  setChecklistItemCount,
+} from "./index";
 
 async function setup() {
   const db = await createTestDb();
@@ -12,8 +19,8 @@ async function setup() {
     .insert(store)
     .values({ id: "s1", name: "Shed", address: "x" })
     .returning();
-  const make = async (name: string) => {
-    const r = await createKitUnit(db, { name, homeId: shed.id });
+  const make = async (name: string, quantity?: number) => {
+    const r = await createKitUnit(db, { name, homeId: shed.id, quantity });
     if (!r.ok) throw new Error(r.error);
     return r.kitUnit;
   };
@@ -26,7 +33,7 @@ describe("Checklists", () => {
     expect(await getChecklist(db, { scope: "series", scopeId: "s" })).toBeUndefined();
   });
 
-  it("adds and removes Kit Units, ignoring duplicates", async () => {
+  it("adds and removes Kit Units, ignoring duplicates, defaulting to 'all'", async () => {
     const { db, balls, cones } = await setup();
     const scope = { scope: "event_type", scopeId: "training" } as const;
 
@@ -35,7 +42,7 @@ describe("Checklists", () => {
     await addToChecklist(db, scope, cones.id);
     await removeFromChecklist(db, scope, balls.id);
 
-    expect(await getChecklist(db, scope)).toEqual([cones.id]);
+    expect(await getChecklist(db, scope)).toEqual([{ kitUnitId: cones.id, count: null }]);
   });
 
   it("only lets Active Kit Units onto a Checklist", async () => {
@@ -53,20 +60,56 @@ describe("Checklists", () => {
     await addToChecklist(db, { scope: "event_type", scopeId: "training" }, balls.id);
     const ref = { eventId: "e1", seriesId: "s1", eventType: "training" };
 
-    expect(await resolveEventChecklist(db, ref)).toEqual({ source: "default", kitUnitIds: [balls.id] });
+    expect(await resolveEventChecklist(db, ref)).toEqual({
+      source: "default",
+      items: [{ kitUnitId: balls.id, count: 1 }],
+    });
 
     await addToChecklist(db, { scope: "series", scopeId: "s1" }, cones.id);
-    expect(await resolveEventChecklist(db, ref)).toEqual({ source: "series", kitUnitIds: [cones.id] });
+    expect(await resolveEventChecklist(db, ref)).toEqual({
+      source: "series",
+      items: [{ kitUnitId: cones.id, count: 1 }],
+    });
 
     await addToChecklist(db, { scope: "event", scopeId: "e1" }, balls.id);
-    expect(await resolveEventChecklist(db, ref)).toEqual({ source: "event", kitUnitIds: [balls.id] });
+    expect(await resolveEventChecklist(db, ref)).toEqual({
+      source: "event",
+      items: [{ kitUnitId: balls.id, count: 1 }],
+    });
   });
 
   it("resolves an Event with no seriesId without a Series level", async () => {
     const { db } = await setup();
     expect(await resolveEventChecklist(db, { eventId: "e", seriesId: null, eventType: "social" })).toEqual({
       source: "none",
-      kitUnitIds: [],
+      items: [],
+    });
+  });
+
+  it("sets a line's count and caps it at the Kit Unit's Quantity when resolved", async () => {
+    const { db, balls } = await setup();
+    await db.insert(user).values({ id: "admin", name: "Admin", email: "admin@x.org", accessState: "approved" });
+    await raiseQuantity(db, balls.id, "admin", 7); // Quantity now 8
+    const scope = { scope: "event_type", scopeId: "training" } as const;
+    await addToChecklist(db, scope, balls.id);
+
+    await setChecklistItemCount(db, scope, balls.id, 4);
+    expect(await getChecklist(db, scope)).toEqual([{ kitUnitId: balls.id, count: 4 }]);
+    expect(await resolveEventChecklist(db, { eventId: "e1", seriesId: null, eventType: "training" })).toEqual({
+      source: "default",
+      items: [{ kitUnitId: balls.id, count: 4 }],
+    });
+
+    await setChecklistItemCount(db, scope, balls.id, 20);
+    expect(await resolveEventChecklist(db, { eventId: "e1", seriesId: null, eventType: "training" })).toEqual({
+      source: "default",
+      items: [{ kitUnitId: balls.id, count: 8 }],
+    });
+
+    await setChecklistItemCount(db, scope, balls.id, null);
+    expect(await resolveEventChecklist(db, { eventId: "e1", seriesId: null, eventType: "training" })).toEqual({
+      source: "default",
+      items: [{ kitUnitId: balls.id, count: 8 }],
     });
   });
 });

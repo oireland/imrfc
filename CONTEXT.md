@@ -1,22 +1,22 @@
 # IMRFC Club Hub
 
-The shared vocabulary for Imperial Medicals RFC's events and kit-tracking app: where the club's kit is, who is bringing it to and from each event, and when events happen.
+The shared vocabulary for Imperial Medicals RFC's events and kit-tracking app: where the club's kit is, who is bringing it to and from each event, when events happen, and who is injured.
 
 ## People
 
 **User**:
 A person with an account in the app. Every user has exactly one Role and one Access State.
-_Avoid_: Account, player (not every user plays), member (that is a Role)
+_Avoid_: Account, player (not every User is a Player), member (that is a Role)
 
 **Role**:
 A user's club-wide permission level: Member, Committee or Admin, each including everything below it.
 _Avoid_: Permission, rank
 
 **Member**:
-The base Role: can see everything, claim Duties, Confirm their own Duties and record Moves.
+The base Role: can see everything except other Players' Injuries, claim Duties, Confirm their own Duties, record Moves and report their own Injuries.
 
 **Committee**:
-The Role that runs things: creates and edits Events, Series, Kit Units, Stores and Checklists, and assigns or Confirms any Duty. Captains are Committee.
+The Role that runs things: creates and edits Events, Series, Kit Units, Stores and Checklists, assigns or Confirms any Duty, and sees every Player's Injuries. Captains are Committee.
 _Avoid_: Captain, organiser, kit manager (as system concepts)
 
 **Admin**:
@@ -25,6 +25,46 @@ The Role that controls access: approves and blocks Users and changes Roles.
 **Access State**:
 Whether a User may use the app: Pending (signed up, awaiting approval), Approved, or Blocked.
 _Avoid_: Status (reserved for Kit Units), active/inactive
+
+## Players
+
+**Player**:
+A User who plays: every User unless they have switched Playing off.
+_Avoid_: Squad member, athlete
+
+**Playing**:
+Whether a User counts as a Player. On unless the User or Committee switches it off.
+
+**Position**:
+Where a Player plays, from a fixed list of specific positions (Loosehead Prop (1) … Fullback (15)). Each Player has one **Preferred Position** and any number of **Other Positions**.
+_Avoid_: Role (that is a permission level)
+
+**Injury**:
+Something a Player has hurt, reported by them or by Committee, with a body area, description, the date it happened and an Injury Status. Kept as history once Cleared; one entered in error is Logged by mistake, never deleted.
+_Avoid_: Knock, niggle
+
+**Injury Status**:
+Where an Injury stands: Out (can't play), Playing through it (can play, still carrying it) or Cleared (over).
+_Avoid_: Status on its own
+
+**Expected Return**:
+The date a Player expects to stop being Out with an Injury. Optional.
+
+**Fitness**:
+A Player's state on a given date, taken from their worst open Injury: Out, Playing through it, or Fit.
+_Avoid_: Availability (whether someone can make an Event, for any reason, is a separate concept)
+
+**Concussion**:
+An Injury flagged as a concussion. It follows the RFU's graduated return, shows an Earliest Match, and only Committee can Clear it.
+
+**Symptom-free Date**:
+The day since which a concussed Player has had no symptoms at rest. Cleared if symptoms come back.
+
+**Earliest Match**:
+The first date a concussed Player may play a match under the graduated return; there is also an earliest date for contact training. Guidance only; it never clears the Concussion.
+
+**Physio Summary**:
+Text listing the club's current and recently Cleared Injuries, formatted for sending to the physio before a Match.
 
 ## Places
 
@@ -39,21 +79,25 @@ _Avoid_: Location, storage, cupboard, shed (these last are names of Stores, not 
 ## Kit
 
 **Kit Unit**:
-A single named, trackable piece of club equipment, which may be a container of many things (e.g. "Ball bag A", "Tackle shields (set of 6)", "Bibs – orange").
+A named, trackable piece of club equipment, or several interchangeable ones counted by a Quantity (e.g. "Ball bag A", "Tackle shields" ×8, "Cones" ×2 sets, "Bibs – orange").
 _Avoid_: Item, equipment, kit (when referring to one thing)
+
+**Quantity**:
+How many of a Kit Unit the club has, in whatever counts naturally for it (8 shields, 2 sets of cones). Defaults to 1 and is only shown when more than 1. Counts things that travel separately, never the contents of a container (the balls in a ball bag).
+_Avoid_: Stock, amount, number
 
 **Home**:
 The Store a Kit Unit normally returns to; the default Destination for its From Duties.
 _Avoid_: Default location
 
 **Kit Status**:
-Whether a Kit Unit is in circulation: Active, Missing or Retired. Only Active units can go on a Checklist. Kit Units are never deleted.
+Whether a Kit Unit is in circulation: Active, Missing or Retired. It applies to the whole unit; losing some of a counted unit lowers its Quantity instead. Only Active units can go on a Checklist. Kit Units are never deleted.
 
 **Condition Note**:
 Free text describing a Kit Unit's current state (e.g. "2 balls need pumping").
 
 **Whereabouts**:
-Where a Kit Unit is right now: at a Store, with a Holder, or Unconfirmed.
+Where a Kit Unit is right now: at a Store, with a Holder, or Unconfirmed. A counted Kit Unit can be split across several places, each with a count ("4 at the Shed, 4 with Sam"); the counts always add up to its Quantity.
 _Avoid_: Location, position
 
 **Holder**:
@@ -64,7 +108,7 @@ _Avoid_: Owner, keeper
 The Whereabouts of a Kit Unit whose From Duty was never Confirmed; shown as "last seen at" the Event.
 
 **Move**:
-A recorded change of a Kit Unit's Whereabouts, either by Confirming a Duty or ad hoc ("I've got it", "give it to Priya", "put it in the Shed").
+A recorded change of a Kit Unit's Whereabouts, either by Confirming a Duty or ad hoc ("I've got it", "give it to Priya", "put it in the Shed"). For a counted unit a Move carries a count and the place it came from.
 _Avoid_: Transfer, check-in/check-out
 
 **Movement Log**:
@@ -107,38 +151,38 @@ _Avoid_: Deleted
 ## Duties
 
 **Checklist**:
-The Kit Units an Event needs. Resolved in order: Event's own Checklist, else its Series' Checklist, else its Event Type's Default Checklist.
+The Kit Units an Event needs, each with how many (all of them unless lowered). Resolved in order: Event's own Checklist, else its Series' Checklist, else its Event Type's Default Checklist.
 _Avoid_: Kit list, requirements
 
 **Default Checklist**:
 The Checklist an Event Type supplies to Events that don't override it.
 
 **Duty**:
-Responsibility of one User to carry one Kit Unit for one Event, in one direction.
+Responsibility of one or more Users to carry one Kit Unit (the count its Checklist asks for) for one Event, in one direction.
 _Avoid_: Job, task, assignment (that's how a Duty gets filled)
 
 **To Duty**:
 The Duty to bring a Kit Unit from its Whereabouts to the Event.
 
 **From Duty**:
-The Duty to take a Kit Unit from the Event to a Destination. It goes to the To Duty's User unless handed to someone else.
+The Duty to take a Kit Unit from the Event to a Destination. It goes to the To Duty's Users unless handed to someone else.
 
 **Destination**:
-Where a From Duty ends: a Store, or the Duty's User becoming Holder. Defaults to the Kit Unit's Home.
+Where a From Duty ends: a Store, or the Duty's Users becoming Holders. Defaults to the Kit Unit's Home.
 
 **Claim**:
-A User taking an unfilled Duty for themselves.
+A User taking a Duty for themselves, or joining the Users already on it.
 _Avoid_: Volunteer, sign up
 
 **Assign**:
-A Committee User filling a Duty with a named User.
+A Committee User putting one or more named Users on a Duty.
 
 **Confirm**:
 Marking a Duty as done, which records a Move. Only a Confirmed Duty changes a Kit Unit's Whereabouts.
 _Avoid_: Complete, tick off, check in
 
 **Clash**:
-A warning that a Kit Unit is double-booked: it is on the Checklists of two Events that overlap, or that are back-to-back with nobody taking it away from the first. Clashes warn; they never block.
+A warning that a Kit Unit is double-booked: Events that overlap, or that are back-to-back with nobody taking it away from the first, between them need more of it than its Quantity. Clashes warn; they never block.
 _Avoid_: Conflict, error
 
 **Heads-up**:

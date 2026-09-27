@@ -1,16 +1,23 @@
 import { and, eq } from "drizzle-orm";
-import { getKitUnit } from "@/features/kit";
+import { getKitUnit, listKitUnitsByIds } from "@/features/kit";
 import { checklist, checklistItem } from "./schema";
-import { resolveChecklist, type ResolvedChecklist } from "./rules";
+import { effectiveCount, resolveChecklist, type ChecklistLine } from "./rules";
 
-export { resolveChecklist } from "./rules";
-export type { ResolvedChecklist } from "./rules";
+export { resolveChecklist, effectiveCount } from "./rules";
+export type { ChecklistLine, ResolvedChecklist } from "./rules";
 export { checklist, checklistItem } from "./schema";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
 
 export type ChecklistScope = { scope: "event_type" | "series" | "event"; scopeId: string };
+
+/** A Checklist line resolved for an Event: its count is now effective, always a number. */
+export type ResolvedChecklistItem = { kitUnitId: string; count: number };
+export type ResolvedEventChecklist = {
+  source: "event" | "series" | "default" | "none";
+  items: ResolvedChecklistItem[];
+};
 
 async function findChecklistId(db: Db, { scope, scopeId }: ChecklistScope): Promise<string | undefined> {
   const [row] = await db
@@ -20,21 +27,22 @@ async function findChecklistId(db: Db, { scope, scopeId }: ChecklistScope): Prom
   return row?.id;
 }
 
-/** Kit Unit ids on this level's own Checklist, or undefined if the level has none. */
-export async function getChecklist(db: Db, target: ChecklistScope): Promise<string[] | undefined> {
+/** This level's own Checklist lines, or undefined if the level has none. */
+export async function getChecklist(db: Db, target: ChecklistScope): Promise<ChecklistLine[] | undefined> {
   const id = await findChecklistId(db, target);
   if (!id) return undefined;
   const rows = await db
-    .select({ kitUnitId: checklistItem.kitUnitId })
+    .select({ kitUnitId: checklistItem.kitUnitId, count: checklistItem.count })
     .from(checklistItem)
     .where(eq(checklistItem.checklistId, id));
-  return rows.map((r: { kitUnitId: string }) => r.kitUnitId);
+  return rows;
 }
 
 export async function addToChecklist(
   db: Db,
   target: ChecklistScope,
   kitUnitId: string,
+  count: number | null = null,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const unit = await getKitUnit(db, kitUnitId);
   if (!unit || unit.status !== "active") {
@@ -47,8 +55,24 @@ export async function addToChecklist(
   }
   await db
     .insert(checklistItem)
-    .values({ id: crypto.randomUUID(), checklistId: id, kitUnitId })
+    .values({ id: crypto.randomUUID(), checklistId: id, kitUnitId, count })
     .onConflictDoNothing();
+  return { ok: true };
+}
+
+/** Sets the count a Checklist line asks for; null goes back to "all of them". */
+export async function setChecklistItemCount(
+  db: Db,
+  target: ChecklistScope,
+  kitUnitId: string,
+  count: number | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const id = await findChecklistId(db, target);
+  if (!id) return { ok: false, error: "That list doesn't exist yet." };
+  await db
+    .update(checklistItem)
+    .set({ count })
+    .where(and(eq(checklistItem.checklistId, id), eq(checklistItem.kitUnitId, kitUnitId)));
   return { ok: true };
 }
 
@@ -68,15 +92,29 @@ export async function clearChecklist(db: Db, target: ChecklistScope) {
   await db.delete(checklist).where(eq(checklist.id, id));
 }
 
+/** Event's own Checklist, else its Series', else its Event Type's Default — with each
+ * line's effective count (capped at the Kit Unit's current Quantity). */
 export async function resolveEventChecklist(
   db: Db,
   event: { eventId: string; seriesId: string | null; eventType: string },
-): Promise<ResolvedChecklist> {
-  return resolveChecklist({
+): Promise<ResolvedEventChecklist> {
+  const resolved = resolveChecklist({
     event: await getChecklist(db, { scope: "event", scopeId: event.eventId }),
     series: event.seriesId
       ? await getChecklist(db, { scope: "series", scopeId: event.seriesId })
       : undefined,
     default: await getChecklist(db, { scope: "event_type", scopeId: event.eventType }),
   });
+  const units = await listKitUnitsByIds(
+    db,
+    resolved.items.map((i) => i.kitUnitId),
+  );
+  const quantityById = new Map(units.map((u) => [u.id, u.quantity]));
+  return {
+    source: resolved.source,
+    items: resolved.items.map((i) => ({
+      kitUnitId: i.kitUnitId,
+      count: effectiveCount(i.count, quantityById.get(i.kitUnitId) ?? 1),
+    })),
+  };
 }

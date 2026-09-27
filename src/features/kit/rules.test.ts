@@ -19,4 +19,15 @@ describe("validateKitUnit", () => {
       error: "Choose where the kit lives.",
     });
   });
+
+  it("accepts a Kit Unit with a Quantity of more than 1", () => {
+    expect(validateKitUnit({ name: "Tackle shields", homeId: "loc-1", quantity: 8 })).toEqual({ ok: true });
+  });
+
+  it("rejects a Quantity below 1", () => {
+    expect(validateKitUnit({ name: "Tackle shields", homeId: "loc-1", quantity: 0 })).toEqual({
+      ok: false,
+      error: "Quantity must be at least 1.",
+    });
+  });
 });

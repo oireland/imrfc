@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
-import { listUpcomingDutiesForUser } from "@/features/duties";
+import { joinNames, listUpcomingDutiesForUser } from "@/features/duties";
 import { listEvents } from "@/features/events";
 import { listKitUnits } from "@/features/kit";
-import { user } from "@/features/users";
+import { displayName, listApprovedUsers, user } from "@/features/users";
 import { buildCalendar, type FeedEvent } from "./ics-rules";
 import { feedToken } from "./schema";
 
@@ -42,13 +42,24 @@ export async function renderFeed(db: Db, token: string, now: Date = new Date()):
   if (!owner) return { status: 404 };
   if (owner.accessState === "blocked") return { status: 410 };
 
-  const [upcoming, past, kit, duties] = await Promise.all([
+  const [upcoming, past, kit, duties, people] = await Promise.all([
     listEvents(db, { when: "upcoming" }),
     listEvents(db, { when: "past" }),
     listKitUnits(db, { includeRetired: true }),
     listUpcomingDutiesForUser(db, owner.id),
+    listApprovedUsers(db),
   ]);
-  const kitName = new Map(kit.map((k) => [k.id, k.name]));
+  const kitById = new Map(kit.map((k) => [k.id, k]));
+  const kitLabel = (kitUnitId: string, count: number) => {
+    const unit = kitById.get(kitUnitId);
+    return unit && unit.quantity > 1 ? `${unit.name} ×${count}` : (unit?.name ?? "Kit");
+  };
+  const names = new Map(people.map((p) => [p.id, displayName(p)]));
+  // A shared Duty reads as everyone's: "You're bringing: Tackle shields ×4 with Sam".
+  const withOthers = (userIds: string[]) => {
+    const others = userIds.filter((id) => id !== owner.id).map((id) => names.get(id) ?? "Someone");
+    return others.length > 0 ? ` with ${joinNames(others)}` : "";
+  };
 
   const events: FeedEvent[] = [...past, ...upcoming].map((e) => ({
     id: e.id,
@@ -59,10 +70,9 @@ export async function renderFeed(db: Db, token: string, now: Date = new Date()):
     cancelled: e.cancelled,
     description: duties
       .filter((d) => d.event.id === e.id)
-      .map(({ duty }) =>
-        duty.direction === "to"
-          ? `You're bringing: ${kitName.get(duty.kitUnitId)}`
-          : `You're taking back: ${kitName.get(duty.kitUnitId)}`,
+      .map(
+        ({ duty, count }) =>
+          `${duty.direction === "to" ? "You're bringing" : "You're taking back"}: ${kitLabel(duty.kitUnitId, count)}${withOthers(duty.userIds)}`,
       )
       .join("\n"),
   }));
