@@ -155,6 +155,51 @@ export async function getEvent(db: Db, id: string): Promise<EventWithDetails | u
   return { ...row, matchDetails: details, teams: teamRows };
 }
 
+/**
+ * Edits a standalone Event's every field in place. For an Occurrence, use
+ * `editOccurrence` instead, which offers "this one" or "this and future".
+ */
+export async function editEvent(
+  db: Db,
+  id: string,
+  input: NewEvent,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = validateEvent(input);
+  if (!result.ok) return result;
+
+  await db
+    .update(event)
+    .set({
+      title: input.title,
+      start: input.start,
+      end: input.end,
+      venue: input.venue.trim(),
+      notes: input.notes ?? "",
+    })
+    .where(eq(event.id, id));
+
+  if (input.eventType === "match") {
+    await db
+      .update(matchDetails)
+      .set({
+        opponent: input.matchDetails.opponent,
+        homeAway: input.matchDetails.homeAway,
+        competition: input.matchDetails.competition,
+        meetTime: input.matchDetails.meetTime,
+        travelMeetTime: input.matchDetails.travelMeetTime ?? null,
+        travelMeetPoint: input.matchDetails.travelMeetPoint ?? null,
+      })
+      .where(eq(matchDetails.eventId, id));
+  }
+
+  await db.delete(eventTeam).where(eq(eventTeam.eventId, id));
+  for (const teamId of input.teamIds ?? []) {
+    await db.insert(eventTeam).values({ id: crypto.randomUUID(), eventId: id, teamId });
+  }
+
+  return { ok: true };
+}
+
 export async function cancelEvent(db: Db, id: string) {
   await db.update(event).set({ cancelled: true }).where(eq(event.id, id));
 }

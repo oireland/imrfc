@@ -60,6 +60,27 @@ describe("buildQuickEvent", () => {
 
     expect(e.eventType === "match" && e.matchDetails.meetTime.toISOString()).toBe("2026-10-24T12:00:00.000Z");
   });
+
+  it("carries a travel meet time and point through for a Match, when given", () => {
+    const e = buildQuickEvent({
+      ...base,
+      type: "match",
+      startTime: "14:30",
+      endTime: "16:30",
+      travelMeetTime: "12:15",
+      travelMeetPoint: "South Ken station",
+    });
+
+    expect(e.eventType === "match" && e.matchDetails.travelMeetTime?.toISOString()).toBe("2026-10-24T11:15:00.000Z");
+    expect(e.eventType === "match" && e.matchDetails.travelMeetPoint).toBe("South Ken station");
+  });
+
+  it("leaves the travel meet time and point unset when not given", () => {
+    const e = buildQuickEvent({ ...base, type: "match", startTime: "14:30", endTime: "16:30" });
+
+    expect(e.eventType === "match" && e.matchDetails.travelMeetTime).toBeUndefined();
+    expect(e.eventType === "match" && e.matchDetails.travelMeetPoint).toBeUndefined();
+  });
 });
 
 describe("buildQuickSeries", () => {

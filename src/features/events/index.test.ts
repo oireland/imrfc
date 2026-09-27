@@ -1,7 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
-import { cancelEvent, createEvent, createEvents, getEvent, listVenues, listEvents, listEventsBetween, listNextEvents, listTeams, type NewEvent } from "./index";
+import {
+  cancelEvent,
+  createEvent,
+  createEvents,
+  editEvent,
+  getEvent,
+  listVenues,
+  listEvents,
+  listEventsBetween,
+  listNextEvents,
+  listTeams,
+  type NewEvent,
+} from "./index";
 
 describe("listTeams", () => {
   it("seeds and returns 1st XV and 2nd XV", async () => {
@@ -87,6 +99,113 @@ describe("createEvent", () => {
       matchDetails: { opponent: "UCL", homeAway: "home", competition: "bucs" },
       teams: [{ name: "1st XV" }],
     });
+  });
+});
+
+describe("editEvent", () => {
+  it("edits a standalone Social's title, time, venue, notes and Teams", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const [firstXV, secondXV] = await listTeams(db);
+    const created = await createEvent(db, {
+      title: "Social",
+      eventType: "social",
+      start: new Date("2999-01-01T19:00:00Z"),
+      end: new Date("2999-01-01T21:00:00Z"),
+      venue: "Harlington",
+      teamIds: [firstXV.id],
+    });
+    if (!created.ok) throw new Error("expected Event to be created");
+
+    const result = await editEvent(db, created.event.id, {
+      title: "Christmas Social",
+      eventType: "social",
+      start: new Date("2999-01-02T18:00:00Z"),
+      end: new Date("2999-01-02T22:00:00Z"),
+      venue: "The Union",
+      notes: " Fancy dress ",
+      teamIds: [secondXV.id],
+    });
+
+    expect(result.ok).toBe(true);
+    const found = await getEvent(db, created.event.id);
+    expect(found).toMatchObject({
+      title: "Christmas Social",
+      start: new Date("2999-01-02T18:00:00Z"),
+      end: new Date("2999-01-02T22:00:00Z"),
+      venue: "The Union",
+      notes: " Fancy dress ",
+      teams: [{ name: "2nd XV" }],
+    });
+  });
+
+  it("edits a Match's Match details", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const created = await createEvent(db, {
+      title: "vs Brighton",
+      eventType: "match",
+      start: new Date("2999-01-10T14:00:00Z"),
+      end: new Date("2999-01-10T16:00:00Z"),
+      venue: "Brighton",
+      matchDetails: {
+        opponent: "Brighton",
+        homeAway: "away",
+        competition: "friendly",
+        meetTime: new Date("2999-01-10T12:15:00Z"),
+      },
+    });
+    if (!created.ok) throw new Error("expected Event to be created");
+
+    const result = await editEvent(db, created.event.id, {
+      title: "vs Brighton",
+      eventType: "match",
+      start: new Date("2999-01-10T14:00:00Z"),
+      end: new Date("2999-01-10T16:00:00Z"),
+      venue: "Brighton",
+      matchDetails: {
+        opponent: "Brighton",
+        homeAway: "away",
+        competition: "bucs",
+        meetTime: new Date("2999-01-10T12:00:00Z"),
+        travelMeetTime: new Date("2999-01-10T11:00:00Z"),
+        travelMeetPoint: "South Ken station",
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    const found = await getEvent(db, created.event.id);
+    expect(found?.matchDetails).toMatchObject({
+      competition: "bucs",
+      meetTime: new Date("2999-01-10T12:00:00Z"),
+      travelMeetTime: new Date("2999-01-10T11:00:00Z"),
+      travelMeetPoint: "South Ken station",
+    });
+  });
+
+  it("rejects an invalid edit and leaves the Event untouched", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const created = await createEvent(db, {
+      title: "Social",
+      eventType: "social",
+      start: new Date("2999-01-01T19:00:00Z"),
+      end: new Date("2999-01-01T21:00:00Z"),
+      venue: "Harlington",
+    });
+    if (!created.ok) throw new Error("expected Event to be created");
+
+    const result = await editEvent(db, created.event.id, {
+      title: "",
+      eventType: "social",
+      start: new Date("2999-01-01T19:00:00Z"),
+      end: new Date("2999-01-01T21:00:00Z"),
+      venue: "Harlington",
+    });
+
+    expect(result.ok).toBe(false);
+    const found = await getEvent(db, created.event.id);
+    expect(found?.title).toBe("Social");
   });
 });
 

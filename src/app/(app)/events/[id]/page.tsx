@@ -1,27 +1,17 @@
 import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { ChevronRight } from "lucide-react";
 import { db } from "@/db/client";
 import { ChecklistEditor } from "@/components/checklist-editor";
 import { ClashList } from "@/components/clash-list";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { CopySummary } from "@/components/copy-summary";
+import { EditEventButton } from "@/components/edit-event-button";
 import { EventDuties, type DutyKit, type DutySlot, type HolderOption, type SourceOption } from "@/components/event-duties";
-import { SubmitButton } from "@/components/submit-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { BackLink } from "@/components/back-link";
 import { formatWhen } from "@/lib/format-time";
 import { mapsSearchUrl } from "@/lib/maps";
-import { VenueInput } from "@/components/venue-input";
 import { resolveEventChecklist } from "@/features/checklists";
 import { describeWhereabouts, listKitUnits, listPortionsFor, type KitUnit, type Portion } from "@/features/kit";
 import {
@@ -38,7 +28,17 @@ import {
   type Duty,
   type DutyRequest,
 } from "@/features/duties";
-import { cancelEvent, editOccurrence, getEvent, listVenues, londonParts } from "@/features/events";
+import {
+  buildQuickEvent,
+  cancelEvent,
+  editEvent,
+  editOccurrence,
+  getEvent,
+  listTeams,
+  listVenues,
+  londonParts,
+  type QuickEventInput,
+} from "@/features/events";
 import { listStores, type Store } from "@/features/stores";
 import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
 import { requireApprovedUser } from "@/lib/session";
@@ -49,6 +49,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
 
   const eventDetails = await getEvent(db, id);
   if (!eventDetails) notFound();
+  const seriesId = eventDetails.seriesId;
 
   async function cancel() {
     "use server";
@@ -59,23 +60,25 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     revalidatePath(`/events/${id}`);
   }
 
-  async function edit(formData: FormData) {
+  async function edit(input: QuickEventInput & { scope: "this" | "future" }): Promise<{ ok: true } | { ok: false; error: string }> {
     "use server";
     const current = await requireApprovedUser();
-    if (!isCommitteeOrAbove(current.role)) return;
-    await editOccurrence(
-      db,
-      id,
-      {
-        title: String(formData.get("title")),
-        startTime: String(formData.get("startTime")),
-        endTime: String(formData.get("endTime")),
-        venue: String(formData.get("venue")),
-      },
-      formData.get("scope") === "future" ? "future" : "this",
-    );
+    if (!isCommitteeOrAbove(current.role)) return { ok: false, error: "Only Committee can edit Events." };
+
+    const result = seriesId
+      ? await editOccurrence(
+          db,
+          id,
+          { title: input.title, startTime: input.startTime, endTime: input.endTime, venue: input.venue, notes: input.notes },
+          input.scope,
+        )
+      : await editEvent(db, id, buildQuickEvent(input));
+    if (!result.ok) return result;
+
     revalidatePath(`/events/${id}`);
     revalidatePath("/events");
+    revalidatePath("/");
+    return { ok: true };
   }
 
   async function act(dutyId: string, request: DutyRequest) {
@@ -224,16 +227,46 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     none: "",
   }[resolved.source];
 
-  const venues = eventDetails.seriesId ? await listVenues(db) : [];
+  const venues = committee ? await listVenues(db) : [];
+  const allTeams = committee ? await listTeams(db) : [];
+  const editInitial = {
+    date: londonParts(eventDetails.start).date,
+    startTime: londonParts(eventDetails.start).time,
+    endTime: londonParts(eventDetails.end).time,
+    title: eventDetails.title,
+    venue: eventDetails.venue,
+    notes: eventDetails.notes,
+    teamIds: eventDetails.teams.map((t) => t.id),
+    ...(eventDetails.matchDetails && {
+      opponent: eventDetails.matchDetails.opponent,
+      homeAway: eventDetails.matchDetails.homeAway,
+      competition: eventDetails.matchDetails.competition,
+      meetTime: londonParts(eventDetails.matchDetails.meetTime).time,
+      travelMeetTime: eventDetails.matchDetails.travelMeetTime ? londonParts(eventDetails.matchDetails.travelMeetTime).time : undefined,
+      travelMeetPoint: eventDetails.matchDetails.travelMeetPoint ?? undefined,
+    }),
+  };
 
   return (
     <div className="flex flex-col gap-4">
       <BackLink href="/events">Events</BackLink>
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-[28px] leading-none">
-            {eventDetails.title}
-            {eventDetails.cancelled && <Badge variant="destructive">Cancelled</Badge>}
+          <CardTitle className="flex items-center justify-between gap-2 text-[28px] leading-none">
+            <span className="flex items-center gap-2">
+              {eventDetails.title}
+              {eventDetails.cancelled && <Badge variant="destructive">Cancelled</Badge>}
+            </span>
+            {committee && !eventDetails.cancelled && (
+              <EditEventButton
+                eventType={eventDetails.eventType}
+                isOccurrence={!!eventDetails.seriesId}
+                venues={venues}
+                teams={allTeams}
+                initial={editInitial}
+                action={edit}
+              />
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-1 text-sm">
@@ -311,59 +344,6 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
       )}
 
       <CopySummary text={summary} />
-
-      {eventDetails.seriesId && !eventDetails.cancelled && committee && (
-        <Collapsible>
-          <Card className="py-0">
-            <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left font-medium group">
-              Edit event
-              <ChevronRight className="size-4 text-muted-foreground transition-transform group-data-[panel-open]:rotate-90" aria-hidden="true" />
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <form action={edit} className="flex flex-col gap-3 border-t border-border p-4 text-sm">
-                <div className="flex flex-col gap-1">
-                  <Label htmlFor={`edit-title-${id}`}>Title</Label>
-                  <Input id={`edit-title-${id}`} name="title" defaultValue={eventDetails.title} required />
-                </div>
-                <div className="flex gap-2">
-                  <div className="flex flex-1 flex-col gap-1">
-                    <Label htmlFor={`edit-start-${id}`}>Start time</Label>
-                    <Input
-                      id={`edit-start-${id}`}
-                      type="time"
-                      name="startTime"
-                      defaultValue={londonParts(eventDetails.start).time}
-                      required
-                    />
-                  </div>
-                  <div className="flex flex-1 flex-col gap-1">
-                    <Label htmlFor={`edit-end-${id}`}>End time</Label>
-                    <Input
-                      id={`edit-end-${id}`}
-                      type="time"
-                      name="endTime"
-                      defaultValue={londonParts(eventDetails.end).time}
-                      required
-                    />
-                  </div>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <Label htmlFor={`edit-venue-${id}`}>Venue</Label>
-                  <VenueInput id={`edit-venue-${id}`} name="venue" defaultValue={eventDetails.venue} suggestions={venues} required />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <Label htmlFor={`edit-scope-${id}`}>Applies to</Label>
-                  <NativeSelect id={`edit-scope-${id}`} name="scope" defaultValue="this">
-                    <NativeSelectOption value="this">This one</NativeSelectOption>
-                    <NativeSelectOption value="future">This and future</NativeSelectOption>
-                  </NativeSelect>
-                </div>
-                <SubmitButton className="self-start">Save</SubmitButton>
-              </form>
-            </CollapsibleContent>
-          </Card>
-        </Collapsible>
-      )}
     </div>
   );
 }

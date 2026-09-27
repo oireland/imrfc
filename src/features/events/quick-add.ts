@@ -12,6 +12,8 @@ export type QuickEventInput = {
   homeAway?: HomeAway;
   competition?: Competition;
   meetTime?: string; // HH:MM, London; Matches only, defaults to kick-off
+  travelMeetTime?: string; // HH:MM, London; Matches only
+  travelMeetPoint?: string; // Matches only
   notes?: string;
   teamIds?: string[]; // none means the whole club
   repeatUntil?: string; // YYYY-MM-DD, London; Training only — repeat weekly on this day up to and including this date
@@ -50,6 +52,8 @@ export function buildQuickEvent(input: QuickEventInput): NewEvent {
         homeAway: input.homeAway ?? "home",
         competition: input.competition ?? "friendly",
         meetTime: input.meetTime ? londonToUtc(input.date, input.meetTime) : start,
+        ...(input.travelMeetTime && { travelMeetTime: londonToUtc(input.date, input.travelMeetTime) }),
+        ...(input.travelMeetPoint?.trim() && { travelMeetPoint: input.travelMeetPoint.trim() }),
       },
     };
   }
