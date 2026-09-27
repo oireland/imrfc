@@ -39,21 +39,25 @@ _Avoid_: Location, storage, cupboard, shed (these last are names of Stores, not 
 ## Kit
 
 **Kit Unit**:
-A single named, trackable piece of club equipment, which may be a container of many things (e.g. "Ball bag A", "Tackle shields (set of 6)", "Bibs – orange").
+A named, trackable piece of club equipment, or several interchangeable ones counted by a Quantity (e.g. "Ball bag A", "Tackle shields" ×8, "Cones" ×2 sets, "Bibs – orange").
 _Avoid_: Item, equipment, kit (when referring to one thing)
+
+**Quantity**:
+How many of a Kit Unit the club has, in whatever counts naturally for it (8 shields, 2 sets of cones). Defaults to 1 and is only shown when more than 1. Counts things that travel separately, never the contents of a container (the balls in a ball bag).
+_Avoid_: Stock, amount, number
 
 **Home**:
 The Store a Kit Unit normally returns to; the default Destination for its From Duties.
 _Avoid_: Default location
 
 **Kit Status**:
-Whether a Kit Unit is in circulation: Active, Missing or Retired. Only Active units can go on a Checklist. Kit Units are never deleted.
+Whether a Kit Unit is in circulation: Active, Missing or Retired. It applies to the whole unit; losing some of a counted unit lowers its Quantity instead. Only Active units can go on a Checklist. Kit Units are never deleted.
 
 **Condition Note**:
 Free text describing a Kit Unit's current state (e.g. "2 balls need pumping").
 
 **Whereabouts**:
-Where a Kit Unit is right now: at a Store, with a Holder, or Unconfirmed.
+Where a Kit Unit is right now: at a Store, with a Holder, or Unconfirmed. A counted Kit Unit can be split across several places, each with a count ("4 at the Shed, 4 with Sam"); the counts always add up to its Quantity.
 _Avoid_: Location, position
 
 **Holder**:
@@ -64,7 +68,7 @@ _Avoid_: Owner, keeper
 The Whereabouts of a Kit Unit whose From Duty was never Confirmed; shown as "last seen at" the Event.
 
 **Move**:
-A recorded change of a Kit Unit's Whereabouts, either by Confirming a Duty or ad hoc ("I've got it", "give it to Priya", "put it in the Shed").
+A recorded change of a Kit Unit's Whereabouts, either by Confirming a Duty or ad hoc ("I've got it", "give it to Priya", "put it in the Shed"). For a counted unit a Move carries a count and the place it came from.
 _Avoid_: Transfer, check-in/check-out
 
 **Movement Log**:
@@ -107,38 +111,38 @@ _Avoid_: Deleted
 ## Duties
 
 **Checklist**:
-The Kit Units an Event needs. Resolved in order: Event's own Checklist, else its Series' Checklist, else its Event Type's Default Checklist.
+The Kit Units an Event needs, each with how many (all of them unless lowered). Resolved in order: Event's own Checklist, else its Series' Checklist, else its Event Type's Default Checklist.
 _Avoid_: Kit list, requirements
 
 **Default Checklist**:
 The Checklist an Event Type supplies to Events that don't override it.
 
 **Duty**:
-Responsibility of one User to carry one Kit Unit for one Event, in one direction.
+Responsibility of one or more Users to carry one Kit Unit (the count its Checklist asks for) for one Event, in one direction.
 _Avoid_: Job, task, assignment (that's how a Duty gets filled)
 
 **To Duty**:
 The Duty to bring a Kit Unit from its Whereabouts to the Event.
 
 **From Duty**:
-The Duty to take a Kit Unit from the Event to a Destination. It goes to the To Duty's User unless handed to someone else.
+The Duty to take a Kit Unit from the Event to a Destination. It goes to the To Duty's Users unless handed to someone else.
 
 **Destination**:
-Where a From Duty ends: a Store, or the Duty's User becoming Holder. Defaults to the Kit Unit's Home.
+Where a From Duty ends: a Store, or the Duty's Users becoming Holders. Defaults to the Kit Unit's Home.
 
 **Claim**:
-A User taking an unfilled Duty for themselves.
+A User taking a Duty for themselves, or joining the Users already on it.
 _Avoid_: Volunteer, sign up
 
 **Assign**:
-A Committee User filling a Duty with a named User.
+A Committee User putting one or more named Users on a Duty.
 
 **Confirm**:
 Marking a Duty as done, which records a Move. Only a Confirmed Duty changes a Kit Unit's Whereabouts.
 _Avoid_: Complete, tick off, check in
 
 **Clash**:
-A warning that a Kit Unit is double-booked: it is on the Checklists of two Events that overlap, or that are back-to-back with nobody taking it away from the first. Clashes warn; they never block.
+A warning that a Kit Unit is double-booked: Events that overlap, or that are back-to-back with nobody taking it away from the first, between them need more of it than its Quantity. Clashes warn; they never block.
 _Avoid_: Conflict, error
 
 **Heads-up**:

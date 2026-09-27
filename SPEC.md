@@ -43,7 +43,7 @@ Imperial Medicals RFC keeps forgetting kit and keeps asking the same questions o
 
 When a User is Blocked:
 - Their sessions are revoked and their Feed Token stops working.
-- Their Duties on future Events are unassigned and flagged to Committee.
+- They are taken off their Duties on future Events; a Duty left with nobody on it is flagged to Committee.
 - Kit Units they Hold stay with them, flagged "with blocked user".
 - Their history (Moves, past Duties) is kept.
 
@@ -54,13 +54,14 @@ When a User is Blocked:
 
 ## Kit
 
-- **Kit Unit**: name, description (free text of contents), Home (a Store), Kit Status, Condition Note.
+- **Kit Unit**: name, description (free text of contents), Quantity (default 1), Home (a Store), Kit Status, Condition Note.
+- **Quantity** counts interchangeable things that travel separately (8 tackle shields, 2 sets of cones, 3 water bottle carriers) in whatever unit is natural; there is no unit-of-measure field. Counts are hidden when the Quantity is 1. Committee lowers it when some are lost and raises it when more are bought (the extra ones start at Home); both are logged in the Movement Log.
 - Kinds of unit include balls/ball bags, tackle shields, cones, bibs, water bottles, physio kit — no fixed category list in v1.
 - **Kit Status**: Active / Missing / Retired. Only Active units may be added to a Checklist. Never hard-deleted.
-- **Whereabouts** is exactly one of: a Store, a Holder (User), or Unconfirmed (last seen at an Event).
-- Any User may record an **ad-hoc Move**: "I've got it" (Holder = me), "give it to [User]" (Holder = another approved User) or "put it in [Store]".
+- **Whereabouts** is one or more portions, each a count at exactly one of: a Store, a Holder (User), or Unconfirmed (last seen at an Event). Portion counts add up to the Quantity; a Quantity-1 unit has exactly one portion.
+- Any User may record an **ad-hoc Move**: "I've got it" (Holder = me), "give it to [User]" (Holder = another approved User) or "put it in [Store]". For a counted unit it asks how many and from where, defaulting to everything at that place.
 - Every Move and every Condition Note change goes in the **Movement Log** (who, what, from, to, when, why — Duty or ad hoc).
-- **Kit view**: all Active Kit Units grouped by Whereabouts — each Store, each Holder, then Unconfirmed. Missing/Retired in a secondary list.
+- **Kit view**: all Active Kit Units grouped by Whereabouts — each Store, each Holder, then Unconfirmed. A split unit appears in each group with its count there. Missing/Retired in a secondary list.
 
 ## Events
 
@@ -85,32 +86,34 @@ When a User is Blocked:
 ## Checklists and Duties
 
 - **Checklist resolution**: Event Checklist → Series Checklist → Event Type Default Checklist. Committee can edit any level.
-- For each Kit Unit on an Event's Checklist there is one **To Duty** and one **From Duty**.
-- **Claim** (any User) or **Assign** (Committee) a To Duty → the From Duty goes to the same User by default. Either Duty can then be handed to someone else.
+- Each Checklist line asks for a count of its Kit Unit: **all of them** by default (kept as "all", so it follows Quantity changes), or a lower number, capped at the Quantity.
+- For each Kit Unit on an Event's Checklist there is one **To Duty** and one **From Duty**, each with **zero or more Users**.
+- **Claim** (any User) puts you on a Duty — joining anyone already on it. **Assign** (Committee) is a multi-select of Users. Claiming or being assigned the To Duty also puts you on the From Duty by default. Each User can take themselves off or hand their place on to someone else.
 - **Destination** of a From Duty defaults to the Kit Unit's Home; editable per Event: another Store, or "stays with the Duty's User".
 - **Confirm**:
-  - To Duty Confirmed → Move: Whereabouts becomes "at Event" (represented as Holder = the Duty's User).
-  - From Duty Confirmed → Move to the Destination (Store, or Holder = the Duty's User).
-  - The Duty's User or any Committee member may Confirm.
-- **Unconfirmed**: once an Event has ended, if its From Duty isn't Confirmed, the Kit Unit's Whereabouts shows Unconfirmed — "last seen at [Event]". The app never assumes a Move happened.
-- **Clashes** (warnings only, shown on the Event and the Kit Unit) are only about double-booked kit: a Kit Unit on the Checklists of two Events whose times overlap, or are back-to-back without a From Duty in between.
+  - To Duty Confirmed → Move: the count comes "to the Event" (represented as Holder = the Duty's Users).
+  - From Duty Confirmed → Move to the Destination (Store, or Holders = the Duty's Users).
+  - Any User on the Duty or any Committee member may Confirm, which confirms it for everyone on it.
+  - The confirm sheet asks **where they came from** when the Kit Unit is split across places, and **who has how many** when the Duty has several Users and the count is more than 1. Both default (everything from the one place / all with whoever confirms), so a single person carrying a single thing sees no extra step.
+- **Unconfirmed**: once an Event has ended, if its From Duty isn't Confirmed, the portion taken there shows Unconfirmed — "last seen at [Event]" (with its count for a counted unit). The app never assumes a Move happened.
+- **Clashes** (warnings only, shown on the Event and the Kit Unit) are only about double-booked kit: Events whose times overlap, or are back-to-back without anyone on the From Duty in between, that between them ask for more of a Kit Unit than its Quantity (4 + 4 of 8 shields is fine; 6 + 4 is a Clash).
 - **Heads-ups** (gentler warnings, same places) cover the rest:
   - Nobody is taking a Kit Unit to, or back from, an Event that starts within 48h.
   - Kit Unit on a Checklist is Missing/Retired (it was Active when added).
-  - Kit Unit's current Holder isn't the person bringing it to the next Event that needs it ("Sam needs to pass Tackle Shields to Tom before Alumni Day"). Nothing is said while nobody is bringing it yet.
+  - Kit Unit's current Holder isn't the person bringing it to the next Event that needs it ("Sam needs to pass Tackle Shields to Tom before Alumni Day"), and the people bringing it can't get enough from Stores and what they already hold. Nothing is said while nobody is bringing it yet.
 - **Duty Summary**: "Copy WhatsApp message" button on an Event, producing e.g.
 
   ```
   🏉 Wed 1 Oct — 1sts & 2nds Training, 19:00, Harlington
   Ball bag A: Tom → / ← Tom
-  Tackle shields: Sam → / ← Priya
+  Tackle shields ×4: Sam & Tom → / ← Priya
   Cones: ❗unassigned
   ```
 
 ## Calendar Feed
 
 - Each User has a private ICS URL containing a Feed Token; they can reset it.
-- Contains all Events (Cancelled ones marked `STATUS:CANCELLED`) with the User's own Duties in the description ("You're bringing: Ball bag A").
+- Contains all Events (Cancelled ones marked `STATUS:CANCELLED`) with the User's own Duties in the description ("You're bringing: Ball bag A", "You're bringing: Tackle shields ×4 with Sam").
 - Blocked Users' feeds return 404/410.
 
 ## Screens (mobile-first)
@@ -167,7 +170,7 @@ Features: `users` (access, roles, blocking), `locations`, `kit` (units, whereabo
 - Availability / RSVPs (WhatsApp polls suffice for now).
 - Email / push reminders.
 - Fixture import (BUCS/LUSL scraping or calendar import).
-- Itemised kit contents (e.g. counting individual balls).
+- Itemised kit contents (e.g. counting the balls inside a ball bag). Quantity counts things that travel separately, not what's inside a container.
 - Team-filtered Calendar Feeds, team membership.
 - Multiple clubs.
 
