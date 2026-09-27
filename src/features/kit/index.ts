@@ -90,6 +90,13 @@ export async function setKitStatus(db: Db, id: string, status: KitStatus) {
   await db.update(kitUnit).set({ status }).where(eq(kitUnit.id, id));
 }
 
+/** Hard-deletes a Kit Unit added by mistake, along with its Portions and Movement Log. */
+export async function deleteKitUnit(db: Db, id: string) {
+  await db.delete(movementLogEntry).where(eq(movementLogEntry.kitUnitId, id));
+  await db.delete(kitPortion).where(eq(kitPortion.kitUnitId, id));
+  await db.delete(kitUnit).where(eq(kitUnit.id, id));
+}
+
 export async function setConditionNote(
   db: Db,
   id: string,

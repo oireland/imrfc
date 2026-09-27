@@ -5,6 +5,7 @@ import { store } from "@/features/stores";
 import { user } from "@/features/users";
 import {
   createKitUnit,
+  deleteKitUnit,
   getPortions,
   listKitHeldBy,
   listKitUnits,
@@ -127,6 +128,35 @@ describe("setKitStatus", () => {
 
     const [unit] = await listKitUnits(db, { includeRetired: true });
     expect(unit.status).toBe("missing");
+  });
+});
+
+describe("deleteKitUnit", () => {
+  it("removes a Kit Unit and its Portions for good, e.g. one added by mistake", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const created = await createKitUnit(db, { name: "Ball bag A", homeId: home.id });
+    if (!created.ok) throw new Error("expected Kit Unit to be created");
+
+    await deleteKitUnit(db, created.kitUnit.id);
+
+    expect(await listKitUnits(db, { includeRetired: true })).toEqual([]);
+    expect(await getPortions(db, created.kitUnit.id)).toEqual([]);
+  });
+
+  it("also removes its Movement Log entries", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const alex = await seedUser(db);
+    const created = await createKitUnit(db, { name: "Ball bag A", homeId: home.id });
+    if (!created.ok) throw new Error("expected Kit Unit to be created");
+    await setConditionNote(db, created.kitUnit.id, alex.id, "typo, deleting");
+
+    await deleteKitUnit(db, created.kitUnit.id);
+
+    expect(await listMovementLog(db, created.kitUnit.id)).toEqual([]);
   });
 });
 

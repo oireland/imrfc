@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import {
+  deleteKitUnit,
   listKitUnits,
   setConditionNote,
   setKitStatus,
@@ -16,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { SubmitButton } from "@/components/submit-button";
+import { ConfirmSubmit } from "@/components/confirm-submit";
 import { BackLink } from "@/components/back-link";
 
 const STATUSES: KitStatus[] = ["active", "missing", "retired"];
@@ -52,6 +54,12 @@ export default async function KitUnitsPage() {
       user!.id,
       String(formData.get("conditionNote")),
     );
+    revalidatePath("/admin/kit");
+  }
+
+  async function remove(formData: FormData) {
+    "use server";
+    await deleteKitUnit(db, String(formData.get("kitUnitId")));
     revalidatePath("/admin/kit");
   }
 
@@ -107,6 +115,20 @@ export default async function KitUnitsPage() {
                   Save
                 </SubmitButton>
               </form>
+              <div className="flex justify-end">
+                <form id={`delete-${k.id}`} action={remove}>
+                  <input type="hidden" name="kitUnitId" value={k.id} />
+                </form>
+                <ConfirmSubmit
+                  formId={`delete-${k.id}`}
+                  triggerLabel="Delete"
+                  triggerSize="sm"
+                  triggerVariant="ghost"
+                  title={`Delete ${k.name}?`}
+                  description="This removes it for good, not just Retired — use this only for a mistake, e.g. a typo or a duplicate."
+                  confirmLabel="Delete"
+                />
+              </div>
             </div>
           ))}
         </div>
