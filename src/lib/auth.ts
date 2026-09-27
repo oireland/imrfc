@@ -40,6 +40,7 @@ export const auth = betterAuth({
       role: { type: "string", defaultValue: "member", input: false },
       accessState: { type: "string", defaultValue: "pending", input: false },
       theme: { type: "string", defaultValue: "system", input: false },
+      preferredPosition: { type: "string", required: false, input: false },
     },
   },
   databaseHooks: {

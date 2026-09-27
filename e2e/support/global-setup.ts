@@ -14,6 +14,17 @@ export default async function globalSetup() {
 
   const sql = postgres(TEST_DATABASE_URL, { onnotice: () => {} });
   await migrate(drizzle(sql), { migrationsFolder: "drizzle" });
+
+  // Every spec signs in as this same Admin via magic link (better-auth finds a User
+  // by email before creating one). Pre-seeding it already onboarded keeps specs that
+  // don't care about onboarding from tripping over the onboarding modal.
+  const adminEmail = process.env.E2E_ADMIN_EMAIL ?? "irelandoliver4@gmail.com";
+  await sql`
+    insert into "user" (id, name, email, email_verified, role, access_state, preferred_position)
+    values (${crypto.randomUUID()}, 'E2E Admin', ${adminEmail}, true, 'admin', 'approved', 'Fly-half')
+    on conflict (email) do nothing
+  `;
+
   await sql.end();
 }
 

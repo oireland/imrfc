@@ -113,6 +113,13 @@
       "when": 1790539484259,
       "tag": "0015_add-hot-column-indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1790541106383,
+      "tag": "0016_add-preferred-position",
+      "breakpoints": true
     }
   ]
 }

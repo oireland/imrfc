@@ -27,7 +27,8 @@ Imperial Medicals RFC keeps forgetting kit and keeps asking the same questions o
 - New Users start **Pending** and see only a "Waiting for approval" screen.
 - Admins see a pending-count badge and approve or block from the Admin area. No approval emails in v1.
 - Emails in the `ADMIN_EMAILS` env var become Admin automatically on first sign-in.
-- Profile: name and email only (from the sign-in provider; name editable).
+- Profile: name and email (from the sign-in provider; name editable), plus a Preferred Position set during onboarding.
+- **Onboarding**: a new User (blank name, or no Preferred Position yet) sees a dismissible modal asking for their name and Preferred Position, with a short guide to what each tab does. "Not now" delays it for that browser tab; it reappears next time the app is opened in a new tab or session until completed.
 - **Roles** are club-wide and cumulative:
 
 | Capability | Member | Committee | Admin |

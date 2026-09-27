@@ -2,12 +2,15 @@ import { Suspense } from "react";
 import { db } from "@/db/client";
 import { FlashToast } from "@/components/flash-toast";
 import { BottomTabs } from "@/components/bottom-tabs";
+import { OnboardingDialog } from "@/components/onboarding-dialog";
 import { canManageUsers, isCommitteeOrAbove, listPendingUsers } from "@/features/users";
+import { needsOnboarding } from "@/features/onboarding";
 import { requireApprovedUser } from "@/lib/session";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await requireApprovedUser();
   const pendingCount = canManageUsers(user.role) ? (await listPendingUsers(db)).length : 0;
+  const showAdmin = isCommitteeOrAbove(user.role);
 
   return (
     <div className="flex flex-col">
@@ -15,7 +18,10 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       <Suspense>
         <FlashToast />
       </Suspense>
-      <BottomTabs showAdmin={isCommitteeOrAbove(user.role)} pendingCount={pendingCount} />
+      <BottomTabs showAdmin={showAdmin} pendingCount={pendingCount} />
+      {needsOnboarding(user) && (
+        <OnboardingDialog name={user.name} preferredPosition={user.preferredPosition} showAdmin={showAdmin} />
+      )}
     </div>
   );
 }

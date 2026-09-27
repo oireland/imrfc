@@ -9,6 +9,7 @@ import {
   listApprovedUsers,
   listPendingUsers,
   setName,
+  setPreferredPosition,
   setThemePreference,
   setRole,
   unblockUser,
@@ -141,6 +142,19 @@ describe("setName", () => {
 
     const [row] = await db.select().from(user).where(eq(user.id, u.id));
     expect(row.name).toBe("Kept");
+  });
+});
+
+describe("setPreferredPosition", () => {
+  it("saves the chosen Position", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const u = await seedUser(db);
+
+    await setPreferredPosition(db, u.id, "Fly-half");
+
+    const [row] = await db.select().from(user).where(eq(user.id, u.id));
+    expect(row.preferredPosition).toBe("Fly-half");
   });
 });
 

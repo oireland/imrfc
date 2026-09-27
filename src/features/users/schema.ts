@@ -1,4 +1,5 @@
 import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { RUGBY_POSITIONS } from "./positions";
 
 // Better Auth's core tables, plus our own `role` and `accessState` on `user`.
 export const user = pgTable("user", {
@@ -17,6 +18,8 @@ export const user = pgTable("user", {
   theme: text("theme", { enum: ["system", "light", "dark"] })
     .notNull()
     .default("system"),
+  // Set during onboarding; the future `players` feature (PLAN slice 20) reads this as Preferred Position.
+  preferredPosition: text("preferred_position", { enum: RUGBY_POSITIONS }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

@@ -1,0 +1,71 @@
+import { expect, test } from "@playwright/test";
+import postgres from "postgres";
+import { TEST_DATABASE_URL } from "./support/test-db";
+
+const MAILPIT = "http://localhost:8025";
+
+async function magicLink(email: string): Promise<string> {
+  for (let i = 0; i < 30; i++) {
+    const list = await (
+      await fetch(`${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}&limit=1`)
+    ).json();
+    const id = list.messages?.[0]?.ID;
+    if (id) {
+      const msg = await (await fetch(`${MAILPIT}/api/v1/message/${id}`)).json();
+      const match = String(msg.Text).match(/https?:\/\/\S+/);
+      if (match) return match[0];
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error("No magic link email arrived in Mailpit");
+}
+
+test("A new User is asked for their name and position, can put it off, and it comes back in a new tab", async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const sql = postgres(TEST_DATABASE_URL);
+  const run = crypto.randomUUID().slice(0, 8);
+  const email = `new-player-${run}@example.com`;
+
+  await page.goto("/sign-in");
+  await page.getByPlaceholder("you@example.com").fill(email);
+  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  await expect(page.getByText("Check your email")).toBeVisible();
+  const link = new URL(await magicLink(email));
+  await page.goto(new URL(link.pathname + link.search, baseURL).toString());
+  await expect(page).toHaveURL(/\/waiting-for-approval$/);
+
+  await sql`update "user" set access_state = 'approved' where email = ${email}`;
+  await page.goto("/");
+
+  const dialog = page.getByRole("dialog", { name: "Welcome to the club" });
+  await expect(dialog).toBeVisible();
+
+  // Put it off for now: the app stays usable and the modal doesn't come back this tab.
+  await dialog.getByRole("button", { name: "Not now" }).click();
+  await expect(dialog).not.toBeVisible();
+  await page.reload();
+  await expect(dialog).not.toBeVisible();
+
+  // A new tab is a new session as far as onboarding is concerned, so it asks again.
+  const secondPage = await context.newPage();
+  await secondPage.goto("/");
+  const secondDialog = secondPage.getByRole("dialog", { name: "Welcome to the club" });
+  await expect(secondDialog).toBeVisible();
+
+  const firstName = `Jess${run}`;
+  await secondDialog.getByLabel("Your name").fill(`${firstName} Carter`);
+  await secondDialog.getByLabel("Your position").selectOption("Scrum-half");
+  await secondDialog.getByRole("button", { name: "Save" }).click();
+  await expect(secondDialog).not.toBeVisible();
+  await expect(secondPage.getByRole("heading", { name: new RegExp(firstName) })).toBeVisible();
+
+  // Onboarded: it never comes back, even in a fresh tab.
+  const thirdPage = await context.newPage();
+  await thirdPage.goto("/");
+  await expect(thirdPage.getByRole("dialog", { name: "Welcome to the club" })).not.toBeVisible();
+
+  await sql.end();
+});

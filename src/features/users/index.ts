@@ -1,11 +1,14 @@
 import { eq, ne } from "drizzle-orm";
 import type { Role } from "./access";
+import type { RugbyPosition } from "./positions";
 import { session, user } from "./schema";
 
 export { resolveNewUser } from "./access";
 export type { AccessState, Role } from "./access";
 export { displayName } from "./display-name";
 export { canAccessApp, canManageUsers, isCommitteeOrAbove } from "./permissions";
+export { RUGBY_POSITIONS } from "./positions";
+export type { RugbyPosition } from "./positions";
 // Other features' schema.ts files reference this table for foreign keys.
 export { user } from "./schema";
 
@@ -45,6 +48,10 @@ export async function setName(db: Db, userId: string, name: string): Promise<{ o
   if (!trimmed) return { ok: false, error: "Please enter your name." };
   await db.update(user).set({ name: trimmed }).where(eq(user.id, userId));
   return { ok: true };
+}
+
+export async function setPreferredPosition(db: Db, userId: string, position: RugbyPosition) {
+  await db.update(user).set({ preferredPosition: position }).where(eq(user.id, userId));
 }
 
 export type ThemePreference = "system" | "light" | "dark";
