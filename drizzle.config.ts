@@ -8,5 +8,6 @@ export default defineConfig({
   // Each feature owns its tables in its own schema.ts.
   schema: "./src/features/*/schema.ts",
   out: "./drizzle",
-  dbCredentials: { url: process.env.DATABASE_URL! },
+  // Migrations need a direct connection; Neon's pooled DATABASE_URL is for app traffic.
+  dbCredentials: { url: (process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL)! },
 });
