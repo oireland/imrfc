@@ -1,4 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
+import postgres from "postgres";
+import { TEST_DATABASE_URL } from "./support/test-db";
 
 const MAILPIT = "http://localhost:8025";
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "irelandoliver4@gmail.com";
@@ -39,15 +41,20 @@ test("Bottom tabs drop Events, and Committee sees Players alongside Admin", asyn
 });
 
 test("Committee sets a Player's Positions and switches Playing off, and they move to Not playing", async ({ page, baseURL }) => {
+  // Its own Player, so switching Playing off can't upset specs that need the Admin playing.
+  const sql = postgres(TEST_DATABASE_URL);
+  const name = `Pat ${crypto.randomUUID().slice(0, 8)}`;
+  await sql`insert into "user" (id, name, email, email_verified, access_state, preferred_position)
+    values (${crypto.randomUUID()}, ${name}, ${`${name.replace(" ", ".")}@x.org`}, true, 'approved', 'Hooker')`;
+  await sql.end();
+
   await signIn(page, baseURL);
   const nav = page.getByRole("navigation", { name: "Main" });
 
   await nav.getByRole("link", { name: "Players" }).click();
   await expect(page).toHaveURL(/\/players$/);
-  await expect(page.getByRole("link", { name: /E2E Admin/ })).toBeVisible();
-
-  await page.getByRole("link", { name: /E2E Admin/ }).click();
-  await expect(page.getByRole("heading", { name: "E2E Admin" })).toBeVisible();
+  await page.getByRole("link", { name: new RegExp(name) }).click();
+  await expect(page.getByRole("heading", { name })).toBeVisible();
 
   await page.getByLabel("Preferred Position").selectOption("Lock");
   await page.getByLabel("Number 8").check();
@@ -60,11 +67,6 @@ test("Committee sets a Player's Positions and switches Playing off, and they mov
   await expect(page.getByRole("button", { name: "Switch Playing on" })).toBeVisible();
 
   await nav.getByRole("link", { name: "Players" }).click();
-  await expect(page.getByText("Not playing (1)")).toBeVisible();
-  await page.getByText("Not playing (1)").click();
-  await expect(page.getByRole("link", { name: /E2E Admin/ })).toBeVisible();
-
-  // Restore Playing for other specs that rely on this seeded Admin.
-  await page.getByRole("link", { name: /E2E Admin/ }).click();
-  await page.getByRole("button", { name: "Switch Playing on" }).click();
+  await page.getByText(/Not playing \(\d+\)/).click();
+  await expect(page.getByRole("link", { name: new RegExp(name) })).toBeVisible();
 });

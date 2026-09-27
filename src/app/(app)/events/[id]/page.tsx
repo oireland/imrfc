@@ -10,6 +10,8 @@ import { EventDuties, type DutyKit, type DutySlot, type HolderOption, type Sourc
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BackLink } from "@/components/back-link";
+import { AvailabilitySlot } from "@/components/availability-slot";
+import { ShareButton } from "@/components/share-button";
 import { formatWhen } from "@/lib/format-time";
 import { mapsSearchUrl } from "@/lib/maps";
 import { resolveEventChecklist } from "@/features/checklists";
@@ -303,20 +305,25 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
             </div>
           )}
 
-          {!eventDetails.cancelled && committee && (
-            <form id={`cancel-event-${id}`} action={cancel} className="mt-3 self-start">
-              <ConfirmSubmit
-                formId={`cancel-event-${id}`}
-                triggerLabel="Cancel event"
-                title="Cancel this event?"
-                description="Nobody will need to bring kit to it. It stays in the calendar, marked as cancelled."
-                confirmLabel="Cancel event"
-              />
-            </form>
-          )}
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <ShareButton title={eventDetails.title} />
+
+            {!eventDetails.cancelled && committee && (
+              <form id={`cancel-event-${id}`} action={cancel}>
+                <ConfirmSubmit
+                  formId={`cancel-event-${id}`}
+                  triggerLabel="Cancel event"
+                  title="Cancel this event?"
+                  description="Nobody will need to bring kit to it. It stays in the calendar, marked as cancelled."
+                  confirmLabel="Cancel event"
+                />
+              </form>
+            )}
+          </div>
         </CardContent>
       </Card>
 
+      <AvailabilitySlot eventId={id} viewer={user} />
       <ClashList clashes={clashes} />
       <EventDuties
         kit={dutyKit}

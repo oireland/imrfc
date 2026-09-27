@@ -29,6 +29,7 @@ Imperial Medicals RFC keeps forgetting kit and keeps asking the same questions o
 - Emails in the `ADMIN_EMAILS` env var become Admin automatically on first sign-in.
 - Profile: name and email (from the sign-in provider; name editable), plus a Preferred Position set during onboarding.
 - **Onboarding**: a new User (blank name, or no Preferred Position yet) sees a dismissible modal asking for their name and Preferred Position, with a short guide to what each tab does. "Not now" delays it for that browser tab; it reappears next time the app is opened in a new tab or session until completed.
+- Following a link while signed out (e.g. an Event shared in the group chat) goes through sign-in — Google or magic link — and lands back on that page. Only same-site paths are accepted. A new User who lands on "Waiting for approval" goes to Home once approved.
 - **Roles** are club-wide and cumulative:
 
 | Capability | Member | Committee | Admin |
@@ -40,6 +41,8 @@ Imperial Medicals RFC keeps forgetting kit and keeps asking the same questions o
 | Assign / unassign / Confirm any Duty | | ✓ | ✓ |
 | Set own Positions, switch own Playing off/on, report and update own Injuries | ✓ | ✓ | ✓ |
 | See Players, everyone's Injuries and duty record; report/update anyone's Injuries; Clear a Concussion | | ✓ | ✓ |
+| Reply with own Availability (Players only) | ✓ | ✓ | ✓ |
+| Reply for another Player, see Reasons, Announce, Nudge, copy chase message | | ✓ | ✓ |
 | Approve, block, unblock Users; change Roles | | | ✓ |
 
 ### Blocking
@@ -164,6 +167,50 @@ Follows the RFU HEADCASE *Graduated Return to Activity & Sport* (GRAS) programme
 - A Player sees and edits only their own Positions and Injuries; other Members see nothing of anyone else's.
 - Profile tells Players: "Injuries you record are seen by committee."
 
+## Availability
+
+Lets Players say whether they can make a Training or Match, and lets Committee see who's in, who's out and who to chase. A new `availability` feature that references Events by id and contributes a card to Event detail. Replaces the WhatsApp poll and the availability link from the team-selection handover.
+
+### Replies
+
+- Training and Match only (not Social).
+- Every Player can reply **Available** (with an optional note, e.g. "late") or **Not available** (a **Reason** is required). A Player who hasn't answered is **No reply** — shown everywhere, because that's who needs chasing.
+- A Player can change their reply as often as they like until the Event starts; after that it is read-only. A Cancelled Event keeps its replies but hides the buttons.
+- **Double-headers:** a reply to a Match counts for every Match that day (1st XV v Barts and 2nd XV v UCL are one answer).
+- **Committee can reply for a Player** (told in person, in the pub…), shown as "set by Tom". A Reason is still required for Not available. The Player's own next reply replaces it.
+- **Reasons** are seen only by Committee and the Player; everyone sees who is Available / Not available.
+- Users with Playing off see the card read-only and are left out of counts and lists. Their old replies are kept and come back if Playing is switched on again. Replies are never deleted.
+
+### Announce and Nudge
+
+- **Announce** (Committee), once per Event: emails every Player with No reply, with an optional **Reply By** date and time. The card then shows "Announced 12 Sep by Tom" and the Reply By; anyone replying after it is marked "late" (nothing is enforced). Announcing a Match covers every Match that day in one email.
+- **Nudge** (Committee): emails everyone with No reply, or the ones ticked. Asks to confirm ("Nudge 9 people?"), no limit; each Player shows "nudged 2h ago".
+- Emails link to the Event page; no one-click answering, no opt-out (switching Playing off stops them). Subject e.g. "Can you make it? Sat 4 Oct — 1st XV v Barts".
+- **Copy chase message**: WhatsApp text listing who hasn't replied, e.g.
+
+  ```
+  🏉 Sat 4 Oct — 1st XV v Barts
+  Still need a reply from: Sam Patel, Jo King, Tom Hale
+  Can you make it? https://app.imrfc.co.uk/events/…
+  ```
+
+### Sharing
+
+- **Share** button on every Event (native share sheet on phones, copy link otherwise).
+- Link previews (WhatsApp etc.) show only the Event's title and date — no Venue, no names — served without sign-in.
+
+### Where it shows
+
+- **Event detail:** an Availability card — your reply buttons, counts ("12 in · 3 out · 8 haven't said"), and Available / Not available / No reply tabs listing names (notes, "set by", "late", and Reasons for Committee). Committee also get Announce / Nudge / Copy chase message. Colours from the theme only: solid tick for Available, destructive red for Not available, dashed outline for No reply.
+- **Home:** a "Can you make it?" card for announced Events you haven't replied to; answer inline (Not available opens a sheet for the Reason). It disappears once you reply.
+- **Player page** (Committee): this season's record, one line each for Matches and Training ("Matches: available 9 · not 3 · no reply 2").
+
+### Not yet
+
+- Scheduled (automatic) Announce a set time before an Event.
+- Emails when an announced Event changes or is Cancelled.
+- When Injuries arrive, Committee see "Out · hamstring" beside a name in the lists; a reply is never set automatically from Fitness.
+
 ## Calendar Feed
 
 - Each User has a private ICS URL containing a Feed Token; they can reset it.
@@ -173,12 +220,12 @@ Follows the RFU HEADCASE *Graduated Return to Activity & Sport* (GRAS) programme
 ## Screens (mobile-first)
 
 - **Bottom tabs**: Members get Home · Kit · Profile; Committee and Admin get Home · Kit · Players · Admin · Profile. There is no Events tab: What's coming up on Home links to Events ("See all"), which keeps Past events and CSV import.
-- **Home**: my Duties (upcoming, soonest first), next few Events, Kit Units I Hold, and a card for each of my open Injuries ("Hamstring — out since 21 Sep · Update").
-- **Events**: Upcoming / Past lists → Event detail (details, maps link, Clashes, **Who's bringing what**, Duty Summary button). Who's bringing what has one row per Kit Unit on the Checklist with its Whereabouts, a Bring slot and a Take back slot (who, done or not, gold for yours, "Needs someone" within 48h) and its heads-ups. Tapping a slot opens a sheet with only the actions the viewer may take (claim, mark as done, hand on / give it to someone from a tap-a-name list, where it goes back to, take someone off).
+- **Home**: "Can you make it?" for announced Events I haven't replied to, my Duties (upcoming, soonest first), next few Events, Kit Units I Hold, and a card for each of my open Injuries ("Hamstring — out since 21 Sep · Update").
+- **Events**: Upcoming / Past lists → Event detail (details, maps link, Share, **Availability** for Training and Matches, Clashes, **Who's bringing what**, Duty Summary button). Who's bringing what has one row per Kit Unit on the Checklist with its Whereabouts, a Bring slot and a Take back slot (who, done or not, gold for yours, "Needs someone" within 48h) and its heads-ups. Tapping a slot opens a sheet with only the actions the viewer may take (claim, mark as done, hand on / give it to someone from a tap-a-name list, where it goes back to, take someone off).
 - **Kit**: grouped by Whereabouts → Kit Unit detail (Whereabouts, Condition Note, upcoming Duties, Movement Log, "I've got it", then "give it to someone" and "put it away in [Store]" below it).
 - **Admin** (Committee/Admin sections as permitted): Pending Users, Users & Roles, Stores, Kit Units, Event Types & Default Checklists, Series.
 - **Players** (Committee): a summary line ("3 out · 2 playing through it"), name search, an Injured-only filter, Players in position order (by Preferred Position) each with their Fitness, main Injury ("Out · ankle (+1)") and check-in flag, then a collapsed **Not playing** section. "Copy for physio" button.
-- **Player page** (Committee): name, Preferred and Other Positions, Playing switch; Fitness and open Injuries (with the Concussion timeline); Injury history; Duties — upcoming, this season's count (1 Sep–31 Aug: "12 done · 2 never confirmed", Cancelled Events left out) and the last 5 past Duties, each done or never confirmed. Actions: report an Injury, update status, edit Positions.
+- **Player page** (Committee): name, Preferred and Other Positions, Playing switch; Fitness and open Injuries (with the Concussion timeline); Injury history; Duties — upcoming, this season's count (1 Sep–31 Aug: "12 done · 2 never confirmed", Cancelled Events left out) and the last 5 past Duties, each done or never confirmed; this season's Availability record. Actions: report an Injury, update status, edit Positions.
 - **Profile**: name, a **Playing** section (Playing switch, Positions, my open Injuries and history with the same Concussion timeline, report an Injury, the privacy line), Calendar Feed URL (copy/reset), sign out.
 - PWA manifest + icons (installable via "Add to Home Screen" on iOS/Android) — nice-to-have, last slice.
 
@@ -211,7 +258,7 @@ Every signed-in screen is checked with axe in light, dark (device) and Dark chos
 | DB | Postgres — Neon (prod), Docker (dev), PGlite (tests) |
 | ORM | Drizzle |
 | Auth | Better Auth: Google, magic link, admin plugin (ban/unban) — see [ADR 0001](docs/adr/0001-better-auth-and-neon-over-supabase.md) |
-| Email | Pluggable mail sender: Mailpit (dev), console (tests), Resend over SMTP from `noreply@imrfc.co.uk` (prod) |
+| Email | Pluggable mail sender: Mailpit (dev), console (tests), SMTP from `noreply@imrfc.co.uk` (prod). One Announce reaches 50–100 Players, so the production sender's free tier must allow ~300 emails/day (Resend's free tier is believed to be 100/day — check; Brevo is ~300/day) |
 | UI | Tailwind, shadcn/ui |
 | Tests | Vitest (unit + integration on PGlite), Playwright (E2E) |
 | Hosting | Vercel (`lhr1`) at `app.imrfc.co.uk`, Neon Postgres (London); DNS at IONOS |
@@ -220,12 +267,11 @@ Every signed-in screen is checked with axe in light, dark (device) and Dark chos
 
 Code is organised **by feature**, not by layer. Each feature owns its domain rules in plain TypeScript, independent of Next.js, which makes them testable in isolation and lets new features attach without editing existing ones. See [ADR 0002](docs/adr/0002-feature-modules.md).
 
-Features: `users` (access, roles, blocking), `locations`, `kit` (units, whereabouts, moves), `events` (events, series, teams), `duties` (checklists, duties, confirm, clashes, summary), `calendar-feed`, `players` (Playing, Positions), `injuries` (Injuries, Fitness, Concussion timeline, Physio Summary).
+Features: `users` (access, roles, blocking), `locations`, `kit` (units, whereabouts, moves), `events` (events, series, teams), `duties` (checklists, duties, confirm, clashes, summary), `calendar-feed`, `players` (Playing, Positions), `availability` (replies, Announce, Nudge, chase message), `selection` (planned: selection board, team sheets), `injuries` (Injuries, Fitness, Concussion timeline, Physio Summary).
 
 ## Out of scope for v1
 
-- Availability / RSVPs (WhatsApp polls suffice for now).
-- Email / push reminders.
+- Duty reminders (email / push), scheduled Announce, and emails when an Event changes or is Cancelled.
 - Fixture import (BUCS/LUSL scraping or calendar import).
 - Itemised kit contents (e.g. counting the balls inside a ball bag). Quantity counts things that travel separately, not what's inside a container.
 - Team-filtered Calendar Feeds, team membership.
@@ -236,9 +282,9 @@ Features: `users` (access, roles, blocking), `locations`, `kit` (units, whereabo
 
 ## Extensions
 
-**Availability / RSVP** is the reference extension and the test of the architecture: it should be addable as a new `availability` feature that references Events by id and adds UI to the Event detail page, with no changes to the `events` feature's rules. Keep Event detail composed of slots that features can contribute to.
+**Availability** (see [Availability](#availability)) is the reference extension and the test of the architecture: a new `availability` feature that references Events by id and adds UI to the Event detail page, with no changes to the `events` feature's rules. Keep Event detail composed of slots that features can contribute to.
 
-The same pattern applies to a **teamsheet/availability** system being developed separately: it would join this app as new features and ask `injuries` for a Player's Fitness on a date (and could then narrow the Physio Summary to a match's squad).
+**Selection** comes next, bringing in the team-selection system another committee member built (selection board with two pitches coloured by reply, click a shirt to see who can play there, drag to pick; team sheets with Default fields and match-day roles, as PDF and Word). It joins as a `selection` feature that asks `availability`'s entry point for each Player's reply to a Match and `players` for Positions, and later `injuries` for Fitness (and could then narrow the Physio Summary to a match's squad). To be grilled before it is built — open questions include a shared board with live updates between admins and how PDFs are produced on free hosting.
 
 Other planned extensions: duty reminders (email/web push — iOS supports push for installed PWAs), fixture import, team-filtered feeds, itemised kit contents.
 

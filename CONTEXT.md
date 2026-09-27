@@ -66,6 +66,37 @@ The first date a concussed Player may play a match under the graduated return; t
 **Physio Summary**:
 Text listing the club's current and recently Cleared Injuries, formatted for sending to the physio before a Match.
 
+## Availability
+
+**Availability**:
+A Player's reply to whether they can make a Training or Match: Available, Not available, or No reply. For Matches, one reply covers every Match that day.
+_Avoid_: Vote, RSVP, poll, attendance
+
+**Available**:
+The Player can make the Event. May carry a note ("late").
+
+**Not available**:
+The Player can't make the Event. Always has a Reason.
+
+**No reply**:
+A Player who hasn't answered yet — the people who need chasing.
+_Avoid_: Pending (that is an Access State), unanswered
+
+**Reason**:
+Why a Player is Not available. Seen only by Committee and that Player.
+
+**Reply By**:
+An optional deadline set when Announcing. Replies after it are marked late; nothing is enforced.
+_Avoid_: Deadline, cut-off
+
+**Announce**:
+Committee emailing every Player with No reply to ask whether they can make an Event. Done once per Event (once per day for Matches).
+_Avoid_: Publish, invite
+
+**Nudge**:
+Committee emailing a reminder to Players with No reply — all of them or chosen ones.
+_Avoid_: Chase, ping, reminder (as the action's name)
+
 ## Places
 
 **Venue**:

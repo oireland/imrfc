@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { authClient } from "@/lib/auth-client";
 
-export function SignInForm() {
+export function SignInForm({ next }: { next: string }) {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [pending, setPending] = useState(false);
@@ -22,7 +22,7 @@ export function SignInForm() {
         type="button"
         variant="outline"
         className="w-full"
-        onClick={() => authClient.signIn.social({ provider: "google", callbackURL: "/" })}
+        onClick={() => authClient.signIn.social({ provider: "google", callbackURL: next })}
       >
         Continue with Google
       </Button>
@@ -38,7 +38,7 @@ export function SignInForm() {
         onSubmit={async (event) => {
           event.preventDefault();
           setPending(true);
-          await authClient.signIn.magicLink({ email, callbackURL: "/" });
+          await authClient.signIn.magicLink({ email, callbackURL: next });
           setSent(true);
         }}
       >

@@ -8,7 +8,12 @@ export function proxy(request: NextRequest) {
   if (PUBLIC_PATHS.some((path) => pathname.startsWith(path))) return NextResponse.next();
 
   const sessionCookie = getSessionCookie(request);
-  if (!sessionCookie) return NextResponse.redirect(new URL("/sign-in", request.url));
+  if (!sessionCookie) {
+    // Come back here after signing in (e.g. an Event shared in the group chat).
+    const signIn = new URL("/sign-in", request.url);
+    if (pathname !== "/") signIn.searchParams.set("next", pathname + request.nextUrl.search);
+    return NextResponse.redirect(signIn);
+  }
 
   return NextResponse.next();
 }

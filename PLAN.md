@@ -25,9 +25,13 @@ Vertical slices, built in order, each test-first (red → green → refactor). A
 - [x] **18b. Onboarding** — a dismissible modal for a new User (blank name or no Preferred Position): name and Preferred Position (from the Players list, ahead of slice 20), a "what's in each tab" guide. "Not now" delays it for this browser tab; it reappears in a new tab or session until completed.
 - [x] **19. Tabs** — drop the Events tab; "See all" from What's coming up on Home to Events; Members get Home · Kit · Profile, Committee add Players (placeholder until 20) and Admin.
 - [x] **20. Players & Positions** — `players` feature: Playing (default on; switched off by the User or Committee), Preferred and Other Positions; Playing section in Profile; Players tab (position order, name search, Not playing section); Player page with Positions and the duty record (upcoming, season count, last 5). Clubhouse mock-up of the list and Player page first.
+- [x] **20a. Availability replies** — `availability` feature: Available (optional note) / Not available (Reason required) / No reply for Training and Matches; one reply covers every Match that day; change until start; Committee reply for a Player ("set by"); Reasons for Committee and the Player only; Availability card on Event detail (counts, three tabs, theme colours); Share button, sign-in returns to the page, title-and-date link preview.
+- [ ] **20b. Announce & Nudge** — Announce once per Event (whole day for Matches) with optional Reply By and "late"; Nudge all with No reply or chosen ones, "nudged 2h ago"; emails linking to the Event; Copy chase message.
+- [ ] **20c. Availability on Home & Player page** — "Can you make it?" card on Home for announced Events with no reply, answered inline; season Availability record on the Player page.
+- [ ] **20d. Selection** — grill first (selection board and team sheets from the handover), then slice.
 - [ ] **21. Injuries** — `injuries` feature: report/update from Profile or the Player page, Injury Status history with who/when, Logged by mistake, Fitness (worst open Injury) on the list with the summary line and Injured-only filter, check-in flags, Home card for my open Injuries, privacy line.
 - [ ] **22. Concussion timeline** — Concussion flag, Symptom-free Date, Earliest contact training / Earliest Match, GRAS stages, NHS 111 / GP prompts, Committee-only Clear.
 - [ ] **23. Physio Summary** — "Copy for physio" on the Players page and on Matches.
 - [ ] **24. PWA** — manifest, icons, iOS home-screen meta.
 
-After v1: deploy to Vercel + Neon, choose production mail sender, then Availability/RSVP as the first extension.
+After v1: deploy to Vercel + Neon, choose production mail sender (it must allow ~300 emails/day for Announce). Follow-ups: scheduled Announce; emails when an announced Event changes or is Cancelled.
