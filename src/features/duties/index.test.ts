@@ -3,7 +3,8 @@ import { eq } from "drizzle-orm";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { store } from "@/features/stores";
-import { createKitUnit, getPortions, listMovementLog, recordMove } from "@/features/kit";
+import { createKitUnit, getPortions, listMovementLog, raiseQuantity, recordMove } from "@/features/kit";
+import { addToChecklist, setChecklistItemCount } from "@/features/checklists";
 import { cancelEvent, createEvent } from "@/features/events";
 import { user } from "@/features/users";
 import {
@@ -219,6 +220,64 @@ describe("Duties", () => {
     });
   });
 
+  describe("Confirm counts", () => {
+    async function setupCounted() {
+      const db = await createTestDb();
+      await migrate(db);
+      await db.insert(user).values({ id: "tom", name: "tom", email: "tom@x.org", accessState: "approved" });
+      const [shed] = await db.insert(store).values({ id: "shed", name: "Shed", address: "x" }).returning();
+      const made = await createKitUnit(db, { name: "Shields", homeId: shed.id });
+      if (!made.ok) throw new Error(made.error);
+      await raiseQuantity(db, made.kitUnit.id, "tom", 7); // Quantity now 8, all at the Shed
+      const created = await createEvent(db, {
+        title: "Match",
+        eventType: "training",
+        start: new Date(Date.now() + 3600_000),
+        end: new Date(Date.now() + 7200_000),
+        venue: "Harlington",
+      });
+      if (!created.ok) throw new Error(created.error);
+      await addToChecklist(db, { scope: "event", scopeId: created.event.id }, made.kitUnit.id);
+      await setChecklistItemCount(db, { scope: "event", scopeId: created.event.id }, made.kitUnit.id, 4);
+      const duties = await ensureDuties(db, created.event.id, [made.kitUnit.id]);
+      return {
+        db,
+        shed,
+        kit: made.kitUnit,
+        event: created.event,
+        to: duties.find((d) => d.direction === "to")!,
+        from: duties.find((d) => d.direction === "from")!,
+      };
+    }
+
+    it("moves only the Checklist line's count to the Duty's User on a Confirmed To Duty", async () => {
+      const { db, kit, shed, to } = await setupCounted();
+      await claimDuty(db, to.id, "tom");
+
+      expect(await confirmDuty(db, to.id, { id: "tom", role: "member" })).toEqual({ ok: true });
+
+      const portions = await getPortions(db, kit.id);
+      expect(portions).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ whereaboutsType: "store", storeId: shed.id, count: 4 }),
+          expect.objectContaining({ whereaboutsType: "holder", holderId: "tom", count: 4 }),
+        ]),
+      );
+    });
+
+    it("moves only the count back from the Duty's User on a Confirmed From Duty", async () => {
+      const { db, kit, shed, to, from } = await setupCounted();
+      await claimDuty(db, to.id, "tom");
+      await confirmDuty(db, to.id, { id: "tom", role: "member" });
+
+      expect(await confirmDuty(db, from.id, { id: "tom", role: "member" })).toEqual({ ok: true });
+
+      expect(await getPortions(db, kit.id)).toEqual([
+        expect.objectContaining({ whereaboutsType: "store", storeId: shed.id, count: 8 }),
+      ]);
+    });
+  });
+
   it("voiding an Event's Duties stops them being Confirmed", async () => {
     const { db, kit, to } = await setup();
     await claimDuty(db, to.id, "tom");
@@ -287,6 +346,29 @@ describe("Duties", () => {
       await markUnconfirmed(db);
 
       expect(await whereaboutsOf(db, kit.id)).toMatchObject({ whereaboutsType: "holder", holderId: "sam" });
+    });
+
+    it("marks only the Checklist line's count Unconfirmed, when the Kit Unit is counted", async () => {
+      const { db, shed } = await setup();
+      const made = await createKitUnit(db, { name: "Shields", homeId: shed.id });
+      if (!made.ok) throw new Error(made.error);
+      await raiseQuantity(db, made.kitUnit.id, "tom", 7); // Quantity 8, all at the Shed
+      const ev = await pastEvent(db, shed.id, 1);
+      await addToChecklist(db, { scope: "event", scopeId: ev.id }, made.kitUnit.id);
+      await setChecklistItemCount(db, { scope: "event", scopeId: ev.id }, made.kitUnit.id, 4);
+      const [to] = (await ensureDuties(db, ev.id, [made.kitUnit.id])).filter((d) => d.direction === "to");
+      await claimDuty(db, to.id, "tom");
+      await confirmDuty(db, to.id, { id: "tom", role: "member" });
+
+      await markUnconfirmed(db);
+
+      const portions = await getPortions(db, made.kitUnit.id);
+      expect(portions).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ whereaboutsType: "store", storeId: shed.id, count: 4 }),
+          expect.objectContaining({ whereaboutsType: "unconfirmed", lastSeenEventId: ev.id, count: 4 }),
+        ]),
+      );
     });
 
     it("is resolved by a later Move", async () => {

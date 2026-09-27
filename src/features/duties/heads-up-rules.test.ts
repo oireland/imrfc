@@ -11,7 +11,8 @@ const kit = (over: Partial<PlanKit> = {}): PlanKit => ({
   id: "shields",
   name: "Tackle Shields",
   status: "active",
-  holderId: null,
+  quantity: 1,
+  portions: [],
   ...over,
 });
 
@@ -20,7 +21,7 @@ const event = (over: Partial<PlanEvent> = {}): PlanEvent => ({
   title: "Alumni Day",
   start: at("2026-10-20T13:00:00Z"),
   end: at("2026-10-20T17:00:00Z"),
-  kitUnitIds: ["shields"],
+  items: [{ kitUnitId: "shields", count: 1 }],
   duties: [
     { kitUnitId: "shields", direction: "to", userId: "tom" },
     { kitUnitId: "shields", direction: "from", userId: "tom" },
@@ -78,7 +79,8 @@ describe("findHeadsUps", () => {
   });
 
   it("says the Holder needs to pass the kit on when someone else is bringing it to the next Event", () => {
-    expect(findHeadsUps({ now, kit: [kit({ holderId: "sam" })], events: [event()], personName })).toEqual([
+    const shields = kit({ portions: [{ storeId: null, holderId: "sam", count: 1 }] });
+    expect(findHeadsUps({ now, kit: [shields], events: [event()], personName })).toEqual([
       {
         kind: "pass_on",
         kitUnitId: "shields",
@@ -90,7 +92,45 @@ describe("findHeadsUps", () => {
 
   it("doesn't ask the Holder to pass kit on when nobody is bringing it yet", () => {
     const unfilled = event({ duties: [] });
+    const shields = kit({ portions: [{ storeId: null, holderId: "sam", count: 1 }] });
 
-    expect(messages([kit({ holderId: "sam" })], [unfilled])).toEqual([]);
+    expect(messages([shields], [unfilled])).toEqual([]);
+  });
+
+  describe("Quantity", () => {
+    it("says nothing when the bringer already holds enough", () => {
+      const shields = kit({ quantity: 8, portions: [{ storeId: null, holderId: "tom", count: 4 }] });
+      const soon = event({ items: [{ kitUnitId: "shields", count: 4 }] });
+
+      expect(messages([shields], [soon])).toEqual([]);
+    });
+
+    it("says nothing when Stores plus what the bringer holds is enough", () => {
+      const shields = kit({
+        quantity: 8,
+        portions: [
+          { storeId: "shed", holderId: null, count: 4 },
+          { storeId: null, holderId: "tom", count: 2 },
+        ],
+      });
+      const soon = event({ items: [{ kitUnitId: "shields", count: 6 }] });
+
+      expect(messages([shields], [soon])).toEqual([]);
+    });
+
+    it("says the Holder needs to pass some on when the bringer can't get enough from Stores and their own", () => {
+      const shields = kit({
+        quantity: 8,
+        portions: [
+          { storeId: null, holderId: "tom", count: 2 },
+          { storeId: null, holderId: "sam", count: 6 },
+        ],
+      });
+      const soon = event({ items: [{ kitUnitId: "shields", count: 6 }] });
+
+      expect(messages([shields], [soon])).toEqual([
+        "Sam Okafor needs to pass Tackle Shields to Tom Reed before Alumni Day.",
+      ]);
+    });
   });
 });

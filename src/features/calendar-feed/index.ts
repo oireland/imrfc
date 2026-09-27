@@ -48,7 +48,11 @@ export async function renderFeed(db: Db, token: string, now: Date = new Date()):
     listKitUnits(db, { includeRetired: true }),
     listUpcomingDutiesForUser(db, owner.id),
   ]);
-  const kitName = new Map(kit.map((k) => [k.id, k.name]));
+  const kitById = new Map(kit.map((k) => [k.id, k]));
+  const kitLabel = (kitUnitId: string, count: number) => {
+    const unit = kitById.get(kitUnitId);
+    return unit && unit.quantity > 1 ? `${unit.name} ×${count}` : (unit?.name ?? "Kit");
+  };
 
   const events: FeedEvent[] = [...past, ...upcoming].map((e) => ({
     id: e.id,
@@ -59,10 +63,10 @@ export async function renderFeed(db: Db, token: string, now: Date = new Date()):
     cancelled: e.cancelled,
     description: duties
       .filter((d) => d.event.id === e.id)
-      .map(({ duty }) =>
+      .map(({ duty, count }) =>
         duty.direction === "to"
-          ? `You're bringing: ${kitName.get(duty.kitUnitId)}`
-          : `You're taking back: ${kitName.get(duty.kitUnitId)}`,
+          ? `You're bringing: ${kitLabel(duty.kitUnitId, count)}`
+          : `You're taking back: ${kitLabel(duty.kitUnitId, count)}`,
       )
       .join("\n"),
   }));

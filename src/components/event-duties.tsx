@@ -25,6 +25,9 @@ export type DutySlot = {
 export type DutyKit = {
   kitUnitId: string;
   kitName: string;
+  /** The Checklist line's effective count, and the Kit Unit's Quantity (shown as "×N" only when > 1). */
+  count: number;
+  quantity: number;
   /** Where it is now, e.g. "In Reynold's Locker". */
   now: string;
   /** Where the From Duty ends, e.g. "Reynold's Locker" or "stays with Priya". */
@@ -115,7 +118,10 @@ export function EventDuties({
           {kit.map((item) => (
             <li key={item.kitUnitId} className="flex flex-col gap-3 px-4 py-4">
               <div className="flex items-baseline justify-between gap-3">
-                <span className="font-heading text-[22px] leading-none">{item.kitName}</span>
+                <span className="font-heading text-[22px] leading-none">
+                  {item.kitName}
+                  {item.quantity > 1 && ` ×${item.count}`}
+                </span>
                 <span className="truncate text-xs text-muted-foreground">{item.now}</span>
               </div>
               <div className="grid grid-cols-2 gap-2">

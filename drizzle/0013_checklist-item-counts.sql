@@ -1,0 +1,1 @@
+ALTER TABLE "checklist_item" ADD COLUMN "count" integer;

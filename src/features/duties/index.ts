@@ -1,9 +1,18 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { resolveEventChecklist } from "@/features/checklists";
-import { listEvents } from "@/features/events";
-import { getKitUnit, getPortions, listKitUnits, recordMove, setUnconfirmed, singlePlace } from "@/features/kit";
+import { getEvent, listEvents } from "@/features/events";
+import {
+  getKitUnit,
+  getPortions,
+  listKitUnits,
+  recordMove,
+  setUnconfirmed,
+  singlePlace,
+  type Place,
+} from "@/features/kit";
 import { displayName, isCommitteeOrAbove, listApprovedUsers, type Role } from "@/features/users";
 import { findClashes, type Clash } from "./clashes-rules";
+import { defaultConfirmSource } from "./confirm-source-rules";
 import { dutyActions, type DutyAction } from "./duty-actions-rules";
 import { findHeadsUps, type HeadsUp } from "./heads-up-rules";
 import type { PlanEvent, PlanKit } from "./plan";
@@ -126,8 +135,36 @@ export async function setDestination(db: Db, dutyId: string, destination: DutyDe
   return { ok: true };
 }
 
-/** The Duty's User, or any Committee member, Confirms a Duty: this records the Move. */
-export async function confirmDuty(db: Db, dutyId: string, actor: { id: string; role: Role }): Promise<Result> {
+/** The Checklist line's effective count for this Duty's Event and Kit Unit, capped at `fallbackQuantity`. */
+async function checklistCountFor(
+  db: Db,
+  dutyRow: { eventId: string; kitUnitId: string },
+  fallbackQuantity: number,
+): Promise<number> {
+  const event = await getEvent(db, dutyRow.eventId);
+  if (!event) return fallbackQuantity;
+  const resolved = await resolveEventChecklist(db, {
+    eventId: dutyRow.eventId,
+    seriesId: event.seriesId,
+    eventType: event.eventType,
+  });
+  return resolved.items.find((i) => i.kitUnitId === dutyRow.kitUnitId)?.count ?? fallbackQuantity;
+}
+
+/**
+ * The Duty's User, or any Committee member, Confirms a Duty: this records a Move of
+ * the Checklist line's effective count (not necessarily the Kit Unit's whole
+ * Quantity). A To Duty's count comes from a source Place, defaulted (the Duty's own
+ * User's Portion, then Home, then another Store, then another Holder) unless one is
+ * given — slice 18 lets the confirm sheet ask instead. A From Duty's count always
+ * comes from the Duty's own User.
+ */
+export async function confirmDuty(
+  db: Db,
+  dutyId: string,
+  actor: { id: string; role: Role },
+  options?: { from?: Place },
+): Promise<Result> {
   const row = await getDuty(db, dutyId);
   if (!row) return { ok: false, error: "That duty no longer exists." };
   if (row.voidedAt) return { ok: false, error: "That event was cancelled, so there's nothing to do." };
@@ -150,15 +187,31 @@ export async function confirmDuty(db: Db, dutyId: string, actor: { id: string; r
           ? ({ type: "store", storeId: row.destinationStoreId } as const)
           : ({ type: "store", storeId: kit.homeId } as const);
 
+  const count = await checklistCountFor(db, row, kit.quantity);
+
   await db.update(duty).set({ confirmedAt: new Date() }).where(eq(duty.id, dutyId));
-  await recordMove(db, row.kitUnitId, actor.id, target, "duty");
-  return { ok: true };
+
+  if (count >= kit.quantity) {
+    // The whole Quantity is asked for: consolidate every Portion into the target,
+    // regardless of where it currently sits — as Confirming has always done.
+    await recordMove(db, row.kitUnitId, actor.id, target, "duty");
+    return { ok: true };
+  }
+
+  const portions = await getPortions(db, row.kitUnitId);
+  const source: Place =
+    row.direction === "to"
+      ? (options?.from ??
+        defaultConfirmSource(portions, { dutyUserId: row.userId, homeStoreId: kit.homeId }) ??
+        singlePlace(portions) ?? { type: "store", storeId: kit.homeId })
+      : { type: "holder", holderId: row.userId };
+  return recordMove(db, row.kitUnitId, actor.id, target, "duty", { count, from: source });
 }
 
 /** Cancelling an Event voids all its Duties. */
 export type DutyRequest =
   | { action: "claim" }
-  | { action: "confirm" }
+  | { action: "confirm"; from?: Place }
   | { action: "handOn"; userId: string }
   | { action: "assign"; userId: string }
   | { action: "unassign" }
@@ -182,7 +235,7 @@ export async function actOnDuty(
     case "claim":
       return claimDuty(db, dutyId, viewer.id);
     case "confirm": {
-      const result = await confirmDuty(db, dutyId, viewer);
+      const result = await confirmDuty(db, dutyId, viewer, { from: request.from });
       if (result.ok) await markUnconfirmed(db);
       return result;
     }
@@ -218,9 +271,18 @@ export async function markUnconfirmed(db: Db) {
     if (!to?.confirmedAt || !to.userId) continue;
     const kit = await getKitUnit(db, from.kitUnitId);
     if (!kit) continue;
-    const place = singlePlace(await getPortions(db, kit.id));
-    if (place?.type === "holder" && place.holderId === to.userId) {
-      await setUnconfirmed(db, kit.id, from.eventId);
+    const count = await checklistCountFor(db, from, kit.quantity);
+    const portions = await getPortions(db, kit.id);
+    if (count >= kit.quantity) {
+      const place = singlePlace(portions);
+      if (place?.type === "holder" && place.holderId === to.userId) {
+        await setUnconfirmed(db, kit.id, from.eventId);
+      }
+      continue;
+    }
+    const holderPortion = portions.find((p) => p.whereaboutsType === "holder" && p.holderId === to.userId);
+    if (holderPortion && holderPortion.count > 0) {
+      await setUnconfirmed(db, kit.id, from.eventId, { type: "holder", holderId: to.userId }, count);
     }
   }
 }
@@ -253,9 +315,18 @@ export async function listUpcomingDutiesForUser(db: Db, userId: string) {
         isNull(duty.voidedAt),
       ),
     );
-  return events.flatMap((event) =>
-    rows.filter((r) => r.eventId === event.id).map((r) => ({ duty: toDuty(r), event })),
+  const results = await Promise.all(
+    events.flatMap((event) =>
+      rows
+        .filter((r) => r.eventId === event.id)
+        .map(async (r) => ({
+          duty: toDuty(r),
+          event,
+          count: await checklistCountFor(db, r, (await getKitUnit(db, r.kitUnitId))?.quantity ?? 1),
+        })),
+    ),
   );
+  return results;
 }
 
 /** The kit plan for every upcoming, uncancelled Event. Read-only: it never creates Duties. */
@@ -283,8 +354,7 @@ async function loadPlan(db: Db): Promise<{ kit: PlanKit[]; events: PlanEvent[] }
       title: e.title,
       start: e.start,
       end: e.end,
-      kitUnitIds: (await resolveEventChecklist(db, { eventId: e.id, seriesId: e.seriesId, eventType: e.eventType }))
-        .kitUnitIds,
+      items: (await resolveEventChecklist(db, { eventId: e.id, seriesId: e.seriesId, eventType: e.eventType })).items,
       duties: dutyRows.filter((d) => d.eventId === e.id),
     })),
   );
@@ -295,15 +365,15 @@ async function loadPlan(db: Db): Promise<{ kit: PlanKit[]; events: PlanEvent[] }
     }),
   );
   return {
-    kit: kit.map((k) => {
-      const place = singlePlace(portionsByUnit.get(k.id) ?? []);
-      return {
-        id: k.id,
-        name: k.name,
-        status: k.status,
-        holderId: place?.type === "holder" ? place.holderId : null,
-      };
-    }),
+    kit: kit.map((k) => ({
+      id: k.id,
+      name: k.name,
+      status: k.status,
+      quantity: k.quantity,
+      portions: (portionsByUnit.get(k.id) ?? [])
+        .filter((p) => p.whereaboutsType !== "unconfirmed")
+        .map((p) => ({ storeId: p.storeId, holderId: p.holderId, count: p.count })),
+    })),
     events: planEvents,
   };
 }

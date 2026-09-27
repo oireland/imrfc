@@ -1,4 +1,4 @@
-import { pgTable, text, unique } from "drizzle-orm/pg-core";
+import { integer, pgTable, text, unique } from "drizzle-orm/pg-core";
 import { kitUnit } from "@/features/kit";
 
 // A row here means that level has its own Checklist (possibly empty). Scope ids
@@ -24,6 +24,9 @@ export const checklistItem = pgTable(
     kitUnitId: text("kit_unit_id")
       .notNull()
       .references(() => kitUnit.id),
+    // How many of the Kit Unit this line asks for: null means "all of them", so it
+    // follows the Kit Unit's Quantity; a number is capped at the Quantity when resolved.
+    count: integer("count"),
   },
   (t) => [unique().on(t.checklistId, t.kitUnitId)],
 );

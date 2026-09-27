@@ -89,9 +89,10 @@ export default async function Home() {
           </p>
         ) : (
           <ul className="grid grid-cols-2 gap-2.5">
-            {duties.map(({ duty, event }, i) => {
+            {duties.map(({ duty, event, count }, i) => {
               const next = i === 0;
               const when = duty.direction === "to" ? event.start : event.end;
+              const unit = allKit.find((k) => k.id === duty.kitUnitId);
               return (
                 <li key={duty.id}>
                   <Link
@@ -112,7 +113,10 @@ export default async function Home() {
                       )}
                     </span>
                     <span>
-                      <span className="block font-heading text-[21px] leading-none">{kitNames.get(duty.kitUnitId) ?? "Kit Unit"}</span>
+                      <span className="block font-heading text-[21px] leading-none">
+                        {kitNames.get(duty.kitUnitId) ?? "Kit Unit"}
+                        {unit && unit.quantity > 1 && ` ×${count}`}
+                      </span>
                       <span className={cn("mt-1 block truncate text-xs", next ? "text-lead-foreground/70" : "text-muted-foreground")}>
                         {relativeDay(when, comingUp.today)} · {londonTime(when)}
                       </span>

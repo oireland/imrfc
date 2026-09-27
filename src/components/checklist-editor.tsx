@@ -1,5 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
+import { ChecklistCountSelect } from "@/components/checklist-count-select";
 import { SubmitButton } from "@/components/submit-button";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -8,6 +9,7 @@ import {
   clearChecklist,
   getChecklist,
   removeFromChecklist,
+  setChecklistItemCount,
   type ChecklistScope,
 } from "@/features/checklists";
 import { listKitUnits } from "@/features/kit";
@@ -27,6 +29,7 @@ export async function ChecklistEditor({
   const [own, units] = await Promise.all([getChecklist(db, target), listKitUnits(db)]);
   const active = units.filter((u) => u.status === "active");
   const names = new Map(units.map((u) => [u.id, u.name]));
+  const quantities = new Map(units.map((u) => [u.id, u.quantity]));
 
   async function add(formData: FormData) {
     "use server";
@@ -40,6 +43,14 @@ export async function ChecklistEditor({
     const user = await requireApprovedUser();
     if (!isCommitteeOrAbove(user.role)) return;
     await removeFromChecklist(db, target, String(formData.get("kitUnitId")));
+    revalidatePath(path);
+  }
+  async function setCount(formData: FormData) {
+    "use server";
+    const user = await requireApprovedUser();
+    if (!isCommitteeOrAbove(user.role)) return;
+    const raw = String(formData.get("count"));
+    await setChecklistItemCount(db, target, String(formData.get("kitUnitId")), raw === "all" ? null : Number(raw));
     revalidatePath(path);
   }
   async function clear() {
@@ -59,17 +70,27 @@ export async function ChecklistEditor({
       ) : (
         <>
           <ul className="flex flex-col divide-y divide-border">
-            {own.map((id) => (
-              <li key={id} className="flex items-center justify-between gap-2 py-1.5 first:pt-0">
-                {names.get(id) ?? id}
-                <form action={remove}>
-                  <input type="hidden" name="kitUnitId" value={id} />
-                  <SubmitButton variant="link" size="sm" className="text-destructive">
-                    Remove
-                  </SubmitButton>
-                </form>
-              </li>
-            ))}
+            {own.map((item) => {
+              const quantity = quantities.get(item.kitUnitId) ?? 1;
+              return (
+                <li key={item.kitUnitId} className="flex items-center justify-between gap-2 py-1.5 first:pt-0">
+                  {names.get(item.kitUnitId) ?? item.kitUnitId}
+                  <div className="flex items-center gap-2">
+                    {quantity > 1 && (
+                      <form action={setCount}>
+                        <ChecklistCountSelect kitUnitId={item.kitUnitId} quantity={quantity} count={item.count} />
+                      </form>
+                    )}
+                    <form action={remove}>
+                      <input type="hidden" name="kitUnitId" value={item.kitUnitId} />
+                      <SubmitButton variant="link" size="sm" className="text-destructive">
+                        Remove
+                      </SubmitButton>
+                    </form>
+                  </div>
+                </li>
+              );
+            })}
             {own.length === 0 && <li className="py-1.5 text-muted-foreground">Nothing on the list yet.</li>}
           </ul>
           <form action={clear}>
@@ -85,7 +106,7 @@ export async function ChecklistEditor({
           <NativeSelect id={`add-kit-unit-${target.scopeId}`} name="kitUnitId" required>
             <NativeSelectOption value="">Choose kit…</NativeSelectOption>
             {active
-              .filter((u) => !own?.includes(u.id))
+              .filter((u) => !own?.some((i) => i.kitUnitId === u.id))
               .map((u) => (
                 <NativeSelectOption key={u.id} value={u.id}>
                   {u.name}

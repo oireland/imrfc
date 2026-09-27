@@ -92,8 +92,10 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     listKitUnits(db),
   ]);
   const kitNames = new Map(kitUnits.map((u) => [u.id, u.name]));
+  const kitUnitIds = resolved.items.map((i) => i.kitUnitId);
+  const countByUnit = new Map(resolved.items.map((i) => [i.kitUnitId, i.count]));
   const [duties, people, stores] = await Promise.all([
-    ensureDuties(db, id, resolved.kitUnitIds),
+    ensureDuties(db, id, kitUnitIds),
     listApprovedUsers(db),
     listStores(db),
   ]);
@@ -108,7 +110,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     duties.find((d) => d.kitUnitId === kid && d.direction === direction)!;
 
   const kitById = new Map(kitUnits.map((u: KitUnit) => [u.id, u]));
-  const portions = await listPortionsFor(db, resolved.kitUnitIds);
+  const portions = await listPortionsFor(db, kitUnitIds);
   const portionsByUnit = new Map<string, Portion[]>();
   for (const p of portions) portionsByUnit.set(p.kitUnitId, [...(portionsByUnit.get(p.kitUnitId) ?? []), p]);
   const eventTitleFor = async (eventId: string) => (await getEvent(db, eventId))?.title ?? "an event";
@@ -139,13 +141,15 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     destination:
       d.destination.type === "store" && d.destination.storeId !== homeId ? `store:${d.destination.storeId}` : d.destination.type === "holder" ? "holder" : "home",
   });
-  const dutyKit: DutyKit[] = resolved.kitUnitIds.map((kid) => {
+  const dutyKit: DutyKit[] = kitUnitIds.map((kid) => {
     const unit = kitById.get(kid);
     const homeId = unit?.homeId ?? null;
     const from = dutyFor(kid, "from");
     return {
       kitUnitId: kid,
       kitName: kitNames.get(kid) ?? "Kit",
+      count: countByUnit.get(kid) ?? 1,
+      quantity: unit?.quantity ?? 1,
       now: !unit ? "" : whereaboutsNow(kid),
       goesBackTo:
         from.destination.type === "store"
@@ -167,8 +171,10 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     title: eventDetails.title,
     start: eventDetails.start,
     venueName: eventDetails.venue,
-    items: resolved.kitUnitIds.map((kid) => ({
+    items: kitUnitIds.map((kid) => ({
       kitName: kitNames.get(kid) ?? kid,
+      count: countByUnit.get(kid) ?? 1,
+      quantity: kitById.get(kid)?.quantity ?? 1,
       to: dutyFor(kid, "to").userId ? (personName.get(dutyFor(kid, "to").userId!) ?? null) : null,
       from: dutyFor(kid, "from").userId ? (personName.get(dutyFor(kid, "from").userId!) ?? null) : null,
     })),

@@ -8,7 +8,8 @@ const kit = (over: Partial<PlanKit> = {}): PlanKit => ({
   id: "balls",
   name: "Balls",
   status: "active",
-  holderId: null,
+  quantity: 1,
+  portions: [],
   ...over,
 });
 
@@ -17,7 +18,7 @@ const event = (over: Partial<PlanEvent> = {}): PlanEvent => ({
   title: "Training",
   start: at("2026-10-20T19:00:00Z"),
   end: at("2026-10-20T21:00:00Z"),
-  kitUnitIds: ["balls"],
+  items: [{ kitUnitId: "balls", count: 1 }],
   duties: [
     { kitUnitId: "balls", direction: "to", userId: "tom" },
     { kitUnitId: "balls", direction: "from", userId: "tom" },
@@ -88,7 +89,90 @@ describe("findClashes", () => {
     });
 
     expect(
-      findClashes({ kit: [kit({ holderId: "sam", status: "missing" })], events: [soonAndUnfilled] }),
+      findClashes({ kit: [kit({ status: "missing" })], events: [soonAndUnfilled] }),
     ).toEqual([]);
+  });
+
+  describe("Quantity", () => {
+    const shields = kit({ id: "shields", name: "tackle shields", quantity: 8 });
+
+    it("is fine when overlapping Events between them ask for no more than the Quantity", () => {
+      const a = event({ id: "a", title: "1st XV v Kings", items: [{ kitUnitId: "shields", count: 4 }] });
+      const b = event({
+        id: "b",
+        title: "2nd XV v UCL",
+        start: at("2026-10-20T20:00:00Z"),
+        end: at("2026-10-20T22:00:00Z"),
+        items: [{ kitUnitId: "shields", count: 4 }],
+      });
+
+      expect(findClashes({ kit: [shields], events: [a, b] })).toEqual([]);
+    });
+
+    it("clashes when overlapping Events between them ask for more than the Quantity", () => {
+      const a = event({ id: "a", title: "1st XV v Kings", items: [{ kitUnitId: "shields", count: 6 }] });
+      const b = event({
+        id: "b",
+        title: "2nd XV v UCL",
+        start: at("2026-10-20T20:00:00Z"),
+        end: at("2026-10-20T22:00:00Z"),
+        items: [{ kitUnitId: "shields", count: 4 }],
+      });
+
+      expect(findClashes({ kit: [shields], events: [a, b] })).toEqual([
+        {
+          kind: "overlap",
+          kitUnitId: "shields",
+          eventIds: ["a", "b"],
+          message: "1st XV v Kings and 2nd XV v UCL need 10 tackle shields between them, but the club only has 8.",
+        },
+      ]);
+    });
+
+    it("sums three overlapping Events, not just adjacent pairs", () => {
+      const a = event({ id: "a", title: "A", items: [{ kitUnitId: "shields", count: 3 }] });
+      const b = event({
+        id: "b",
+        title: "B",
+        start: at("2026-10-20T19:30:00Z"),
+        end: at("2026-10-20T20:30:00Z"),
+        items: [{ kitUnitId: "shields", count: 3 }],
+      });
+      const c = event({
+        id: "c",
+        title: "C",
+        start: at("2026-10-20T20:15:00Z"),
+        end: at("2026-10-20T21:15:00Z"),
+        items: [{ kitUnitId: "shields", count: 3 }],
+      });
+
+      expect(findClashes({ kit: [shields], events: [a, b, c] })).toEqual([
+        expect.objectContaining({ kind: "overlap", eventIds: ["a", "b", "c"] }),
+      ]);
+    });
+
+    it("clashes back-to-back Events only when their counts add up to more than the Quantity", () => {
+      const noFrom = { direction: "from" as const, kitUnitId: "shields", userId: null };
+      const a = event({
+        id: "a",
+        title: "A",
+        items: [{ kitUnitId: "shields", count: 4 }],
+        duties: [{ kitUnitId: "shields", direction: "to", userId: "tom" }, noFrom],
+      });
+      const fine = event({
+        id: "b",
+        title: "B",
+        start: at("2026-10-20T21:30:00Z"),
+        end: at("2026-10-20T23:00:00Z"),
+        items: [{ kitUnitId: "shields", count: 4 }],
+      });
+
+      expect(findClashes({ kit: [shields], events: [a, fine] })).toEqual([]);
+
+      const tooMany = { ...fine, items: [{ kitUnitId: "shields", count: 6 }] };
+      expect(findClashes({ kit: [shields], events: [a, tooMany] })).toEqual([
+        expect.objectContaining({ kind: "back_to_back", eventIds: ["a", "b"] }),
+      ]);
+    });
   });
 });

@@ -182,13 +182,14 @@ function portionCountAt(portions: Portion[], place: Place): number {
  * The Kit Unit's Whereabouts is unknown: the count at the given source Place (or the
  * whole Quantity, with no `from`) was last seen at the given Event. No Move is recorded.
  */
-export async function setUnconfirmed(db: Db, kitUnitId: string, lastSeenEventId: string, from?: Place) {
+export async function setUnconfirmed(db: Db, kitUnitId: string, lastSeenEventId: string, from?: Place, count?: number) {
   const portions = await loadPortions(db, kitUnitId);
   const target: Place = { type: "unconfirmed", lastSeenEventId };
   let nextPortions: Portion[];
   if (from) {
-    const count = portionCountAt(portions, from);
-    const moved = movePortion(portions, { count, from, to: target });
+    const available = portionCountAt(portions, from);
+    const moveCount = count !== undefined ? Math.min(count, available) : available;
+    const moved = movePortion(portions, { count: moveCount, from, to: target });
     nextPortions = moved.ok ? moved.portions : portions;
   } else {
     nextPortions = wholeQuantityMove(portions, target);
@@ -199,6 +200,12 @@ export async function setUnconfirmed(db: Db, kitUnitId: string, lastSeenEventId:
 export async function getKitUnit(db: Db, id: string): Promise<KitUnit | undefined> {
   const [row] = await db.select().from(kitUnit).where(eq(kitUnit.id, id));
   return row;
+}
+
+/** Several Kit Units by id in one query, e.g. to look up their Quantities together. */
+export async function listKitUnitsByIds(db: Db, ids: string[]): Promise<KitUnit[]> {
+  if (ids.length === 0) return [];
+  return db.select().from(kitUnit).where(inArray(kitUnit.id, ids));
 }
 
 /** A Kit Unit's Portions: where it is right now, split by count. */

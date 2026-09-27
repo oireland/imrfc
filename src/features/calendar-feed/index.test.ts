@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { store } from "@/features/stores";
-import { createKitUnit } from "@/features/kit";
+import { createKitUnit, raiseQuantity } from "@/features/kit";
 import { cancelEvent, createEvent } from "@/features/events";
 import { claimDuty, ensureDuties } from "@/features/duties";
 import { blockUser, user } from "@/features/users";
@@ -72,6 +72,16 @@ describe("renderFeed", () => {
     const theirs = await renderFeed(db, await getFeedToken(db, "sam"));
     expect(mine.status === 200 && mine.body).toContain("You're bringing: Ball bag A");
     expect(theirs.status === 200 && theirs.body).not.toContain("Ball bag A");
+  });
+
+  it("shows the count in the description when the Kit Unit's Quantity is more than 1", async () => {
+    const { db, kit, event } = await setup();
+    await raiseQuantity(db, kit.id, "tom", 7); // Quantity now 8
+    const [toDuty] = (await ensureDuties(db, event.id, [kit.id])).filter((d) => d.direction === "to");
+    await claimDuty(db, toDuty.id, "tom");
+
+    const mine = await renderFeed(db, await getFeedToken(db, "tom"));
+    expect(mine.status === 200 && mine.body).toContain("You're bringing: Ball bag A ×8");
   });
 
   it("marks a Cancelled Event STATUS:CANCELLED", async () => {
