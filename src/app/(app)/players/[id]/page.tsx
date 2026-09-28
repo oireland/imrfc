@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { SubmitButton } from "@/components/submit-button";
+import { getSeasonRecord, type RecordLine, type ReplyCounts } from "@/features/availability";
 import { listKitUnits } from "@/features/kit";
 import { getPlayer, setPlayerPositions, setPlaying } from "@/features/players";
 import { formatWhen } from "@/lib/format-time";
@@ -18,7 +19,11 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
   if (!user || !isCommitteeOrAbove(user.role)) redirect("/");
 
   const { id } = await params;
-  const [player, kitUnits] = await Promise.all([getPlayer(db, id), listKitUnits(db, { includeRetired: true })]);
+  const [player, kitUnits, availability] = await Promise.all([
+    getPlayer(db, id),
+    listKitUnits(db, { includeRetired: true }),
+    getSeasonRecord(db, id),
+  ]);
   if (!player) redirect("/players");
 
   const kitName = new Map(kitUnits.map((k) => [k.id, k.name]));
@@ -44,6 +49,7 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
   }
 
   const { upcoming, season, last } = player.dutyRecord;
+  const counts = (c: ReplyCounts) => `available ${c.available} · not ${c.notAvailable} · no reply ${c.noReply}`;
 
   return (
     <div className="flex flex-col gap-4">
@@ -142,6 +148,27 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
               </ul>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h3 className="font-heading text-[22px] leading-tight">Availability this season</h3>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3 text-sm">
+          {(
+            [
+              ["Matches", availability.matches],
+              ["Training", availability.training],
+            ] as [string, RecordLine][]
+          ).map(([label, line]) => (
+            <div key={label} className="flex flex-col gap-0.5">
+              <p>
+                {label}: {counts(line.all)}
+              </p>
+              <p className="text-muted-foreground">Announced only: {counts(line.announced)}</p>
+            </div>
+          ))}
         </CardContent>
       </Card>
     </div>

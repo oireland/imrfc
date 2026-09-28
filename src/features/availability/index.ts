@@ -1,4 +1,5 @@
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
+import { seasonStart } from "@/features/duties";
 import { getEvent, listEventsBetween, londonParts, londonToUtc, type Event } from "@/features/events";
 import { listPlayers } from "@/features/players";
 import { displayName, listApprovedUsers } from "@/features/users";
@@ -8,19 +9,23 @@ import { availabilityAnnouncement, availabilityNudge, availabilityReply } from "
 import {
   mayReply,
   replyGroup,
+  seasonRecord,
   summarizeAvailability,
   takesReplies,
   validateReply,
+  waitingOnReply,
   type AvailabilitySummary,
   type Nudge,
   type Reply,
   type ReplyStatus,
+  type SeasonRecord,
+  type WaitingAsk,
 } from "./rules";
 
 export { takesReplies } from "./rules";
 export { chaseMessage } from "./announce-rules";
 export type { AskedEvent } from "./announce-rules";
-export type { AvailabilityRow, AvailabilitySummary, ReplyStatus } from "./rules";
+export type { AvailabilityRow, AvailabilitySummary, RecordLine, ReplyCounts, ReplyStatus, SeasonRecord, WaitingAsk } from "./rules";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
@@ -243,4 +248,41 @@ export async function nudge(db: Db, input: AskInput & { playerIds: string[] | nu
     );
   }
   return { ok: true, sent: reached.length };
+}
+
+async function playerRepliesFor(db: Db, playerId: string, eventIds: string[]): Promise<(Reply & { eventId: string })[]> {
+  if (eventIds.length === 0) return [];
+  return db
+    .select()
+    .from(availabilityReply)
+    .where(and(eq(availabilityReply.userId, playerId), inArray(availabilityReply.eventId, eventIds)));
+}
+
+/** For Home: the announced Events still open that the Player hasn't replied to, soonest first. */
+export async function listWaitingOnReply(db: Db, playerId: string, now: Date = new Date()): Promise<WaitingAsk[]> {
+  const player = (await playersById(db)).get(playerId);
+  if (!player?.playing) return [];
+  // From the start of today, so a Match day whose first Match has started counts as closed.
+  const from = londonToUtc(londonParts(now).date, "00:00");
+  const events: Event[] = await listEventsBetween(db, from, new Date(now.getTime() + 366 * 86_400_000));
+  const ids = events.map((e) => e.id);
+  if (ids.length === 0) return [];
+  const [announcements, replies] = await Promise.all([
+    db.select().from(availabilityAnnouncement).where(inArray(availabilityAnnouncement.eventId, ids)),
+    playerRepliesFor(db, playerId, ids),
+  ]);
+  return waitingOnReply({ events, announcements, repliedEventIds: new Set(replies.map((r) => r.eventId)), now });
+}
+
+/** For the Player page: this season's Matches and Training, counted by the Player's replies — all, and announced only. */
+export async function getSeasonRecord(db: Db, playerId: string, now: Date = new Date()): Promise<SeasonRecord> {
+  const since = seasonStart(now);
+  const events: Event[] = await listEventsBetween(db, since, now);
+  const ids = events.map((e) => e.id);
+  const [replies, announcements] = await Promise.all([
+    playerRepliesFor(db, playerId, ids),
+    ids.length === 0 ? [] : db.select().from(availabilityAnnouncement).where(inArray(availabilityAnnouncement.eventId, ids)),
+  ]);
+  const announcedEventIds = new Set<string>(announcements.map((a: { eventId: string }) => a.eventId));
+  return seasonRecord({ events, replies, announcedEventIds, since, now });
 }

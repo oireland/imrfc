@@ -4,7 +4,7 @@ import { createTestDb } from "@/test/db";
 import { createEvent, type NewEvent } from "@/features/events";
 import { user } from "@/features/users";
 import type { MailSender } from "@/lib/mail";
-import { announce, getAvailability, nudge, saveReply } from "./index";
+import { announce, getAvailability, getSeasonRecord, listWaitingOnReply, nudge, saveReply } from "./index";
 
 const now = new Date("2026-10-01T12:00:00Z");
 const tom = { id: "tom", committee: true };
@@ -194,5 +194,48 @@ describe("nudge", () => {
     expect((await nudge(db, { eventId, viewer: sam, playerIds: null, url: url(eventId), mail }, now)).ok).toBe(false);
     expect((await nudge(db, { eventId, viewer: tom, playerIds: null, url: url(eventId), mail }, now)).ok).toBe(false);
     expect(sent).toEqual([]);
+  });
+});
+
+describe("listWaitingOnReply", () => {
+  it("lists announced Events the Player hasn't replied to, until they reply", async () => {
+    const db = await setup();
+    const asked = await makeEvent(db, { title: "Thursday training", start: new Date("2026-10-02T18:00:00Z") });
+    await makeEvent(db, { title: "Not announced", start: new Date("2026-10-03T18:00:00Z") });
+    const replyBy = new Date("2026-10-02T09:00:00Z");
+    await announce(db, { eventId: asked, viewer: tom, replyBy, url: url(asked), mail: fakeMail().mail }, now);
+
+    expect(await listWaitingOnReply(db, "sam", now)).toEqual([
+      { eventId: asked, events: [{ title: "Thursday training", start: new Date("2026-10-02T18:00:00Z") }], replyBy },
+    ]);
+
+    await saveReply(db, { eventId: asked, playerId: "sam", viewer: sam, status: "available", note: "", reason: "" }, now);
+    expect(await listWaitingOnReply(db, "sam", now)).toEqual([]);
+  });
+
+  it("asks nothing of a Player with Playing off", async () => {
+    const db = await setup();
+    const asked = await makeEvent(db, { start: new Date("2026-10-02T18:00:00Z") });
+    await announce(db, { eventId: asked, viewer: tom, replyBy: null, url: url(asked), mail: fakeMail().mail }, now);
+    expect(await listWaitingOnReply(db, "ray", now)).toEqual([]);
+  });
+});
+
+describe("getSeasonRecord", () => {
+  it("counts this season's Matches and Training by the Player's replies", async () => {
+    const db = await setup();
+    const early = new Date("2026-09-01T12:00:00Z");
+    const training = await makeEvent(db, { start: new Date("2026-09-10T18:00:00Z") });
+    await makeEvent(db, { start: new Date("2026-09-17T18:00:00Z") });
+    const match = await makeEvent(db, { title: "1st XV v Barts", eventType: "match", start: new Date("2026-09-20T13:00:00Z") });
+    await makeEvent(db, { title: "Last season", start: new Date("2026-08-20T18:00:00Z") });
+    await announce(db, { eventId: training, viewer: tom, replyBy: null, url: url(training), mail: fakeMail().mail }, early);
+    await saveReply(db, { eventId: training, playerId: "sam", viewer: sam, status: "not_available", note: "", reason: "Exams" }, early);
+    await saveReply(db, { eventId: match, playerId: "sam", viewer: sam, status: "available", note: "", reason: "" }, early);
+
+    expect(await getSeasonRecord(db, "sam", now)).toEqual({
+      matches: { all: { available: 1, notAvailable: 0, noReply: 0 }, announced: { available: 0, notAvailable: 0, noReply: 0 } },
+      training: { all: { available: 0, notAvailable: 1, noReply: 1 }, announced: { available: 0, notAvailable: 1, noReply: 0 } },
+    });
   });
 });

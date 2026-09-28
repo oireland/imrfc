@@ -1,15 +1,17 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import { db } from "@/db/client";
+import { CanYouMakeIt } from "@/components/can-you-make-it";
 import { ComingUp } from "@/components/coming-up";
 import { CrestThemePicker } from "@/components/crest-theme-picker";
+import { listWaitingOnReply } from "@/features/availability";
 import { joinNames, listUpcomingDutiesForUser, markUnconfirmed } from "@/features/duties";
 import { listKitHeldBy, listKitUnits } from "@/features/kit";
 import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
 import { greeting, londonDay, londonTime } from "@/lib/calendar";
 import { requireApprovedUser } from "@/lib/session";
 import { cn } from "cn";
-import { quickAddEvent, setTheme } from "./actions";
+import { quickAddEvent, replyFromHome, setTheme } from "./actions";
 import { loadComingUp } from "./coming-up-data";
 
 /** How many held Kit Units the greeting names before "& N more". */
@@ -29,7 +31,8 @@ export default async function Home() {
   const user = await requireApprovedUser();
 
   await markUnconfirmed(db);
-  const [duties, held, comingUp, allKit, people] = await Promise.all([
+  const [asks, duties, held, comingUp, allKit, people] = await Promise.all([
+    listWaitingOnReply(db, user.id),
     listUpcomingDutiesForUser(db, user.id),
     listKitHeldBy(db, user.id),
     loadComingUp(user.id),
@@ -82,6 +85,8 @@ export default async function Home() {
         </div>
         <CrestThemePicker theme={user.theme} onChange={setTheme} />
       </header>
+
+      <CanYouMakeIt asks={asks} now={new Date(comingUp.now)} reply={replyFromHome} />
 
       <section aria-labelledby="your-duties" className="flex flex-col gap-3">
         <div className="flex items-baseline justify-between">
