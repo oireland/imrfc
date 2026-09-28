@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mayReply, replyGroup, summarizeAvailability, validateReply, type Reply } from "./rules";
+import { mayReply, replyGroup, seasonRecord, summarizeAvailability, validateReply, waitingOnReply, type Reply } from "./rules";
 
 describe("validateReply", () => {
   it("needs a Reason for Not available", () => {
@@ -151,5 +151,129 @@ describe("mayReply", () => {
     expect(mayReply({ ...open, eventType: "social" }, { id: "sam", committee: false }, sam, now)).toBe(false);
     expect(mayReply({ ...open, cancelled: true }, { id: "sam", committee: false }, sam, now)).toBe(false);
     expect(mayReply(open, { id: "tom", committee: true }, { id: "sam", playing: false }, now)).toBe(false);
+  });
+});
+
+const ev = (id: string, eventType: "training" | "match", start: string, extra: { cancelled?: boolean; title?: string } = {}) => ({
+  id,
+  title: extra.title ?? id,
+  eventType,
+  start: new Date(start),
+  cancelled: extra.cancelled ?? false,
+});
+
+describe("waitingOnReply", () => {
+  const now = new Date("2026-10-01T12:00:00Z");
+
+  it("lists announced, still-open Events the Player hasn't replied to, soonest first", () => {
+    const events = [
+      ev("sat", "training", "2026-10-04T10:00:00Z"),
+      ev("thu", "training", "2026-10-02T18:00:00Z"),
+      ev("quiet", "training", "2026-10-03T18:00:00Z"),
+    ];
+    const asks = waitingOnReply({
+      events,
+      announcements: [
+        { eventId: "sat", replyBy: null },
+        { eventId: "thu", replyBy: new Date("2026-10-02T09:00:00Z") },
+      ],
+      repliedEventIds: new Set(),
+      now,
+    });
+    expect(asks.map((a) => [a.eventId, a.replyBy])).toEqual([
+      ["thu", new Date("2026-10-02T09:00:00Z")],
+      ["sat", null],
+    ]);
+  });
+
+  it("drops Events already replied to, started or Cancelled", () => {
+    const asks = waitingOnReply({
+      events: [
+        ev("replied", "training", "2026-10-02T18:00:00Z"),
+        ev("started", "training", "2026-10-01T11:00:00Z"),
+        ev("off", "training", "2026-10-02T18:00:00Z", { cancelled: true }),
+      ],
+      announcements: ["replied", "started", "off"].map((eventId) => ({ eventId, replyBy: null })),
+      repliedEventIds: new Set(["replied"]),
+      now,
+    });
+    expect(asks).toEqual([]);
+  });
+
+  it("asks once for a day's Matches, answered by a reply to any of them", () => {
+    const events = [
+      ev("firsts", "match", "2026-10-03T13:00:00Z", { title: "1st XV v Barts" }),
+      ev("seconds", "match", "2026-10-03T15:00:00Z", { title: "2nd XV v UCL" }),
+    ];
+    const announcements = [{ eventId: "seconds", replyBy: null }];
+    const asks = waitingOnReply({ events, announcements, repliedEventIds: new Set(), now });
+    expect(asks).toEqual([
+      {
+        eventId: "firsts",
+        events: [
+          { title: "1st XV v Barts", start: new Date("2026-10-03T13:00:00Z") },
+          { title: "2nd XV v UCL", start: new Date("2026-10-03T15:00:00Z") },
+        ],
+        replyBy: null,
+      },
+    ]);
+    expect(waitingOnReply({ events, announcements, repliedEventIds: new Set(["firsts"]), now })).toEqual([]);
+  });
+});
+
+describe("seasonRecord", () => {
+  const since = new Date("2026-08-31T23:00:00Z");
+  const now = new Date("2026-10-10T12:00:00Z");
+  const reply = (eventId: string, status: "available" | "not_available", at = "2026-09-01T00:00:00Z") => ({
+    eventId,
+    status,
+    createdAt: new Date(at),
+  });
+
+  const zero = { available: 0, notAvailable: 0, noReply: 0 };
+
+  it("counts each past Training and Match day this season by the latest reply, and the announced ones apart", () => {
+    const record = seasonRecord({
+      events: [
+        ev("t1", "training", "2026-09-10T18:00:00Z"),
+        ev("t2", "training", "2026-09-17T18:00:00Z"),
+        ev("t3", "training", "2026-09-24T18:00:00Z"),
+        ev("m1", "match", "2026-09-20T13:00:00Z"),
+        ev("m2", "match", "2026-09-20T15:00:00Z"),
+        ev("m3", "match", "2026-09-27T13:00:00Z"),
+      ],
+      replies: [
+        reply("t1", "not_available"),
+        reply("t1", "available", "2026-09-02T00:00:00Z"),
+        reply("t2", "not_available"),
+        reply("m2", "available"),
+      ],
+      announcedEventIds: new Set(["t1", "t3", "m1"]),
+      since,
+      now,
+    });
+    expect(record).toEqual({
+      matches: { all: { available: 1, notAvailable: 0, noReply: 1 }, announced: { available: 1, notAvailable: 0, noReply: 0 } },
+      training: { all: { available: 1, notAvailable: 1, noReply: 1 }, announced: { available: 1, notAvailable: 0, noReply: 1 } },
+    });
+  });
+
+  it("leaves out last season, Events still to come, Cancelled Events and a day of only Cancelled Matches", () => {
+    const record = seasonRecord({
+      events: [
+        ev("old", "training", "2026-08-20T18:00:00Z"),
+        ev("soon", "training", "2026-10-12T18:00:00Z"),
+        ev("off", "training", "2026-09-10T18:00:00Z", { cancelled: true }),
+        ev("offMatch", "match", "2026-09-20T13:00:00Z", { cancelled: true }),
+      ],
+      replies: [],
+      announcedEventIds: new Set(["old", "soon", "off", "offMatch"]),
+      since,
+      now,
+    });
+    expect(record).toEqual({
+      matches: { all: zero, announced: zero },
+      training: { all: zero, announced: zero },
+    });
   });
 });

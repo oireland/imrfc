@@ -147,3 +147,96 @@ export function mayReply(
     (viewer.id === player.id || viewer.committee)
   );
 }
+
+export type TitledEvent = GroupEvent & { title: string };
+
+export type WaitingAsk = {
+  /** The Event to open: the group's first that's still going ahead. */
+  eventId: string;
+  events: { title: string; start: Date }[];
+  replyBy: Date | null;
+};
+
+/** Training and Match days: each Training alone, a day's Matches together. */
+function replyGroups<E extends GroupEvent>(events: E[]): E[][] {
+  const groups = new Map<string, E[]>();
+  for (const e of events.filter((e) => takesReplies(e.eventType))) {
+    const key = e.eventType === "match" ? `match:${londonParts(e.start).date}` : e.id;
+    groups.set(key, [...(groups.get(key) ?? []), e]);
+  }
+  return [...groups.values()].map((group) => group.sort((a, b) => a.start.getTime() - b.start.getTime()));
+}
+
+/**
+ * The announced Events still open that a Player hasn't replied to, soonest first — one
+ * per Training, one per day's Matches. `events` must include the whole London day of
+ * any Match, so a day whose first Match has started counts as closed.
+ */
+export function waitingOnReply({
+  events,
+  announcements,
+  repliedEventIds,
+  now,
+}: {
+  events: TitledEvent[];
+  announcements: { eventId: string; replyBy: Date | null }[];
+  repliedEventIds: Set<string>;
+  now: Date;
+}): WaitingAsk[] {
+  const asks: WaitingAsk[] = [];
+  for (const group of replyGroups(events)) {
+    const goingAhead = group.filter((e) => !e.cancelled);
+    const announced = announcements.find((a) => group.some((e) => e.id === a.eventId));
+    if (!announced || goingAhead.length === 0 || now >= goingAhead[0].start) continue;
+    if (group.some((e) => repliedEventIds.has(e.id))) continue;
+    asks.push({
+      eventId: goingAhead[0].id,
+      events: goingAhead.map((e) => ({ title: e.title, start: e.start })),
+      replyBy: announced.replyBy,
+    });
+  }
+  // Replies close at the group's first start, which is its first Event's.
+  return asks.sort((a, b) => a.events[0].start.getTime() - b.events[0].start.getTime());
+}
+
+export type ReplyCounts = { available: number; notAvailable: number; noReply: number };
+/** Every Event counted, and just the ones Committee announced. */
+export type RecordLine = { all: ReplyCounts; announced: ReplyCounts };
+export type SeasonRecord = { matches: RecordLine; training: RecordLine };
+
+/**
+ * A Player's Availability this season (from `since`): each Training and each Match day
+ * that has started and wasn't Cancelled, counted by their latest reply to it — for all of
+ * them, and again for the announced ones (a Match day is announced if any of its Matches is).
+ */
+export function seasonRecord({
+  events,
+  replies,
+  announcedEventIds,
+  since,
+  now,
+}: {
+  events: GroupEvent[];
+  /** This Player's replies. */
+  replies: { eventId: string; status: ReplyStatus; createdAt: Date }[];
+  announcedEventIds: Set<string>;
+  since: Date;
+  now: Date;
+}): SeasonRecord {
+  const line = (): RecordLine => ({
+    all: { available: 0, notAvailable: 0, noReply: 0 },
+    announced: { available: 0, notAvailable: 0, noReply: 0 },
+  });
+  const record: SeasonRecord = { matches: line(), training: line() };
+  for (const group of replyGroups(events.filter((e) => !e.cancelled && e.start >= since && e.start < now))) {
+    const ids = new Set(group.map((e) => e.id));
+    const latest = replies
+      .filter((r) => ids.has(r.eventId))
+      .reduce<(typeof replies)[number] | undefined>((a, r) => (!a || r.createdAt > a.createdAt ? r : a), undefined);
+    const key = !latest ? "noReply" : latest.status === "available" ? "available" : "notAvailable";
+    const counts = group[0].eventType === "match" ? record.matches : record.training;
+    counts.all[key]++;
+    if (group.some((e) => announcedEventIds.has(e.id))) counts.announced[key]++;
+  }
+  return record;
+}

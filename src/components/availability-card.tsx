@@ -390,7 +390,7 @@ function StatusMark({ tab }: { tab: Tab }) {
   return <span aria-hidden="true" className="size-7 shrink-0 rounded-full border-2 border-dashed border-muted-foreground/50" />;
 }
 
-function ReplySheet({
+export function ReplySheet({
   name,
   initial,
   pending,

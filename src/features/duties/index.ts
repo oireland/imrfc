@@ -27,6 +27,7 @@ export { formatDutySummary } from "./duty-summary-rules";
 export { dutyActions } from "./duty-actions-rules";
 export type { DutyAction } from "./duty-actions-rules";
 export { joinNames } from "./names-rules";
+export { seasonStart } from "./duty-record-rules";
 export { gatherConfirmSources, needsSourceChoice } from "./confirm-source-rules";
 export type { HolderPart, SourcePart } from "./confirm-source-rules";
 

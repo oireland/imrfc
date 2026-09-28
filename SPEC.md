@@ -203,7 +203,7 @@ Lets Players say whether they can make a Training or Match, and lets Committee s
 
 - **Event detail:** an Availability card — your reply buttons, counts ("12 in · 3 out · 8 haven't said"), and Available / Not available / No reply tabs listing names (notes, "set by", "late", and Reasons for Committee). Committee also get Announce / Nudge / Copy chase message. Colours from the theme only: solid tick for Available, destructive red for Not available, dashed outline for No reply.
 - **Home:** a "Can you make it?" card for announced Events you haven't replied to; answer inline (Not available opens a sheet for the Reason). It disappears once you reply.
-- **Player page** (Committee): this season's record, one line each for Matches and Training ("Matches: available 9 · not 3 · no reply 2").
+- **Player page** (Committee): this season's record, one line each for Matches and Training ("Matches: available 9 · not 3 · no reply 2"), each with a second line counting only the announced ones ("Announced only: available 5 · not 1 · no reply 0"). Past Events this season that weren't Cancelled; a day's Matches count once.
 
 ### Not yet
 
