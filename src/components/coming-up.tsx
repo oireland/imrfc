@@ -58,7 +58,7 @@ export function ComingUp({
   teams: { id: string; name: string }[];
   addAction: (input: QuickEventInput) => Promise<{ ok: true; id: string } | { ok: false; error: string }>;
   title?: string;
-  /** Home only: a "See all" link across to Events. */
+  /** Home only: the title links across to Events. */
   seeAllHref?: string;
 }) {
   const [tab, setTab] = useState<"calendar" | "agenda">("calendar");
@@ -67,16 +67,16 @@ export function ComingUp({
   return (
     <section aria-labelledby="coming-up" className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-baseline gap-2">
-          <h2 id="coming-up" className="font-heading text-[28px] leading-none">
-            {title}
-          </h2>
-          {seeAllHref && (
-            <Link href={seeAllHref} className="flex items-center gap-0.5 text-sm text-muted-foreground hover:text-foreground">
-              See all <ChevronRight className="size-3.5" aria-hidden="true" />
+        <h2 id="coming-up" className="min-w-0 font-heading text-[28px] leading-none">
+          {seeAllHref ? (
+            <Link href={seeAllHref} className="inline-flex items-center gap-1 hover:text-muted-foreground">
+              {title}
+              <ChevronRight className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
             </Link>
+          ) : (
+            title
           )}
-        </div>
+        </h2>
         <div role="tablist" aria-label="View" className="flex shrink-0 rounded-full bg-muted p-1 text-[13px] font-semibold">
           {(["calendar", "agenda"] as const).map((t) => (
             <button
