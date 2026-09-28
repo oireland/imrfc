@@ -88,3 +88,51 @@ test("a shared Event link previews only its title and date, and signing in lands
   await expect(page).toHaveURL(new RegExp(`/events/${eventId}$`));
   await expect(page.getByText(title).first()).toBeVisible();
 });
+
+async function mailTo(email: string, subject: RegExp) {
+  for (let i = 0; i < 30; i++) {
+    const list = await (await fetch(`${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}`)).json();
+    const found = (list.messages ?? []).find((m: { Subject: string }) => subject.test(m.Subject));
+    if (found) return found;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error(`No email matching ${subject} reached ${email}`);
+}
+
+test("Committee announce Training with a reply-by, nudge someone, and copy the chase message", async ({ page, baseURL, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  const title = `Training ${crypto.randomUUID().slice(0, 8)}`;
+  const { eventId, playerName } = await seedTraining(title);
+  const playerEmail = `${eventId}@x.org`;
+
+  await page.goto("/sign-in");
+  await finishSignIn(page, baseURL);
+  await page.goto(`/events/${eventId}`);
+  const card = page.getByRole("region", { name: "Who's coming" });
+
+  await card.getByRole("button", { name: "Announce" }).click();
+  const sheet = page.getByRole("dialog");
+  const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+  await sheet.getByLabel("Reply by (optional)").fill(tomorrow);
+  await sheet.getByRole("button", { name: /^Email \d+ (person|people)$/ }).click();
+  await expect(page.getByText(/^Announced\. Emailed/)).toBeVisible();
+  await expect(card).toContainText(/Announced \w{3} \d+ \w{3} by E2E Admin · reply by/);
+  await expect(card.getByRole("button", { name: "Announce" })).toBeHidden();
+  const announced = await mailTo(playerEmail, new RegExp(`^Can you make it\\? .* — ${title}$`));
+  expect(announced.Snippet).toContain("Reply now");
+
+  await card.getByRole("button", { name: "Nudge" }).click();
+  await sheet.getByRole("button", { name: "Untick all" }).click();
+  await sheet.getByRole("checkbox", { name: playerName }).check();
+  await sheet.getByRole("button", { name: "Nudge 1 person" }).click();
+  await expect(page.getByText("Nudged 1 person.")).toBeVisible();
+  await mailTo(playerEmail, new RegExp(`^Still need your answer: .* — ${title}$`));
+  await card.getByRole("tab", { name: /No reply/ }).click();
+  await expect(card.getByRole("button", { name: `Reply for ${playerName}` })).toContainText("nudged just now");
+
+  await card.getByRole("button", { name: "Copy chase message" }).click();
+  await expect(page.getByText("Copied. Paste it into the club group.")).toBeVisible();
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copied).toContain(`— ${title}\nStill need a reply from:`);
+  expect(copied).toContain(playerName);
+});

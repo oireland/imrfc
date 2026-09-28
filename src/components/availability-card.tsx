@@ -2,38 +2,52 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Check, Loader2, X } from "lucide-react";
+import { Check, Copy, Loader2, Megaphone, Send, X } from "lucide-react";
 import { cn } from "cn";
 import type { Availability, AvailabilityRow, ReplyStatus } from "@/features/availability";
+import { formatAgo, formatDay, formatWhen } from "@/lib/format-time";
 import { BottomSheet, SheetSaveButton } from "./bottom-sheet";
+import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 
 type Answer = { status: ReplyStatus; note: string; reason: string };
 type Result = { ok: true } | { ok: false; error: string };
+type SendResult = { ok: true; sent: number } | { ok: false; error: string };
 type Tab = "in" | "out" | "none";
 
 /**
  * Who can make a Training or Match: your own reply, the counts, and In / Out / No reply
- * lists. Committee can tap anyone to reply for them.
+ * lists. Committee can tap anyone to reply for them, and Announce, Nudge or copy a chase
+ * message for WhatsApp.
  */
 export function AvailabilityCard({
   availability,
   viewerId,
   playing,
   committee,
+  now,
+  chase,
   reply,
+  announce,
+  nudge,
 }: {
   availability: Availability;
   viewerId: string;
   playing: boolean;
   committee: boolean;
+  now: Date;
+  /** The WhatsApp chase message, for Committee while anyone has No reply. */
+  chase: string | null;
   reply: (playerId: string, answer: Answer) => Promise<Result>;
+  announce: (replyBy: { date: string; time: string } | null) => Promise<SendResult>;
+  nudge: (playerIds: string[]) => Promise<SendResult>;
 }) {
-  const { summary, myReply, open, canReplyForSelf, canReplyForOthers } = availability;
+  const { summary, myReply, open, canReplyForSelf, canReplyForOthers, announcement, canAnnounce, canNudge } = availability;
   const [tab, setTab] = useState<Tab>("in");
   const [sheet, setSheet] = useState<{ playerId: string; name: string; initial: Answer } | null>(null);
+  const [asking, setAsking] = useState<"announce" | "nudge" | null>(null);
   const [pending, startTransition] = useTransition();
 
   const rows = { in: summary.available, out: summary.notAvailable, none: summary.noReply }[tab];
@@ -49,6 +63,28 @@ export function AvailabilityCard({
       toast.success(success);
       after?.();
     });
+  }
+
+  function send(action: () => Promise<SendResult>, success: (sent: number) => string) {
+    startTransition(async () => {
+      const result = await action();
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(success(result.sent));
+      setAsking(null);
+    });
+  }
+
+  async function copyChase() {
+    if (!chase) return;
+    try {
+      await navigator.clipboard.writeText(chase);
+      toast.success("Copied. Paste it into the club group.");
+    } catch {
+      toast.error("Couldn't copy the message");
+    }
   }
 
   function openSheetFor(row: AvailabilityRow, status?: ReplyStatus) {
@@ -86,6 +122,13 @@ export function AvailabilityCard({
       </div>
 
       <div className="flex flex-col gap-4 rounded-3xl bg-card px-4 py-4 shadow-card">
+        {announcement && (
+          <p className="text-xs text-muted-foreground">
+            Announced {formatDay(announcement.at)} by {announcement.by}
+            {announcement.replyBy && ` · reply by ${formatWhen(announcement.replyBy, now)}`}
+          </p>
+        )}
+
         <YourReply
           myReply={myReply}
           open={open}
@@ -132,6 +175,7 @@ export function AvailabilityCard({
                   <PersonRow
                     row={row}
                     tab={tab}
+                    now={now}
                     you={row.userId === viewerId}
                     onTap={canReplyForOthers && row.userId !== viewerId ? () => openSheetFor(row) : undefined}
                   />
@@ -143,7 +187,49 @@ export function AvailabilityCard({
             <p className="px-1 pt-2 text-xs text-muted-foreground">Heard from someone in person? Tap their name to put their answer in.</p>
           )}
         </div>
+
+        {committee && (canAnnounce || canNudge || chase) && (
+          <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+            {canAnnounce && (
+              <Button type="button" size="sm" onClick={() => setAsking("announce")}>
+                <Megaphone aria-hidden="true" />
+                Announce
+              </Button>
+            )}
+            {canNudge && (
+              <Button type="button" size="sm" variant="outline" onClick={() => setAsking("nudge")}>
+                <Send aria-hidden="true" />
+                Nudge
+              </Button>
+            )}
+            {chase && (
+              <Button type="button" size="sm" variant="outline" onClick={copyChase}>
+                <Copy aria-hidden="true" />
+                Copy chase message
+              </Button>
+            )}
+          </div>
+        )}
       </div>
+
+      {asking === "announce" && (
+        <AnnounceSheet
+          count={summary.noReply.length}
+          pending={pending}
+          onClose={() => setAsking(null)}
+          onSend={(replyBy) => send(() => announce(replyBy), (sent) => `Announced. Emailed ${people(sent)}.`)}
+        />
+      )}
+
+      {asking === "nudge" && (
+        <NudgeSheet
+          rows={summary.noReply}
+          now={now}
+          pending={pending}
+          onClose={() => setAsking(null)}
+          onSend={(ids) => send(() => nudge(ids), (sent) => `Nudged ${people(sent)}.`)}
+        />
+      )}
 
       {sheet && (
         <ReplySheet
@@ -251,8 +337,18 @@ function YourReply({
   );
 }
 
-function PersonRow({ row, tab, you, onTap }: { row: AvailabilityRow; tab: Tab; you: boolean; onTap?: () => void }) {
-  const details = [row.note, tab === "out" ? row.reason : null, row.setBy && `set by ${row.setBy}`].filter(Boolean).join(" · ");
+const people = (n: number) => (n === 1 ? "1 person" : `${n} people`);
+
+function PersonRow({ row, tab, now, you, onTap }: { row: AvailabilityRow; tab: Tab; now: Date; you: boolean; onTap?: () => void }) {
+  const details = [
+    row.note,
+    tab === "out" ? row.reason : null,
+    row.setBy && `set by ${row.setBy}`,
+    row.late && "replied late",
+    row.nudgedAt && `nudged ${formatAgo(row.nudgedAt, now)}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const body = (
     <>
       <StatusMark tab={tab} />
@@ -372,5 +468,131 @@ function ReplySheet({
         <SheetSaveButton pending={pending} />
       </div>
     </BottomSheet>
+  );
+}
+
+function AnnounceSheet({
+  count,
+  pending,
+  onClose,
+  onSend,
+}: {
+  count: number;
+  pending: boolean;
+  onClose: () => void;
+  onSend: (replyBy: { date: string; time: string } | null) => void;
+}) {
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("18:00");
+
+  return (
+    <BottomSheet
+      eyebrow="Announce"
+      title="Ask everyone who hasn't replied"
+      onClose={onClose}
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSend(date ? { date, time: time || "23:59" } : null);
+      }}
+    >
+      <div className="flex flex-col gap-4">
+        <p className="text-sm text-muted-foreground">
+          We&apos;ll email {people(count)} a link to this page. You can only announce once, then use Nudge to remind people.
+        </p>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="reply-by-date">Reply by (optional)</Label>
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <Input id="reply-by-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <Input aria-label="Reply by time" type="time" value={time} onChange={(e) => setTime(e.target.value)} disabled={!date} />
+          </div>
+          <p className="text-xs text-muted-foreground">Anyone who replies after this shows as late. Nobody is stopped from replying.</p>
+        </div>
+        <SendButton pending={pending} disabled={count === 0}>
+          Email {people(count)}
+        </SendButton>
+      </div>
+    </BottomSheet>
+  );
+}
+
+function NudgeSheet({
+  rows,
+  now,
+  pending,
+  onClose,
+  onSend,
+}: {
+  rows: AvailabilityRow[];
+  now: Date;
+  pending: boolean;
+  onClose: () => void;
+  onSend: (playerIds: string[]) => void;
+}) {
+  const [chosen, setChosen] = useState<Set<string>>(() => new Set(rows.map((r) => r.userId)));
+  const toggle = (id: string) =>
+    setChosen((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  return (
+    <BottomSheet
+      eyebrow="Nudge"
+      title="Remind people who haven't replied"
+      onClose={onClose}
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSend([...chosen]);
+      }}
+    >
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between px-1 text-sm">
+          <span className="text-muted-foreground">{chosen.size} of {rows.length} ticked</span>
+          <button
+            type="button"
+            className="font-medium underline-offset-4 hover:underline"
+            onClick={() => setChosen(chosen.size === rows.length ? new Set() : new Set(rows.map((r) => r.userId)))}
+          >
+            {chosen.size === rows.length ? "Untick all" : "Tick all"}
+          </button>
+        </div>
+        <ul className="flex flex-col">
+          {rows.map((row) => (
+            <li key={row.userId}>
+              <label className="flex items-center gap-3 rounded-xl px-1 py-2 hover:bg-muted">
+                <input
+                  type="checkbox"
+                  checked={chosen.has(row.userId)}
+                  onChange={() => toggle(row.userId)}
+                  className="size-5 shrink-0 accent-primary"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">{row.name}</span>
+                  {row.nudgedAt && <span className="block text-xs text-muted-foreground">nudged {formatAgo(row.nudgedAt, now)}</span>}
+                </span>
+              </label>
+            </li>
+          ))}
+        </ul>
+        <SendButton pending={pending} disabled={chosen.size === 0}>
+          Nudge {people(chosen.size)}
+        </SendButton>
+      </div>
+    </BottomSheet>
+  );
+}
+
+function SendButton({ pending, disabled, children }: { pending: boolean; disabled: boolean; children: React.ReactNode }) {
+  return (
+    <button
+      type="submit"
+      disabled={pending || disabled}
+      className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-base font-semibold text-primary-foreground disabled:opacity-60"
+    >
+      {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+      {children}
+    </button>
   );
 }

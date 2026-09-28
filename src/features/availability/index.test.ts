@@ -3,7 +3,8 @@ import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { createEvent, type NewEvent } from "@/features/events";
 import { user } from "@/features/users";
-import { getAvailability, saveReply } from "./index";
+import type { MailSender } from "@/lib/mail";
+import { announce, getAvailability, nudge, saveReply } from "./index";
 
 const now = new Date("2026-10-01T12:00:00Z");
 const tom = { id: "tom", committee: true };
@@ -16,6 +17,8 @@ async function setup() {
     { id: "tom", name: "Tom Hale", email: "tom@x.org", accessState: "approved", role: "committee" },
     { id: "sam", name: "Sam Patel", email: "sam@x.org", accessState: "approved" },
     { id: "ray", name: "Ray Old", email: "ray@x.org", accessState: "approved", playing: false },
+    { id: "jo", name: "Jo King", email: "jo@x.org", accessState: "approved" },
+    { id: "bex", name: "Bex Gone", email: "bex@x.org", accessState: "blocked" },
   ]);
   return db;
 }
@@ -42,7 +45,7 @@ describe("saveReply", () => {
 
     const availability = await getAvailability(db, eventId, sam, later);
     expect(availability.summary.available.map((r) => [r.name, r.note])).toEqual([["Sam Patel", "late"]]);
-    expect(availability.summary.noReply.map((r) => r.name)).toEqual(["Tom Hale"]);
+    expect(availability.summary.noReply.map((r) => r.name)).toEqual(["Jo King", "Tom Hale"]);
     expect(availability.myReply?.status).toBe("available");
   });
 
@@ -86,12 +89,110 @@ describe("getAvailability", () => {
     const eventId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
     const availability = await getAvailability(db, eventId, { id: "ray", committee: false }, now);
     expect(availability.canReplyForSelf).toBe(false);
-    expect(availability.summary.noReply.map((r) => r.name)).toEqual(["Sam Patel", "Tom Hale"]);
+    expect(availability.summary.noReply.map((r) => r.name)).toEqual(["Jo King", "Sam Patel", "Tom Hale"]);
   });
 
   it("doesn't take replies for a Social", async () => {
     const db = await setup();
     const eventId = await makeEvent(db, { title: "Curry", eventType: "social", start: new Date("2026-10-03T18:00:00Z") });
     expect((await getAvailability(db, eventId, sam, now)).takesReplies).toBe(false);
+  });
+});
+
+function fakeMail() {
+  const sent: Parameters<MailSender["send"]>[0][] = [];
+  const mail: MailSender = { send: async (m) => void sent.push(m) };
+  return { mail, sent };
+}
+
+const url = (id: string) => `https://app.test/events/${id}`;
+
+describe("announce", () => {
+  it("emails every Player with No reply, and shows who announced it and the Reply By", async () => {
+    const db = await setup();
+    const eventId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
+    await saveReply(db, { eventId, playerId: "sam", viewer: sam, status: "available", note: "", reason: "" }, now);
+    const { mail, sent } = fakeMail();
+    const replyBy = new Date("2026-10-02T17:00:00Z");
+
+    expect(await announce(db, { eventId, viewer: tom, replyBy, url: url(eventId), mail }, now)).toEqual({ ok: true, sent: 2 });
+
+    expect(sent.map((m) => m.to).sort()).toEqual(["jo@x.org", "tom@x.org"]);
+    expect(sent[0].text).toContain(url(eventId));
+    expect(sent[0].html).toContain(`<a href="${url(eventId)}"`);
+    const availability = await getAvailability(db, eventId, tom, now);
+    expect(availability.announcement).toEqual({ at: now, by: "Tom Hale", replyBy });
+    expect(availability.canAnnounce).toBe(false);
+  });
+
+  it("only happens once, and once for every Match that day", async () => {
+    const db = await setup();
+    const firsts = await makeEvent(db, { title: "1st XV v Barts", eventType: "match", start: new Date("2026-10-03T13:00:00Z") });
+    const seconds = await makeEvent(db, { title: "2nd XV v UCL", eventType: "match", start: new Date("2026-10-03T15:00:00Z") });
+    const { mail, sent } = fakeMail();
+    await announce(db, { eventId: firsts, viewer: tom, replyBy: null, url: url(firsts), mail }, now);
+
+    expect(sent[0].subject).toBe("Can you make it? Sat 3 Oct — 1st XV v Barts & 2nd XV v UCL");
+    expect(await announce(db, { eventId: seconds, viewer: tom, replyBy: null, url: url(seconds), mail }, now)).toEqual({
+      ok: false,
+      error: "This has already been announced.",
+    });
+    expect((await getAvailability(db, seconds, tom, now)).announcement?.by).toBe("Tom Hale");
+  });
+
+  it("is for Committee only", async () => {
+    const db = await setup();
+    const eventId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
+    const { mail, sent } = fakeMail();
+    expect((await announce(db, { eventId, viewer: sam, replyBy: null, url: url(eventId), mail }, now)).ok).toBe(false);
+    expect(sent).toEqual([]);
+    expect((await getAvailability(db, eventId, sam, now)).canAnnounce).toBe(false);
+  });
+
+  it("marks replies after the Reply By as late", async () => {
+    const db = await setup();
+    const eventId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
+    const replyBy = new Date("2026-10-02T17:00:00Z");
+    await announce(db, { eventId, viewer: tom, replyBy, url: url(eventId), mail: fakeMail().mail }, now);
+    const after = new Date("2026-10-02T20:00:00Z");
+    await saveReply(db, { eventId, playerId: "sam", viewer: sam, status: "available", note: "", reason: "" }, after);
+    expect((await getAvailability(db, eventId, tom, after)).summary.available[0]).toMatchObject({ name: "Sam Patel", late: true });
+  });
+});
+
+describe("nudge", () => {
+  it("emails everyone with No reply and records when they were nudged", async () => {
+    const db = await setup();
+    const eventId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
+    await saveReply(db, { eventId, playerId: "sam", viewer: sam, status: "available", note: "", reason: "" }, now);
+    const { mail, sent } = fakeMail();
+
+    expect(await nudge(db, { eventId, viewer: tom, playerIds: null, url: url(eventId), mail }, now)).toEqual({ ok: true, sent: 2 });
+
+    expect(sent.map((m) => m.to).sort()).toEqual(["jo@x.org", "tom@x.org"]);
+    expect(sent[0].subject).toMatch(/^Still need your answer/);
+    const availability = await getAvailability(db, eventId, tom, now);
+    expect(availability.summary.noReply.map((r) => [r.name, r.nudgedAt])).toEqual([
+      ["Jo King", now],
+      ["Tom Hale", now],
+    ]);
+  });
+
+  it("emails only the ones chosen, skipping anyone who has since replied", async () => {
+    const db = await setup();
+    const eventId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
+    await saveReply(db, { eventId, playerId: "sam", viewer: sam, status: "available", note: "", reason: "" }, now);
+    const { mail, sent } = fakeMail();
+    await nudge(db, { eventId, viewer: tom, playerIds: ["jo", "sam"], url: url(eventId), mail }, now);
+    expect(sent.map((m) => m.to)).toEqual(["jo@x.org"]);
+  });
+
+  it("is for Committee only, and not once replies have closed", async () => {
+    const db = await setup();
+    const eventId = await makeEvent(db, { start: new Date("2026-10-01T11:00:00Z") });
+    const { mail, sent } = fakeMail();
+    expect((await nudge(db, { eventId, viewer: sam, playerIds: null, url: url(eventId), mail }, now)).ok).toBe(false);
+    expect((await nudge(db, { eventId, viewer: tom, playerIds: null, url: url(eventId), mail }, now)).ok).toBe(false);
+    expect(sent).toEqual([]);
   });
 });

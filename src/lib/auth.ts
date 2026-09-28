@@ -5,6 +5,7 @@ import { db } from "@/db/client";
 import { resolveNewUser } from "@/features/users/access";
 import { account, session, user, verification } from "@/features/users/schema";
 import { getMailSender } from "./mail";
+import { signInEmail } from "./sign-in-email";
 
 function adminEmails(): string[] {
   return (process.env.ADMIN_EMAILS ?? "")
@@ -27,11 +28,7 @@ export const auth = betterAuth({
   plugins: [
     magicLink({
       sendMagicLink: async ({ email, url }) => {
-        await getMailSender().send({
-          to: email,
-          subject: "Sign in to IMRFC",
-          text: `Sign in here: ${url}`,
-        });
+        await getMailSender().send({ to: email, ...signInEmail(url) });
       },
     }),
   ],

@@ -141,6 +141,13 @@
       "when": 1790550082450,
       "tag": "0019_add-series-event-type",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790584116526,
+      "tag": "0020_announce-and-nudge",
+      "breakpoints": true
     }
   ]
 }

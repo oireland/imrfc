@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatWhen } from "./format-time";
+import { formatAgo, formatWhen } from "./format-time";
 
 describe("formatWhen", () => {
   it("formats a summer (BST) instant in Europe/London, 24-hour", () => {
@@ -46,5 +46,17 @@ describe("formatWhen", () => {
     // 2026-03-29 01:30 UTC is after the clock change; London is BST (+1h) -> 02:30 local.
     const now = new Date("2026-03-01T00:00:00Z");
     expect(formatWhen(new Date("2026-03-29T01:30:00Z"), now)).toBe("Sun 29 Mar, 02:30");
+  });
+});
+
+describe("formatAgo", () => {
+  const now = new Date("2026-10-01T12:00:00Z");
+  it.each([
+    [new Date("2026-10-01T11:59:30Z"), "just now"],
+    [new Date("2026-10-01T11:45:00Z"), "15m ago"],
+    [new Date("2026-10-01T10:00:00Z"), "2h ago"],
+    [new Date("2026-09-28T12:00:00Z"), "3d ago"],
+  ])("says %s as %s", (date, expected) => {
+    expect(formatAgo(date, now)).toBe(expected);
   });
 });
