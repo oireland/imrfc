@@ -33,14 +33,15 @@ export async function quickAddEvent(input: QuickEventInput): Promise<{ ok: true;
   return { ok: true, id: result.event.id };
 }
 
-/** Answers a "Can you make it?" card on Home with the User's own reply. */
-export async function replyFromHome(
+/** Saves the User's own reply from Home's "Can you make it?" cards or the Agenda. */
+export async function saveMyReply(
   eventId: string,
   answer: { status: ReplyStatus; note: string; reason: string },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const user = await requireApprovedUser();
   const result = await saveReply(db, { eventId, playerId: user.id, viewer: { id: user.id, committee: isCommitteeOrAbove(user.role) }, ...answer });
   revalidatePath("/");
+  revalidatePath("/events");
   revalidatePath(`/events/${eventId}`);
   return result;
 }

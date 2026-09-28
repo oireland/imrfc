@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { House, Package, ShieldCheck, User, Users } from "lucide-react";
+import { CalendarDays, House, Package, ShieldCheck, User, Users } from "lucide-react";
 import { cn } from "cn";
 
 export type BottomTabsProps = {
@@ -21,6 +21,7 @@ type Tab = {
 
 const TABS: Tab[] = [
   { href: "/", label: "Home", icon: House, isActive: (p) => p === "/" },
+  { href: "/events", label: "Events", icon: CalendarDays, isActive: (p) => p.startsWith("/events") },
   { href: "/kit", label: "Kit", icon: Package, isActive: (p) => p.startsWith("/kit") },
   { href: "/profile", label: "Profile", icon: User, isActive: (p) => p.startsWith("/profile") },
 ];
@@ -30,15 +31,15 @@ const COMMITTEE_TABS: Tab[] = [
   { href: "/admin", label: "Admin", icon: ShieldCheck, isActive: (p) => p.startsWith("/admin") || p.startsWith("/stores") },
 ];
 
-/** The fixed, frosted bottom tab bar: Home, Kit, Profile, plus Players and Admin for Committee and above. */
+/** The fixed, frosted bottom tab bar: Home, Events, Kit, Profile, plus Players and Admin for Committee and above. */
 export function BottomTabs({ showAdmin, pendingCount = 0 }: BottomTabsProps) {
   const pathname = usePathname();
-  const tabs = showAdmin ? [TABS[0], TABS[1], COMMITTEE_TABS[0], COMMITTEE_TABS[1], TABS[2]] : TABS;
+  const tabs = showAdmin ? [TABS[0], TABS[1], TABS[2], COMMITTEE_TABS[0], COMMITTEE_TABS[1], TABS[3]] : TABS;
 
   return (
     <nav
       aria-label="Main"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/80 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl"
     >
       <div className="mx-auto flex max-w-2xl items-stretch justify-around py-1.5">
         {tabs.map(({ href, label, icon: Icon, isActive }) => {

@@ -199,6 +199,12 @@ export function waitingOnReply({
   return asks.sort((a, b) => a.events[0].start.getTime() - b.events[0].start.getTime());
 }
 
+/** A Player's latest reply to any Event in `group`. */
+function latestInGroup<R extends { eventId: string; createdAt: Date }>(group: GroupEvent[], replies: R[]): R | undefined {
+  const ids = new Set(group.map((e) => e.id));
+  return replies.filter((r) => ids.has(r.eventId)).reduce<R | undefined>((a, r) => (!a || r.createdAt > a.createdAt ? r : a), undefined);
+}
+
 export type ReplyCounts = { available: number; notAvailable: number; noReply: number };
 /** Every Event counted, and just the ones Committee announced. */
 export type RecordLine = { all: ReplyCounts; announced: ReplyCounts };
@@ -229,14 +235,41 @@ export function seasonRecord({
   });
   const record: SeasonRecord = { matches: line(), training: line() };
   for (const group of replyGroups(events.filter((e) => !e.cancelled && e.start >= since && e.start < now))) {
-    const ids = new Set(group.map((e) => e.id));
-    const latest = replies
-      .filter((r) => ids.has(r.eventId))
-      .reduce<(typeof replies)[number] | undefined>((a, r) => (!a || r.createdAt > a.createdAt ? r : a), undefined);
+    const latest = latestInGroup(group, replies);
     const key = !latest ? "noReply" : latest.status === "available" ? "available" : "notAvailable";
     const counts = group[0].eventType === "match" ? record.matches : record.training;
     counts.all[key]++;
     if (group.some((e) => announcedEventIds.has(e.id))) counts.announced[key]++;
   }
   return record;
+}
+
+export type MyReply = { status: ReplyStatus | null; open: boolean };
+
+/**
+ * A Player's own reply to each Training and Match in `events` (Socials left out): their
+ * latest reply to its group (a day's Matches share one), and whether they can still
+ * reply — Playing on, not Cancelled, and before the group's first start still going ahead.
+ */
+export function myReplies({
+  events,
+  replies,
+  playing,
+  now,
+}: {
+  events: GroupEvent[];
+  /** This Player's replies. */
+  replies: { eventId: string; status: ReplyStatus; createdAt: Date }[];
+  playing: boolean;
+  now: Date;
+}): Record<string, MyReply> {
+  const result: Record<string, MyReply> = {};
+  for (const group of replyGroups(events)) {
+    const latest = latestInGroup(group, replies);
+    const closesAt = group.find((e) => !e.cancelled)?.start;
+    for (const e of group) {
+      result[e.id] = { status: latest?.status ?? null, open: playing && !e.cancelled && !!closesAt && now < closesAt };
+    }
+  }
+  return result;
 }

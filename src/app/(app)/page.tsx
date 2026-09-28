@@ -11,7 +11,7 @@ import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/u
 import { greeting, londonDay, londonTime } from "@/lib/calendar";
 import { requireApprovedUser } from "@/lib/session";
 import { cn } from "cn";
-import { quickAddEvent, replyFromHome, setTheme } from "./actions";
+import { quickAddEvent, saveMyReply, setTheme } from "./actions";
 import { loadComingUp } from "./coming-up-data";
 
 /** How many held Kit Units the greeting names before "& N more". */
@@ -86,7 +86,7 @@ export default async function Home() {
         <CrestThemePicker theme={user.theme} onChange={setTheme} />
       </header>
 
-      <CanYouMakeIt asks={asks} now={new Date(comingUp.now)} reply={replyFromHome} />
+      <CanYouMakeIt asks={asks} now={new Date(comingUp.now)} reply={saveMyReply} />
 
       <section aria-labelledby="your-duties" className="flex flex-col gap-3">
         <div className="flex items-baseline justify-between">
@@ -149,7 +149,7 @@ export default async function Home() {
         )}
       </section>
 
-      <ComingUp {...comingUp} canAdd={isCommitteeOrAbove(user.role)} addAction={quickAddEvent} seeAllHref="/events" />
+      <ComingUp {...comingUp} canAdd={isCommitteeOrAbove(user.role)} addAction={quickAddEvent} reply={saveMyReply} seeAllHref="/events" />
     </div>
   );
 }

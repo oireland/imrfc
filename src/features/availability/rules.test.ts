@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mayReply, replyGroup, seasonRecord, summarizeAvailability, validateReply, waitingOnReply, type Reply } from "./rules";
+import { mayReply, myReplies, replyGroup, seasonRecord, summarizeAvailability, validateReply, waitingOnReply, type Reply } from "./rules";
 
 describe("validateReply", () => {
   it("needs a Reason for Not available", () => {
@@ -275,5 +275,58 @@ describe("seasonRecord", () => {
       matches: { all: zero, announced: zero },
       training: { all: zero, announced: zero },
     });
+  });
+});
+
+describe("myReplies", () => {
+  const now = new Date("2026-10-01T12:00:00Z");
+  const mine = (eventId: string, status: "available" | "not_available", minute = 0) => ({ eventId, status, createdAt: at(minute) });
+
+  it("gives each Training and Match the Player's latest reply, and whether they can still reply", () => {
+    const replies = myReplies({
+      events: [
+        ev("tue", "training", "2026-10-06T18:00:00Z"),
+        ev("thu", "training", "2026-10-08T18:00:00Z"),
+        ev("done", "training", "2026-10-01T10:00:00Z"),
+        ev("off", "training", "2026-10-09T18:00:00Z", { cancelled: true }),
+      ],
+      replies: [mine("tue", "not_available", 0), mine("tue", "available", 5)],
+      playing: true,
+      now,
+    });
+    expect(replies).toEqual({
+      tue: { status: "available", open: true },
+      thu: { status: null, open: true },
+      done: { status: null, open: false },
+      off: { status: null, open: false },
+    });
+  });
+
+  it("shares one reply across a day's Matches, closing at the first one still going ahead", () => {
+    const replies = myReplies({
+      events: [
+        ev("firsts", "match", "2026-10-03T13:00:00Z", { cancelled: true }),
+        ev("seconds", "match", "2026-10-03T15:00:00Z"),
+        ev("sunday", "match", "2026-10-04T15:00:00Z"),
+      ],
+      replies: [mine("firsts", "not_available")],
+      playing: true,
+      now,
+    });
+    expect(replies).toEqual({
+      firsts: { status: "not_available", open: false },
+      seconds: { status: "not_available", open: true },
+      sunday: { status: null, open: true },
+    });
+  });
+
+  it("leaves out Socials, and closes everything for a Player not playing", () => {
+    const replies = myReplies({
+      events: [ev("tue", "training", "2026-10-06T18:00:00Z"), { ...ev("drinks", "training", "2026-10-06T20:00:00Z"), eventType: "social" as const }],
+      replies: [],
+      playing: false,
+      now,
+    });
+    expect(replies).toEqual({ tue: { status: null, open: false } });
   });
 });

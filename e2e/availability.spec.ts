@@ -1,30 +1,15 @@
 import { expect, test, type Page } from "@playwright/test";
 import postgres from "postgres";
 import { TEST_DATABASE_URL } from "./support/test-db";
+import { MAILPIT, magicLink, signIn } from "./support/sign-in";
 
-const MAILPIT = "http://localhost:8025";
-const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "irelandoliver4@gmail.com";
-
-async function magicLink(email: string, after: number): Promise<string> {
-  for (let i = 0; i < 30; i++) {
-    const list = await (await fetch(`${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}&limit=1`)).json();
-    const latest = list.messages?.[0];
-    if (latest && Date.parse(latest.Created) >= after) {
-      const msg = await (await fetch(`${MAILPIT}/api/v1/message/${latest.ID}`)).json();
-      const match = String(msg.Text).match(/https?:\/\/\S+/);
-      if (match) return match[0];
-    }
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  throw new Error("No magic link email arrived in Mailpit");
-}
-
-async function finishSignIn(page: Page, baseURL: string | undefined) {
+/** The real magic-link flow from the sign-in page, as `email` (its own User, so parallel specs can't cross links). */
+async function finishSignIn(page: Page, baseURL: string | undefined, email: string) {
   const asked = Date.now() - 1000;
-  await page.getByPlaceholder("you@example.com").fill(ADMIN_EMAIL);
+  await page.getByPlaceholder("you@example.com").fill(email);
   await page.getByRole("button", { name: "Email me a sign-in link" }).click();
   await expect(page.getByText("Check your email")).toBeVisible();
-  const link = new URL(await magicLink(ADMIN_EMAIL, asked));
+  const link = new URL(await magicLink(email, asked));
   await page.goto(new URL(link.pathname + link.search, baseURL).toString());
 }
 
@@ -40,12 +25,11 @@ async function seedTraining(title: string) {
   return { eventId, playerName };
 }
 
-test("a Player says whether they can make Training, and Committee replies for someone else", async ({ page, baseURL }) => {
+test("a Player says whether they can make Training, and Committee replies for someone else", async ({ page }) => {
   const title = `Training ${crypto.randomUUID().slice(0, 8)}`;
   const { eventId, playerName } = await seedTraining(title);
 
-  await page.goto("/sign-in");
-  await finishSignIn(page, baseURL);
+  await signIn(page);
   await page.goto(`/events/${eventId}`);
   const card = page.getByRole("region", { name: "Who's coming" });
 
@@ -84,7 +68,8 @@ test("a shared Event link previews only its title and date, and signing in lands
 
   await page.goto(`/events/${eventId}`);
   await expect(page).toHaveURL(/\/sign-in\?next=/);
-  await finishSignIn(page, baseURL);
+  // The seeded Player signs in, so this doesn't share a Mailpit inbox with other specs.
+  await finishSignIn(page, baseURL, `${eventId}@x.org`);
   await expect(page).toHaveURL(new RegExp(`/events/${eventId}$`));
   await expect(page.getByText(title).first()).toBeVisible();
 });
@@ -99,14 +84,13 @@ async function mailTo(email: string, subject: RegExp) {
   throw new Error(`No email matching ${subject} reached ${email}`);
 }
 
-test("Committee announce Training with a reply-by, nudge someone, and copy the chase message", async ({ page, baseURL, context }) => {
+test("Committee announce Training with a reply-by, nudge someone, and copy the chase message", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   const title = `Training ${crypto.randomUUID().slice(0, 8)}`;
   const { eventId, playerName } = await seedTraining(title);
   const playerEmail = `${eventId}@x.org`;
 
-  await page.goto("/sign-in");
-  await finishSignIn(page, baseURL);
+  await signIn(page);
   await page.goto(`/events/${eventId}`);
   const card = page.getByRole("region", { name: "Who's coming" });
 

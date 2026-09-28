@@ -1,34 +1,7 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import postgres from "postgres";
 import { TEST_DATABASE_URL } from "./support/test-db";
-
-const MAILPIT = "http://localhost:8025";
-const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "irelandoliver4@gmail.com";
-
-async function magicLink(email: string, after: number): Promise<string> {
-  for (let i = 0; i < 30; i++) {
-    const list = await (await fetch(`${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}&limit=1`)).json();
-    const latest = list.messages?.[0];
-    if (latest && Date.parse(latest.Created) >= after) {
-      const msg = await (await fetch(`${MAILPIT}/api/v1/message/${latest.ID}`)).json();
-      const match = String(msg.Text).match(/https?:\/\/\S+/);
-      if (match) return match[0];
-    }
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  throw new Error("No magic link email arrived in Mailpit");
-}
-
-async function signIn(page: Page, baseURL: string | undefined) {
-  const asked = Date.now() - 1000;
-  await page.goto("/sign-in");
-  await page.getByPlaceholder("you@example.com").fill(ADMIN_EMAIL);
-  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-  await expect(page.getByText("Check your email")).toBeVisible();
-  const link = new URL(await magicLink(ADMIN_EMAIL, asked));
-  await page.goto(new URL(link.pathname + link.search, baseURL).toString());
-  await expect(page.getByRole("link", { name: "Kit", exact: true })).toBeVisible();
-}
+import { ADMIN_EMAIL, signIn } from "./support/sign-in";
 
 /** An announced Training two days out that nobody has replied to. */
 async function seedAnnouncedTraining(title: string) {
@@ -41,8 +14,8 @@ async function seedAnnouncedTraining(title: string) {
   await sql.end();
 }
 
-test("Home asks about announced Events I haven't replied to, and I answer there", async ({ page, baseURL }) => {
-  await signIn(page, baseURL);
+test("Home asks about announced Events I haven't replied to, and I answer there", async ({ page }) => {
+  await signIn(page);
   const run = crypto.randomUUID().slice(0, 8);
   const inTitle = `Tuesday training ${run}`;
   const outTitle = `Thursday training ${run}`;

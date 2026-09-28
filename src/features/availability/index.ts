@@ -8,6 +8,7 @@ import { askEmail, type AskedEvent } from "./announce-rules";
 import { availabilityAnnouncement, availabilityNudge, availabilityReply } from "./schema";
 import {
   mayReply,
+  myReplies,
   replyGroup,
   seasonRecord,
   summarizeAvailability,
@@ -15,6 +16,7 @@ import {
   validateReply,
   waitingOnReply,
   type AvailabilitySummary,
+  type MyReply,
   type Nudge,
   type Reply,
   type ReplyStatus,
@@ -25,7 +27,7 @@ import {
 export { takesReplies } from "./rules";
 export { chaseMessage } from "./announce-rules";
 export type { AskedEvent } from "./announce-rules";
-export type { AvailabilityRow, AvailabilitySummary, RecordLine, ReplyCounts, ReplyStatus, SeasonRecord, WaitingAsk } from "./rules";
+export type { AvailabilityRow, AvailabilitySummary, MyReply, RecordLine, ReplyCounts, ReplyStatus, SeasonRecord, WaitingAsk } from "./rules";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
@@ -272,6 +274,18 @@ export async function listWaitingOnReply(db: Db, playerId: string, now: Date = n
     playerRepliesFor(db, playerId, ids),
   ]);
   return waitingOnReply({ events, announcements, repliedEventIds: new Set(replies.map((r) => r.eventId)), now });
+}
+
+/**
+ * For the Agenda: the Player's own reply to each Training and Match in `events`, and
+ * whether they can still reply. `events` must include the whole London day of any Match.
+ */
+export async function listMyReplies(db: Db, playerId: string, events: Event[], now: Date = new Date()): Promise<Record<string, MyReply>> {
+  const [player, replies] = await Promise.all([
+    playersById(db).then((players) => players.get(playerId)),
+    playerRepliesFor(db, playerId, events.filter((e) => takesReplies(e.eventType)).map((e) => e.id)),
+  ]);
+  return myReplies({ events, replies, playing: !!player?.playing, now });
 }
 
 /** For the Player page: this season's Matches and Training, counted by the Player's replies — all, and announced only. */

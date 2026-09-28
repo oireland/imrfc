@@ -1,24 +1,7 @@
 import { expect, test } from "@playwright/test";
 import postgres from "postgres";
 import { TEST_DATABASE_URL } from "./support/test-db";
-
-const MAILPIT = "http://localhost:8025";
-
-async function magicLink(email: string): Promise<string> {
-  for (let i = 0; i < 30; i++) {
-    const list = await (
-      await fetch(`${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}&limit=1`)
-    ).json();
-    const id = list.messages?.[0]?.ID;
-    if (id) {
-      const msg = await (await fetch(`${MAILPIT}/api/v1/message/${id}`)).json();
-      const match = String(msg.Text).match(/https?:\/\/\S+/);
-      if (match) return match[0];
-    }
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  throw new Error("No magic link email arrived in Mailpit");
-}
+import { magicLink } from "./support/sign-in";
 
 test("A new User is asked for their name and position, can put it off, and it comes back in a new tab", async ({
   page,
@@ -29,11 +12,12 @@ test("A new User is asked for their name and position, can put it off, and it co
   const run = crypto.randomUUID().slice(0, 8);
   const email = `new-player-${run}@example.com`;
 
+  const asked = Date.now() - 1000;
   await page.goto("/sign-in");
   await page.getByPlaceholder("you@example.com").fill(email);
   await page.getByRole("button", { name: "Email me a sign-in link" }).click();
   await expect(page.getByText("Check your email")).toBeVisible();
-  const link = new URL(await magicLink(email));
+  const link = new URL(await magicLink(email, asked));
   await page.goto(new URL(link.pathname + link.search, baseURL).toString());
   await expect(page).toHaveURL(/\/waiting-for-approval$/);
 
