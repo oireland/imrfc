@@ -4,7 +4,8 @@ import { createTestDb } from "@/test/db";
 import { createEvent, type NewEvent } from "@/features/events";
 import { user } from "@/features/users";
 import type { MailSender } from "@/lib/mail";
-import { announce, getAvailability, getSeasonRecord, listWaitingOnReply, nudge, saveReply } from "./index";
+import { listEventsBetween } from "@/features/events";
+import { announce, getAvailability, getSeasonRecord, listMyReplies, listWaitingOnReply, nudge, saveReply } from "./index";
 
 const now = new Date("2026-10-01T12:00:00Z");
 const tom = { id: "tom", committee: true };
@@ -218,6 +219,34 @@ describe("listWaitingOnReply", () => {
     const asked = await makeEvent(db, { start: new Date("2026-10-02T18:00:00Z") });
     await announce(db, { eventId: asked, viewer: tom, replyBy: null, url: url(asked), mail: fakeMail().mail }, now);
     expect(await listWaitingOnReply(db, "ray", now)).toEqual([]);
+  });
+});
+
+describe("listMyReplies", () => {
+  it("gives the Player's own reply to each Training and Match, sharing one across a Match day", async () => {
+    const db = await setup();
+    const training = await makeEvent(db, { start: new Date("2026-10-02T18:00:00Z") });
+    const firsts = await makeEvent(db, { title: "1st XV v Barts", eventType: "match", start: new Date("2026-10-03T13:00:00Z") });
+    const seconds = await makeEvent(db, { title: "2nd XV v Barts", eventType: "match", start: new Date("2026-10-03T15:00:00Z") });
+    const social = await makeEvent(db, { title: "Drinks", eventType: "social", start: new Date("2026-10-03T20:00:00Z") });
+    await saveReply(db, { eventId: firsts, playerId: "sam", viewer: sam, status: "not_available", note: "", reason: "Exams" }, now);
+    await saveReply(db, { eventId: training, playerId: "jo", viewer: { id: "jo", committee: false }, status: "available", note: "", reason: "" }, now);
+
+    const events = await listEventsBetween(db, new Date("2026-10-01T00:00:00Z"), new Date("2026-10-05T00:00:00Z"));
+    const replies = await listMyReplies(db, "sam", events, now);
+    expect(replies).toEqual({
+      [training]: { status: null, open: true },
+      [firsts]: { status: "not_available", open: true },
+      [seconds]: { status: "not_available", open: true },
+    });
+    expect(replies[social]).toBeUndefined();
+  });
+
+  it("closes every reply for a Player with Playing off", async () => {
+    const db = await setup();
+    const training = await makeEvent(db, { start: new Date("2026-10-02T18:00:00Z") });
+    const events = await listEventsBetween(db, new Date("2026-10-01T00:00:00Z"), new Date("2026-10-05T00:00:00Z"));
+    expect(await listMyReplies(db, "ray", events, now)).toEqual({ [training]: { status: null, open: false } });
   });
 });
 

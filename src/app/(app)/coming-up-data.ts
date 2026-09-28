@@ -1,12 +1,14 @@
 import { db } from "@/db/client";
 import type { CalendarEvent } from "@/components/coming-up";
+import { listMyReplies } from "@/features/availability";
 import { listUpcomingDutiesForUser } from "@/features/duties";
 import { listEventsBetween, listTeams, listVenues } from "@/features/events";
 import { londonDay } from "@/lib/calendar";
 
 /**
  * What the "What's coming up" calendar needs: Events from three months back to a year
- * ahead (enough to page through), the User's own Duties marked, and the venues already used and the Teams, for the New event sheet.
+ * ahead (enough to page through), the User's own Duties and replies marked, and the venues
+ * already used and the Teams, for the New event sheet.
  */
 export async function loadComingUp(userId: string) {
   const now = new Date();
@@ -19,6 +21,7 @@ export async function loadComingUp(userId: string) {
     listUpcomingDutiesForUser(db, userId),
   ]);
   const mine = new Set(duties.map(({ event }) => event.id));
+  const replies = await listMyReplies(db, userId, events, now);
 
   return {
     now: now.getTime(),
@@ -35,6 +38,7 @@ export async function loadComingUp(userId: string) {
         venue: e.venue,
         cancelled: e.cancelled,
         mine: mine.has(e.id),
+        reply: replies[e.id] ?? null,
       }),
     ),
   };

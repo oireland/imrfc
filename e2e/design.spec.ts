@@ -2,34 +2,7 @@ import { AxeBuilder } from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import postgres from "postgres";
 import { TEST_DATABASE_URL } from "./support/test-db";
-
-const MAILPIT = "http://localhost:8025";
-const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "irelandoliver4@gmail.com";
-
-async function magicLink(email: string): Promise<string> {
-  for (let i = 0; i < 30; i++) {
-    const list = await (
-      await fetch(`${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}&limit=1`)
-    ).json();
-    const id = list.messages?.[0]?.ID;
-    if (id) {
-      const msg = await (await fetch(`${MAILPIT}/api/v1/message/${id}`)).json();
-      const match = String(msg.Text).match(/https?:\/\/\S+/);
-      if (match) return match[0];
-    }
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  throw new Error("No magic link email arrived in Mailpit");
-}
-
-async function signIn(page: Page, baseURL: string | undefined) {
-  await page.goto("/sign-in");
-  await page.getByPlaceholder("you@example.com").fill(ADMIN_EMAIL);
-  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-  await expect(page.getByText("Check your email")).toBeVisible();
-  const link = new URL(await magicLink(ADMIN_EMAIL));
-  await page.goto(new URL(link.pathname + link.search, baseURL).toString());
-}
+import { signIn } from "./support/sign-in";
 
 async function assertNoHorizontalScroll(page: Page) {
   const overflowing = await page.evaluate(
@@ -83,11 +56,11 @@ test.describe("Design pass: every screen is accessible at phone width, light and
   // "light" / "dark" follow the device (the default System theme); "chosen dark" is
   // the crest menu's Dark choice (<html data-theme="dark">) on a light device.
   for (const mode of ["light", "dark", "chosen dark"] as const) {
-    test(`signed-in screens have no axe violations (${mode})`, async ({ page, baseURL }) => {
+    test(`signed-in screens have no axe violations (${mode})`, async ({ page }) => {
       // Visits and scans every screen (~2s each), well past the default 30s.
       test.setTimeout(120_000);
       await page.emulateMedia({ colorScheme: mode === "dark" ? "dark" : "light" });
-      await signIn(page, baseURL);
+      await signIn(page);
 
       const screens = [
         "/",

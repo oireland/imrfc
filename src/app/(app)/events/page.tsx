@@ -11,7 +11,7 @@ import { formatWhen } from "@/lib/format-time";
 import { listEvents, type Event } from "@/features/events";
 import { isCommitteeOrAbove } from "@/features/users";
 import { requireApprovedUser } from "@/lib/session";
-import { quickAddEvent } from "../actions";
+import { quickAddEvent, saveMyReply } from "../actions";
 import { loadComingUp } from "../coming-up-data";
 
 export default async function EventsPage({ searchParams }: PageProps<"/events">) {
@@ -59,7 +59,7 @@ export default async function EventsPage({ searchParams }: PageProps<"/events">)
         </Link>
       </div>
 
-      <ComingUp {...comingUp} title="Upcoming" canAdd={committee} addAction={quickAddEvent} />
+      <ComingUp {...comingUp} title="Upcoming" canAdd={committee} addAction={quickAddEvent} reply={saveMyReply} />
 
       {committee && (
         <div className="flex flex-col gap-2">
