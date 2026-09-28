@@ -1,18 +1,18 @@
 import { index, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
-import { kitUnit } from "@/features/kit";
+import { equipmentUnit } from "@/features/equipment";
 import { store } from "@/features/stores";
 import { user } from "@/features/users";
 
-// One To Duty and one From Duty per Kit Unit per Event. The Event is referenced
+// One To Duty and one From Duty per Equipment Unit per Event. The Event is referenced
 // by plain id so this feature never reaches into `events` internals.
 export const duty = pgTable(
   "duty",
   {
     id: text("id").primaryKey(),
     eventId: text("event_id").notNull(),
-    kitUnitId: text("kit_unit_id")
+    equipmentUnitId: text("equipment_unit_id")
       .notNull()
-      .references(() => kitUnit.id),
+      .references(() => equipmentUnit.id),
     direction: text("direction", { enum: ["to", "from"] }).notNull(),
     // From Duties only: Home (default), a specific Store, or the Duty's Users as Holders.
     destinationType: text("destination_type", { enum: ["home", "store", "holder"] })
@@ -24,9 +24,9 @@ export const duty = pgTable(
     voidedAt: timestamp("voided_at", { withTimezone: true }),
   },
   (t) => [
-    unique().on(t.eventId, t.kitUnitId, t.direction),
+    unique().on(t.eventId, t.equipmentUnitId, t.direction),
     index("duty_event_id_idx").on(t.eventId),
-    index("duty_kit_unit_id_idx").on(t.kitUnitId),
+    index("duty_equipment_unit_id_idx").on(t.equipmentUnitId),
   ],
 );
 

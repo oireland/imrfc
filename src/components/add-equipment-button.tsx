@@ -14,21 +14,21 @@ type Action = (input: {
   quantity?: number;
 }) => Promise<{ ok: true; id: string } | { ok: false; error: string }>;
 
-/** The full-width "+ Add kit" button: opens the New kit sheet. */
-export function AddKitButton({ stores, action }: { stores: { id: string; name: string }[]; action: Action }) {
+/** The full-width "+ Add equipment" button: opens the New equipment sheet. */
+export function AddEquipmentButton({ stores, action }: { stores: { id: string; name: string }[]; action: Action }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} className={buttonVariants({ size: "lg", className: "h-11 w-full" })}>
         <Plus aria-hidden="true" />
-        Add kit
+        Add equipment
       </button>
-      {open && <AddKitSheet stores={stores} action={action} onClose={() => setOpen(false)} />}
+      {open && <AddEquipmentSheet stores={stores} action={action} onClose={() => setOpen(false)} />}
     </>
   );
 }
 
-function AddKitSheet({ stores, action, onClose }: { stores: { id: string; name: string }[]; action: Action; onClose: () => void }) {
+function AddEquipmentSheet({ stores, action, onClose }: { stores: { id: string; name: string }[]; action: Action; onClose: () => void }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
@@ -43,14 +43,14 @@ function AddKitSheet({ stores, action, onClose }: { stores: { id: string; name: 
         toast.error(result.error);
         return;
       }
-      toast.success("Kit added");
+      toast.success("Equipment added");
       onClose();
       router.refresh();
     });
   }
 
   return (
-    <BottomSheet eyebrow="New kit" onSubmit={save} onClose={onClose}>
+    <BottomSheet eyebrow="New equipment" onSubmit={save} onClose={onClose}>
       <input
         autoFocus
         value={name}

@@ -34,7 +34,7 @@ describe("dutyActions", () => {
     ]);
   });
 
-  it("lets Committee assign (add or remove anyone), confirm, and set where kit goes back to", () => {
+  it("lets Committee assign (add or remove anyone), confirm, and set where equipment goes back to", () => {
     expect(dutyActions(duty(), { viewerId: "priya", committee: true })).toEqual(["claim", "assign"]);
     expect(dutyActions(duty({ userIds: ["tom"] }), { viewerId: "priya", committee: true })).toEqual(["claim", "confirm", "assign"]);
     expect(dutyActions(duty({ direction: "from", userIds: ["sam"] }), { viewerId: "sam", committee: true })).toEqual([

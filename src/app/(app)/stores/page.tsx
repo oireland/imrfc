@@ -37,7 +37,7 @@ export default async function StoresPage() {
 
       <Card className="py-0">
         <div className="divide-y divide-border">
-          {stores.length === 0 && <p className="p-4 text-muted-foreground">No stores yet. Add wherever the kit lives between events.</p>}
+          {stores.length === 0 && <p className="p-4 text-muted-foreground">No stores yet. Add wherever the equipment lives between events.</p>}
           {stores.map((s: Store) => (
             <div key={s.id} className="flex items-center justify-between gap-3 p-4">
               <div className="flex flex-col gap-1">

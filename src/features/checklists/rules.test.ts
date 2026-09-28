@@ -5,31 +5,31 @@ describe("resolveChecklist", () => {
   it("prefers the Event's own Checklist over Series and Default", () => {
     expect(
       resolveChecklist({
-        event: [{ kitUnitId: "a", count: null }],
-        series: [{ kitUnitId: "b", count: null }],
-        default: [{ kitUnitId: "c", count: null }],
+        event: [{ equipmentUnitId: "a", count: null }],
+        series: [{ equipmentUnitId: "b", count: null }],
+        default: [{ equipmentUnitId: "c", count: null }],
       }),
     ).toEqual({
       source: "event",
-      items: [{ kitUnitId: "a", count: null }],
+      items: [{ equipmentUnitId: "a", count: null }],
     });
   });
 
   it("falls back to the Series Checklist, then the Default Checklist", () => {
     expect(
-      resolveChecklist({ series: [{ kitUnitId: "b", count: null }], default: [{ kitUnitId: "c", count: null }] }),
+      resolveChecklist({ series: [{ equipmentUnitId: "b", count: null }], default: [{ equipmentUnitId: "c", count: null }] }),
     ).toEqual({
       source: "series",
-      items: [{ kitUnitId: "b", count: null }],
+      items: [{ equipmentUnitId: "b", count: null }],
     });
-    expect(resolveChecklist({ default: [{ kitUnitId: "c", count: null }] })).toEqual({
+    expect(resolveChecklist({ default: [{ equipmentUnitId: "c", count: null }] })).toEqual({
       source: "default",
-      items: [{ kitUnitId: "c", count: null }],
+      items: [{ equipmentUnitId: "c", count: null }],
     });
   });
 
   it("treats an empty override as an override", () => {
-    expect(resolveChecklist({ event: [], default: [{ kitUnitId: "c", count: null }] })).toEqual({
+    expect(resolveChecklist({ event: [], default: [{ equipmentUnitId: "c", count: null }] })).toEqual({
       source: "event",
       items: [],
     });

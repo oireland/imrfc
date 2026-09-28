@@ -2,14 +2,14 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { resolveEventChecklist, type ResolvedEventChecklist } from "@/features/checklists";
 import { getEvent, listEvents } from "@/features/events";
 import {
-  getKitUnit,
+  getEquipmentUnit,
   getPortions,
-  listKitUnits,
-  listKitUnitsByIds,
+  listEquipmentUnits,
+  listEquipmentUnitsByIds,
   listPortionsFor,
   recordSplitMove,
   setUnconfirmed,
-} from "@/features/kit";
+} from "@/features/equipment";
 import { displayName, isCommitteeOrAbove, listApprovedUsers, type Role } from "@/features/users";
 import { findClashes, type Clash } from "./clashes-rules";
 import { gatherConfirmSources, gatherFromDutyUsers, validateHolderSplit, type HolderPart, type SourcePart } from "./confirm-source-rules";
@@ -17,7 +17,7 @@ import { dutyActions, type DutyAction } from "./duty-actions-rules";
 import { lastDuties, seasonCount } from "./duty-record-rules";
 import { findHeadsUps, type HeadsUp } from "./heads-up-rules";
 import { joinNames } from "./names-rules";
-import type { PlanEvent, PlanKit } from "./plan";
+import type { PlanEvent, PlanEquipment } from "./plan";
 import { duty, dutyUser } from "./schema";
 
 export { duty } from "./schema";
@@ -75,13 +75,13 @@ async function loadUserIdsFor(db: Db, dutyIds: string[]): Promise<Map<string, st
 
 const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
 
-/** The sibling From Duty for a To Duty (same Event, same Kit Unit), if any. */
+/** The sibling From Duty for a To Duty (same Event, same Equipment Unit), if any. */
 async function siblingFromDuty(db: Db, toRow: typeof duty.$inferSelect): Promise<typeof duty.$inferSelect | undefined> {
   if (toRow.direction !== "to") return undefined;
   const [row] = await db
     .select()
     .from(duty)
-    .where(and(eq(duty.eventId, toRow.eventId), eq(duty.kitUnitId, toRow.kitUnitId), eq(duty.direction, "from")));
+    .where(and(eq(duty.eventId, toRow.eventId), eq(duty.equipmentUnitId, toRow.equipmentUnitId), eq(duty.direction, "from")));
   return row;
 }
 
@@ -111,17 +111,17 @@ async function removeUser(db: Db, row: typeof duty.$inferSelect, userId: string)
   if (following) await db.delete(dutyUser).where(and(eq(dutyUser.dutyId, following.id), eq(dutyUser.userId, userId)));
 }
 
-/** Makes sure each Kit Unit on the Event's Checklist has its To and From Duty, and returns them. */
-export async function ensureDuties(db: Db, eventId: string, kitUnitIds: string[]): Promise<Duty[]> {
-  if (kitUnitIds.length === 0) return [];
+/** Makes sure each Equipment Unit on the Event's Checklist has its To and From Duty, and returns them. */
+export async function ensureDuties(db: Db, eventId: string, equipmentUnitIds: string[]): Promise<Duty[]> {
+  if (equipmentUnitIds.length === 0) return [];
   await db
     .insert(duty)
     .values(
-      kitUnitIds.flatMap((kitUnitId) =>
+      equipmentUnitIds.flatMap((equipmentUnitId) =>
         (["to", "from"] as const).map((direction) => ({
           id: crypto.randomUUID(),
           eventId,
-          kitUnitId,
+          equipmentUnitId,
           direction,
         })),
       ),
@@ -130,7 +130,7 @@ export async function ensureDuties(db: Db, eventId: string, kitUnitIds: string[]
   const rows: (typeof duty.$inferSelect)[] = await db
     .select()
     .from(duty)
-    .where(and(eq(duty.eventId, eventId), inArray(duty.kitUnitId, kitUnitIds)));
+    .where(and(eq(duty.eventId, eventId), inArray(duty.equipmentUnitId, equipmentUnitIds)));
   const userIdsByDuty = await loadUserIdsFor(db, rows.map((r) => r.id));
   return rows.map((r) => toDuty(r, userIdsByDuty.get(r.id) ?? []));
 }
@@ -191,10 +191,10 @@ export async function setDestination(db: Db, dutyId: string, destination: DutyDe
   return { ok: true };
 }
 
-/** The Checklist line's effective count for this Duty's Event and Kit Unit, capped at `fallbackQuantity`. */
+/** The Checklist line's effective count for this Duty's Event and Equipment Unit, capped at `fallbackQuantity`. */
 async function checklistCountFor(
   db: Db,
-  dutyRow: { eventId: string; kitUnitId: string },
+  dutyRow: { eventId: string; equipmentUnitId: string },
   fallbackQuantity: number,
 ): Promise<number> {
   const event = await getEvent(db, dutyRow.eventId);
@@ -204,7 +204,7 @@ async function checklistCountFor(
     seriesId: event.seriesId,
     eventType: event.eventType,
   });
-  return resolved.items.find((i) => i.kitUnitId === dutyRow.kitUnitId)?.count ?? fallbackQuantity;
+  return resolved.items.find((i) => i.equipmentUnitId === dutyRow.equipmentUnitId)?.count ?? fallbackQuantity;
 }
 
 /** Every given Event's resolved Checklist, once each — not once per Duty on it. */
@@ -224,10 +224,10 @@ async function resolveChecklistsForEvents(
 /** A Checklist line's effective count from an already-resolved Event Checklist. */
 function countFromResolved(
   resolved: ResolvedEventChecklist | undefined,
-  kitUnitId: string,
+  equipmentUnitId: string,
   fallbackQuantity: number,
 ): number {
-  return resolved?.items.find((i) => i.kitUnitId === kitUnitId)?.count ?? fallbackQuantity;
+  return resolved?.items.find((i) => i.equipmentUnitId === equipmentUnitId)?.count ?? fallbackQuantity;
 }
 
 /**
@@ -252,7 +252,7 @@ function resolveHolderSplit(
 
 /**
  * The Duty's User, or any Committee member, Confirms a Duty: this records a Move of
- * the Checklist line's effective count (not necessarily the Kit Unit's whole
+ * the Checklist line's effective count (not necessarily the Equipment Unit's whole
  * Quantity). A To Duty's count is gathered from a source Place (or several — see
  * `gatherConfirmSources`), defaulted unless the confirm sheet gives one. A From Duty's
  * count always comes from the Duty's own People. When the Duty has several People and
@@ -275,19 +275,19 @@ export async function confirmDuty(
     return { ok: false, error: "Only the person doing it or the committee can confirm it." };
   }
 
-  const kit = await getKitUnit(db, row.kitUnitId);
-  if (!kit) return { ok: false, error: "That kit no longer exists." };
+  const equipment = await getEquipmentUnit(db, row.equipmentUnitId);
+  if (!equipment) return { ok: false, error: "That equipment no longer exists." };
 
-  const count = await checklistCountFor(db, row, kit.quantity);
-  const portions = await getPortions(db, row.kitUnitId);
+  const count = await checklistCountFor(db, row, equipment.quantity);
+  const portions = await getPortions(db, row.equipmentUnitId);
 
   await db.update(duty).set({ confirmedAt: new Date() }).where(eq(duty.id, dutyId));
 
   if (row.direction === "to") {
     const holderSplit = resolveHolderSplit(userIds, count, actor.id, options?.holders);
     if (!holderSplit.ok) return holderSplit;
-    const parts = options?.from ?? gatherConfirmSources(portions, { dutyUserIds: userIds, homeStoreId: kit.homeId, count }).sources;
-    return recordSplitMove(db, kit.id, actor.id, "duty", {
+    const parts = options?.from ?? gatherConfirmSources(portions, { dutyUserIds: userIds, homeStoreId: equipment.homeId, count }).sources;
+    return recordSplitMove(db, equipment.id, actor.id, "duty", {
       sources: toSources(parts),
       targets: holderSplit.parts.map((p) => ({ to: { type: "holder", holderId: p.userId } as const, count: p.count })),
     });
@@ -297,13 +297,13 @@ export async function confirmDuty(
   if (row.destinationType === "holder") {
     const holderSplit = resolveHolderSplit(userIds, count, actor.id, options?.holders);
     if (!holderSplit.ok) return holderSplit;
-    return recordSplitMove(db, kit.id, actor.id, "duty", {
+    return recordSplitMove(db, equipment.id, actor.id, "duty", {
       sources: toSources(parts),
       targets: holderSplit.parts.map((p) => ({ to: { type: "holder", holderId: p.userId } as const, count: p.count })),
     });
   }
-  const storeId = row.destinationType === "store" && row.destinationStoreId ? row.destinationStoreId : kit.homeId;
-  return recordSplitMove(db, kit.id, actor.id, "duty", { sources: toSources(parts), targets: [{ to: { type: "store", storeId }, count }] });
+  const storeId = row.destinationType === "store" && row.destinationStoreId ? row.destinationStoreId : equipment.homeId;
+  return recordSplitMove(db, equipment.id, actor.id, "duty", { sources: toSources(parts), targets: [{ to: { type: "store", storeId }, count }] });
 }
 
 /** `SourcePart` (`{ place, count }`, the domain vocabulary) to `recordSplitMove`'s `{ from, count }`. */
@@ -359,7 +359,7 @@ export async function voidDutiesForEvent(db: Db, eventId: string) {
 }
 
 /**
- * Once an Event has ended, a Kit Unit still held by the To Duty's People whose From
+ * Once an Event has ended, an Equipment Unit still held by the To Duty's People whose From
  * Duty wasn't Confirmed becomes Unconfirmed — up to the Checklist line's count, taken
  * from whichever of them hold it (in order). The app never assumes a Move happened.
  */
@@ -372,27 +372,27 @@ export async function markUnconfirmed(db: Db) {
     .from(duty)
     .where(and(inArray(duty.eventId, ended), isNull(duty.voidedAt)));
   const fromRows = rows.filter((d) => d.direction === "from" && !d.confirmedAt);
-  const kitUnitIds = [...new Set(fromRows.map((r) => r.kitUnitId))];
-  const [userIdsByDuty, checklistsByEvent, kitUnits, portions] = await Promise.all([
+  const equipmentUnitIds = [...new Set(fromRows.map((r) => r.equipmentUnitId))];
+  const [userIdsByDuty, checklistsByEvent, equipmentUnits, portions] = await Promise.all([
     loadUserIdsFor(db, rows.map((r) => r.id)),
     resolveChecklistsForEvents(db, endedEvents),
-    listKitUnitsByIds(db, kitUnitIds),
-    listPortionsFor(db, kitUnitIds),
+    listEquipmentUnitsByIds(db, equipmentUnitIds),
+    listPortionsFor(db, equipmentUnitIds),
   ]);
-  const kitById = new Map(kitUnits.map((k) => [k.id, k]));
-  const portionsByKit = new Map<string, typeof portions>();
-  for (const p of portions) portionsByKit.set(p.kitUnitId, [...(portionsByKit.get(p.kitUnitId) ?? []), p]);
+  const equipmentById = new Map(equipmentUnits.map((k) => [k.id, k]));
+  const portionsByEquipment = new Map<string, typeof portions>();
+  for (const p of portions) portionsByEquipment.set(p.equipmentUnitId, [...(portionsByEquipment.get(p.equipmentUnitId) ?? []), p]);
 
   for (const from of fromRows) {
-    const to = rows.find((d) => d.direction === "to" && d.eventId === from.eventId && d.kitUnitId === from.kitUnitId);
+    const to = rows.find((d) => d.direction === "to" && d.eventId === from.eventId && d.equipmentUnitId === from.equipmentUnitId);
     const toUserIds = to ? (userIdsByDuty.get(to.id) ?? []) : [];
     if (!to?.confirmedAt || toUserIds.length === 0) continue;
-    const kit = kitById.get(from.kitUnitId);
-    if (!kit) continue;
-    const count = countFromResolved(checklistsByEvent.get(from.eventId), from.kitUnitId, kit.quantity);
-    const held = gatherFromDutyUsers(portionsByKit.get(kit.id) ?? [], { userIds: toUserIds, count });
+    const equipment = equipmentById.get(from.equipmentUnitId);
+    if (!equipment) continue;
+    const count = countFromResolved(checklistsByEvent.get(from.eventId), from.equipmentUnitId, equipment.quantity);
+    const held = gatherFromDutyUsers(portionsByEquipment.get(equipment.id) ?? [], { userIds: toUserIds, count });
     for (const source of held.sources) {
-      await setUnconfirmed(db, kit.id, from.eventId, source.place, source.count);
+      await setUnconfirmed(db, equipment.id, from.eventId, source.place, source.count);
     }
   }
 }
@@ -421,7 +421,7 @@ export async function listUpcomingDutiesForUser(db: Db, userId: string) {
     .select({
       id: duty.id,
       eventId: duty.eventId,
-      kitUnitId: duty.kitUnitId,
+      equipmentUnitId: duty.equipmentUnitId,
       direction: duty.direction,
       destinationType: duty.destinationType,
       destinationStoreId: duty.destinationStoreId,
@@ -442,19 +442,19 @@ export async function listUpcomingDutiesForUser(db: Db, userId: string) {
         isNull(duty.voidedAt),
       ),
     );
-  const [userIdsByDuty, checklistsByEvent, kitUnits] = await Promise.all([
+  const [userIdsByDuty, checklistsByEvent, equipmentUnits] = await Promise.all([
     loadUserIdsFor(db, rows.map((r) => r.id)),
     resolveChecklistsForEvents(db, events),
-    listKitUnitsByIds(db, rows.map((r) => r.kitUnitId)),
+    listEquipmentUnitsByIds(db, rows.map((r) => r.equipmentUnitId)),
   ]);
-  const kitUnitById = new Map(kitUnits.map((k) => [k.id, k]));
+  const equipmentUnitById = new Map(equipmentUnits.map((k) => [k.id, k]));
   return events.flatMap((event) =>
     rows
       .filter((r) => r.eventId === event.id)
       .map((r) => ({
         duty: toDuty(r, userIdsByDuty.get(r.id) ?? []),
         event,
-        count: countFromResolved(checklistsByEvent.get(event.id), r.kitUnitId, kitUnitById.get(r.kitUnitId)?.quantity ?? 1),
+        count: countFromResolved(checklistsByEvent.get(event.id), r.equipmentUnitId, equipmentUnitById.get(r.equipmentUnitId)?.quantity ?? 1),
       })),
   );
 }
@@ -463,7 +463,7 @@ export type PastDutyRecord = {
   dutyId: string;
   direction: "to" | "from";
   confirmedAt: Date | null;
-  kitUnitId: string;
+  equipmentUnitId: string;
   event: { id: string; title: string; end: Date };
 };
 
@@ -485,8 +485,8 @@ export async function listDutyRecordForUser(
   const pastEvents = (await listEvents(db, { when: "past" })).filter((e) => !e.cancelled);
   if (pastEvents.length === 0) return { upcoming, season: { done: 0, neverConfirmed: 0 }, last: [] };
   const eventById = new Map(pastEvents.map((e) => [e.id, e]));
-  const rows: { id: string; eventId: string; kitUnitId: string; direction: "to" | "from"; confirmedAt: Date | null }[] = await db
-    .select({ id: duty.id, eventId: duty.eventId, kitUnitId: duty.kitUnitId, direction: duty.direction, confirmedAt: duty.confirmedAt })
+  const rows: { id: string; eventId: string; equipmentUnitId: string; direction: "to" | "from"; confirmedAt: Date | null }[] = await db
+    .select({ id: duty.id, eventId: duty.eventId, equipmentUnitId: duty.equipmentUnitId, direction: duty.direction, confirmedAt: duty.confirmedAt })
     .from(duty)
     .innerJoin(dutyUser, eq(dutyUser.dutyId, duty.id))
     .where(and(eq(dutyUser.userId, userId), inArray(duty.eventId, pastEvents.map((e) => e.id)), isNull(duty.voidedAt)));
@@ -498,7 +498,7 @@ export async function listDutyRecordForUser(
             dutyId: r.id,
             direction: r.direction,
             confirmedAt: r.confirmedAt,
-            kitUnitId: r.kitUnitId,
+            equipmentUnitId: r.equipmentUnitId,
             event: { id: event.id, title: event.title, end: event.end },
           }
         : undefined;
@@ -511,12 +511,12 @@ export async function listDutyRecordForUser(
   };
 }
 
-/** The kit plan for every upcoming, uncancelled Event. Read-only: it never creates Duties. */
-async function loadPlan(db: Db): Promise<{ kit: PlanKit[]; events: PlanEvent[] }> {
+/** The equipment plan for every upcoming, uncancelled Event. Read-only: it never creates Duties. */
+async function loadPlan(db: Db): Promise<{ equipment: PlanEquipment[]; events: PlanEvent[] }> {
   const events = (await listEvents(db, { when: "upcoming" })).filter((e) => !e.cancelled);
-  if (events.length === 0) return { kit: [], events: [] };
-  const [kit, dutyRows] = await Promise.all([
-    listKitUnits(db, { includeRetired: true }),
+  if (events.length === 0) return { equipment: [], events: [] };
+  const [equipment, dutyRows] = await Promise.all([
+    listEquipmentUnits(db, { includeRetired: true }),
     db
       .select()
       .from(duty)
@@ -540,14 +540,14 @@ async function loadPlan(db: Db): Promise<{ kit: PlanKit[]; events: PlanEvent[] }
       items: (await resolveEventChecklist(db, { eventId: e.id, seriesId: e.seriesId, eventType: e.eventType })).items,
       duties: dutyRows
         .filter((d) => d.eventId === e.id)
-        .map((d) => ({ kitUnitId: d.kitUnitId, direction: d.direction, userIds: userIdsByDuty.get(d.id) ?? [] })),
+        .map((d) => ({ equipmentUnitId: d.equipmentUnitId, direction: d.direction, userIds: userIdsByDuty.get(d.id) ?? [] })),
     })),
   );
-  const portions = await listPortionsFor(db, kit.map((k) => k.id));
+  const portions = await listPortionsFor(db, equipment.map((k) => k.id));
   const portionsByUnit = new Map<string, typeof portions>();
-  for (const p of portions) portionsByUnit.set(p.kitUnitId, [...(portionsByUnit.get(p.kitUnitId) ?? []), p]);
+  for (const p of portions) portionsByUnit.set(p.equipmentUnitId, [...(portionsByUnit.get(p.equipmentUnitId) ?? []), p]);
   return {
-    kit: kit.map((k) => ({
+    equipment: equipment.map((k) => ({
       id: k.id,
       name: k.name,
       status: k.status,
@@ -572,7 +572,7 @@ export async function listHeadsUps(db: Db, now: Date = new Date()): Promise<Head
   return findHeadsUps({ now, ...plan, personName: (id) => names.get(id) ?? "Someone" });
 }
 
-/** A shared Duty reads as everyone's: "Tom & Sam" for the Kit Unit's plain description. */
+/** A shared Duty reads as everyone's: "Tom & Sam" for the Equipment Unit's plain description. */
 export function dutyPeopleLabel(userIds: string[], personName: (id: string) => string): string {
   return joinNames(userIds.map(personName));
 }

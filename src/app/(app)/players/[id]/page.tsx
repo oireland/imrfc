@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { SubmitButton } from "@/components/submit-button";
 import { getSeasonRecord, type RecordLine, type ReplyCounts } from "@/features/availability";
-import { listKitUnits } from "@/features/kit";
+import { listEquipmentUnits } from "@/features/equipment";
 import { getPlayer, setPlayerPositions, setPlaying } from "@/features/players";
 import { formatWhen } from "@/lib/format-time";
 import { RUGBY_POSITIONS, isCommitteeOrAbove, type RugbyPosition } from "@/features/users";
@@ -19,14 +19,14 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
   if (!user || !isCommitteeOrAbove(user.role)) redirect("/");
 
   const { id } = await params;
-  const [player, kitUnits, availability] = await Promise.all([
+  const [player, equipmentUnits, availability] = await Promise.all([
     getPlayer(db, id),
-    listKitUnits(db, { includeRetired: true }),
+    listEquipmentUnits(db, { includeRetired: true }),
     getSeasonRecord(db, id),
   ]);
   if (!player) redirect("/players");
 
-  const kitName = new Map(kitUnits.map((k) => [k.id, k.name]));
+  const equipmentName = new Map(equipmentUnits.map((k) => [k.id, k.name]));
 
   async function savePositions(formData: FormData) {
     "use server";
@@ -116,7 +116,7 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
               <ul className="flex flex-col gap-1.5">
                 {upcoming.map(({ duty, event, count }) => (
                   <li key={duty.id} className="text-sm">
-                    {duty.direction === "to" ? "Bring" : "Take back"} {kitName.get(duty.kitUnitId) ?? "Kit"}
+                    {duty.direction === "to" ? "Bring" : "Take back"} {equipmentName.get(duty.equipmentUnitId) ?? "Equipment"}
                     {count > 1 && ` ×${count}`} — {event.title}, {formatWhen(duty.direction === "to" ? event.start : event.end)}
                   </li>
                 ))}
@@ -140,7 +140,7 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
                 {last.map((r) => (
                   <li key={r.dutyId} className="flex items-center justify-between gap-2 text-sm">
                     <span>
-                      {r.direction === "to" ? "Bring" : "Take back"} {kitName.get(r.kitUnitId) ?? "Kit"} — {r.event.title}
+                      {r.direction === "to" ? "Bring" : "Take back"} {equipmentName.get(r.equipmentUnitId) ?? "Equipment"} — {r.event.title}
                     </span>
                     <Badge variant={r.confirmedAt ? "secondary" : "destructive"}>{r.confirmedAt ? "Done" : "Never confirmed"}</Badge>
                   </li>

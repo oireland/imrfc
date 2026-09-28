@@ -14,7 +14,7 @@ import {
 function portion(overrides: Partial<Portion>): Portion {
   return {
     id: crypto.randomUUID(),
-    kitUnitId: "kit-1",
+    equipmentUnitId: "equipment-1",
     count: 1,
     whereaboutsType: "store",
     storeId: "shed",
@@ -67,7 +67,7 @@ describe("singlePlace", () => {
     expect(singlePlace([p])).toEqual({ type: "store", storeId: "shed" });
   });
 
-  it("returns undefined when the Kit Unit is split across places", () => {
+  it("returns undefined when the Equipment Unit is split across places", () => {
     const a = portion({ count: 4, storeId: "shed" });
     const b = portion({ count: 4, whereaboutsType: "holder", storeId: null, holderId: "sam" });
     expect(singlePlace([a, b])).toBeUndefined();
@@ -233,7 +233,7 @@ describe("lowerQuantity", () => {
     const shed = portion({ count: 1, storeId: "shed" });
     expect(lowerQuantity([shed], { removeCount: 1 })).toEqual({
       ok: false,
-      error: "Can't lower a kit unit's quantity below 1.",
+      error: "Can't lower an equipment unit's quantity below 1.",
     });
   });
 

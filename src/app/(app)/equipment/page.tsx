@@ -2,64 +2,64 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { ChevronRight, CircleHelp, User, Warehouse } from "lucide-react";
 import { db } from "@/db/client";
-import { AddKitButton } from "@/components/add-kit-button";
+import { AddEquipmentButton } from "@/components/add-equipment-button";
 import { Card } from "@/components/ui/card";
 import { QuickMoveRowButton } from "@/components/quick-move-button";
 import {
-  getKitUnit,
+  getEquipmentUnit,
   getPortions,
   groupByWhereabouts,
-  listKitUnits,
+  listEquipmentUnits,
   listPortionsFor,
   quickMoveFor,
   recordMove,
-  type KitRow,
-  type KitUnit,
+  type EquipmentRow,
+  type EquipmentUnit,
   type WhereaboutsGroup,
-} from "@/features/kit";
+} from "@/features/equipment";
 import { markUnconfirmed } from "@/features/duties";
 import { getEvent } from "@/features/events";
 import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
 import { listStores, type Store } from "@/features/stores";
 import { requireApprovedUser } from "@/lib/session";
-import { addKitUnit } from "./actions";
+import { addEquipmentUnit } from "./actions";
 
-export default async function KitViewPage() {
+export default async function EquipmentViewPage() {
   const user = await requireApprovedUser();
 
   await markUnconfirmed(db);
   const [allUnits, stores, people] = await Promise.all([
-    listKitUnits(db, { includeRetired: true }),
+    listEquipmentUnits(db, { includeRetired: true }),
     listStores(db),
     listApprovedUsers(db),
   ]);
   const personById = new Map(people.map((p) => [p.id, p]));
-  const activeUnits = allUnits.filter((u: KitUnit) => u.status === "active");
-  const inactiveUnits = allUnits.filter((u: KitUnit) => u.status !== "active");
-  const portions = await listPortionsFor(db, activeUnits.map((u: KitUnit) => u.id));
+  const activeUnits = allUnits.filter((u: EquipmentUnit) => u.status === "active");
+  const inactiveUnits = allUnits.filter((u: EquipmentUnit) => u.status !== "active");
+  const portions = await listPortionsFor(db, activeUnits.map((u: EquipmentUnit) => u.id));
   const lastSeenIds = [...new Set(portions.flatMap((p) => (p.lastSeenEventId ? [p.lastSeenEventId] : [])))];
   const lastSeenEvents = await Promise.all(lastSeenIds.map((id) => getEvent(db, id)));
   const lastSeen = new Map(lastSeenIds.map((id, i) => [id, lastSeenEvents[i]?.title ?? "an event"]));
   const storesById = new Map(stores.map((s: Store) => [s.id, s]));
   const storeName = (id: string) => storesById.get(id)?.name ?? "Store";
-  const unitsById = new Map(activeUnits.map((u: KitUnit) => [u.id, u]));
-  const rows: KitRow[] = portions
-    .filter((p) => unitsById.has(p.kitUnitId))
-    .map((p) => ({ unit: unitsById.get(p.kitUnitId)!, portion: p }));
+  const unitsById = new Map(activeUnits.map((u: EquipmentUnit) => [u.id, u]));
+  const rows: EquipmentRow[] = portions
+    .filter((p) => unitsById.has(p.equipmentUnitId))
+    .map((p) => ({ unit: unitsById.get(p.equipmentUnitId)!, portion: p }));
   const groups = groupByWhereabouts(rows, user.id);
 
   async function quickMove(formData: FormData) {
     "use server";
     const { id: userId } = await requireApprovedUser();
-    const kitUnitId = String(formData.get("kitUnitId"));
+    const equipmentUnitId = String(formData.get("equipmentUnitId"));
     const portionId = String(formData.get("portionId"));
-    const [unit, unitPortions] = await Promise.all([getKitUnit(db, kitUnitId), getPortions(db, kitUnitId)]);
+    const [unit, unitPortions] = await Promise.all([getEquipmentUnit(db, equipmentUnitId), getPortions(db, equipmentUnitId)]);
     const portion = unitPortions.find((p) => p.id === portionId);
     if (!unit || !portion) return;
     const count = formData.get("count");
     const move = quickMoveFor({ unit, portion }, userId, count ? Number(count) : undefined);
-    await recordMove(db, kitUnitId, userId, move.to, "ad_hoc", { count: move.count, from: move.from });
-    revalidatePath("/kit");
+    await recordMove(db, equipmentUnitId, userId, move.to, "ad_hoc", { count: move.count, from: move.from });
+    revalidatePath("/equipment");
   }
 
   function groupHeading(group: WhereaboutsGroup) {
@@ -78,7 +78,7 @@ export default async function KitViewPage() {
     };
   }
 
-  function KitRowItem({ row }: { row: KitRow }) {
+  function EquipmentRowItem({ row }: { row: EquipmentRow }) {
     const { unit, portion } = row;
     const move = quickMoveFor(row, user.id);
     const split = unit.quantity > 1;
@@ -90,7 +90,7 @@ export default async function KitViewPage() {
     return (
       <li className="relative flex items-center gap-3 px-4 py-3 has-[a:hover]:bg-muted/60">
         <Link
-          href={`/kit/${unit.id}`}
+          href={`/equipment/${unit.id}`}
           className="flex min-w-0 flex-1 flex-col after:absolute after:inset-0 after:content-['']"
         >
           <span className="truncate font-medium">{name}</span>
@@ -98,7 +98,7 @@ export default async function KitViewPage() {
         </Link>
         <QuickMoveRowButton
           action={quickMove}
-          fields={{ kitUnitId: unit.id, portionId: portion.id }}
+          fields={{ equipmentUnitId: unit.id, portionId: portion.id }}
           available={split ? portion.count : 1}
           returnTo={move.to.type === "store" ? storeName(move.to.storeId) : null}
           name={name}
@@ -111,11 +111,11 @@ export default async function KitViewPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h2 className="font-heading text-[40px] leading-none tracking-tight">Kit</h2>
+        <h2 className="font-heading text-[40px] leading-none tracking-tight">Equipment</h2>
         <p className="text-sm text-muted-foreground">Where everything is right now. Tap anything to see its history.</p>
       </div>
 
-      {groups.length === 0 && <p className="text-muted-foreground">No kit yet.</p>}
+      {groups.length === 0 && <p className="text-muted-foreground">No equipment yet.</p>}
 
       {groups.map((group) => {
         const { icon: Icon, title, kind, blocked } = groupHeading(group);
@@ -140,7 +140,7 @@ export default async function KitViewPage() {
             <Card className="py-0">
               <ul className="divide-y divide-border">
                 {group.rows.map((row) => (
-                  <KitRowItem key={`${row.unit.id}:${row.portion.id}`} row={row} />
+                  <EquipmentRowItem key={`${row.unit.id}:${row.portion.id}`} row={row} />
                 ))}
               </ul>
             </Card>
@@ -155,10 +155,10 @@ export default async function KitViewPage() {
           </h3>
           <Card className="py-0">
             <ul className="divide-y divide-border">
-              {inactiveUnits.map((unit: KitUnit) => (
+              {inactiveUnits.map((unit: EquipmentUnit) => (
                 <li key={unit.id}>
                   <Link
-                    href={`/kit/${unit.id}`}
+                    href={`/equipment/${unit.id}`}
                     className="flex items-center justify-between gap-2 px-4 py-3 hover:bg-muted/60"
                   >
                     <span className="font-medium">{unit.name}</span>
@@ -171,7 +171,7 @@ export default async function KitViewPage() {
         </section>
       )}
 
-      {isCommitteeOrAbove(user.role) && <AddKitButton stores={stores.map((s: Store) => ({ id: s.id, name: s.name }))} action={addKitUnit} />}
+      {isCommitteeOrAbove(user.role) && <AddEquipmentButton stores={stores.map((s: Store) => ({ id: s.id, name: s.name }))} action={addEquipmentUnit} />}
     </div>
   );
 }

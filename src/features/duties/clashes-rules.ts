@@ -1,12 +1,12 @@
 // Clash rules: pure functions over plain data, no database or Next.js.
-import { byStart, dutyUsers, itemCount, needsUnit, HOUR, type PlanEvent, type PlanKit } from "./plan";
+import { byStart, dutyUsers, itemCount, needsUnit, HOUR, type PlanEvent, type PlanEquipment } from "./plan";
 
 /** Events closer together than this count as back-to-back. */
 const BACK_TO_BACK_GAP = 2 * HOUR;
 
 export type Clash = {
   kind: "overlap" | "back_to_back";
-  kitUnitId: string;
+  equipmentUnitId: string;
   eventIds: string[];
   message: string;
 };
@@ -18,7 +18,7 @@ function joinTitles(titles: string[]): string {
   return `${titles.slice(0, -1).join(", ")} and ${titles[titles.length - 1]}`;
 }
 
-function overlapMessage(unit: PlanKit, events: PlanEvent[], total: number): string {
+function overlapMessage(unit: PlanEquipment, events: PlanEvent[], total: number): string {
   const titles = events.map((e) => e.title);
   if (unit.quantity === 1) {
     const need = titles.length === 2 ? "both" : "all";
@@ -27,7 +27,7 @@ function overlapMessage(unit: PlanKit, events: PlanEvent[], total: number): stri
   return `${joinTitles(titles)} need ${total} ${unit.name} between them, but the club only has ${unit.quantity}.`;
 }
 
-function backToBackMessage(unit: PlanKit, a: PlanEvent, b: PlanEvent, total: number): string {
+function backToBackMessage(unit: PlanEquipment, a: PlanEvent, b: PlanEvent, total: number): string {
   if (unit.quantity === 1) {
     return `${b.title} starts straight after ${a.title} and both need ${unit.name}, but nobody is taking ${unit.name} away from ${a.title} yet.`;
   }
@@ -35,16 +35,16 @@ function backToBackMessage(unit: PlanKit, a: PlanEvent, b: PlanEvent, total: num
 }
 
 /**
- * A Kit Unit needed at Events that overlap, or that are back-to-back with nobody
+ * An Equipment Unit needed at Events that overlap, or that are back-to-back with nobody
  * taking it away from the first, whose counts between them add up to more than its
  * Quantity. Warnings only: a Clash never blocks anything. `events` are the upcoming,
  * uncancelled Events.
  */
-export function findClashes({ kit, events }: { kit: PlanKit[]; events: PlanEvent[] }): Clash[] {
+export function findClashes({ equipment, events }: { equipment: PlanEquipment[]; events: PlanEvent[] }): Clash[] {
   const clashes: Clash[] = [];
   const sorted = byStart(events);
 
-  for (const unit of kit) {
+  for (const unit of equipment) {
     const needing = sorted.filter((e) => needsUnit(e, unit.id));
 
     // Overlap: sweep sorted-by-start Events into maximal mutually-overlapping groups
@@ -57,7 +57,7 @@ export function findClashes({ kit, events }: { kit: PlanKit[]; events: PlanEvent
       if (total > unit.quantity) {
         clashes.push({
           kind: "overlap",
-          kitUnitId: unit.id,
+          equipmentUnitId: unit.id,
           eventIds: group.map((e) => e.id),
           message: overlapMessage(unit, group, total),
         });
@@ -85,7 +85,7 @@ export function findClashes({ kit, events }: { kit: PlanKit[]; events: PlanEvent
       if (total > unit.quantity) {
         clashes.push({
           kind: "back_to_back",
-          kitUnitId: unit.id,
+          equipmentUnitId: unit.id,
           eventIds: [a.id, b.id],
           message: backToBackMessage(unit, a, b, total),
         });

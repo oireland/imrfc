@@ -6,7 +6,7 @@ import { ComingUp } from "@/components/coming-up";
 import { CrestThemePicker } from "@/components/crest-theme-picker";
 import { listWaitingOnReply } from "@/features/availability";
 import { joinNames, listUpcomingDutiesForUser, markUnconfirmed } from "@/features/duties";
-import { listKitHeldBy, listKitUnits } from "@/features/kit";
+import { listEquipmentHeldBy, listEquipmentUnits } from "@/features/equipment";
 import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
 import { greeting, londonDay, londonTime } from "@/lib/calendar";
 import { requireApprovedUser } from "@/lib/session";
@@ -14,7 +14,7 @@ import { cn } from "cn";
 import { quickAddEvent, saveMyReply, setTheme } from "./actions";
 import { loadComingUp } from "./coming-up-data";
 
-/** How many held Kit Units the greeting names before "& N more". */
+/** How many held Equipment Units the greeting names before "& N more". */
 const HELD_SHOWN = 2;
 
 /** "Today", "Tomorrow", a weekday within the week, else "Sat 11 Oct". */
@@ -31,15 +31,15 @@ export default async function Home() {
   const user = await requireApprovedUser();
 
   await markUnconfirmed(db);
-  const [asks, duties, held, comingUp, allKit, people] = await Promise.all([
+  const [asks, duties, held, comingUp, allEquipment, people] = await Promise.all([
     listWaitingOnReply(db, user.id),
     listUpcomingDutiesForUser(db, user.id),
-    listKitHeldBy(db, user.id),
+    listEquipmentHeldBy(db, user.id),
     loadComingUp(user.id),
-    listKitUnits(db, { includeRetired: true }),
+    listEquipmentUnits(db, { includeRetired: true }),
     listApprovedUsers(db),
   ]);
-  const kitNames = new Map(allKit.map((k) => [k.id, k.name]));
+  const equipmentNames = new Map(allEquipment.map((k) => [k.id, k.name]));
   const names = new Map(people.map((p) => [p.id, displayName(p)]));
   // A shared Duty is yours for everyone on it: "with Sam".
   const withOthers = (userIds: string[]) => {
@@ -66,7 +66,7 @@ export default async function Home() {
               {held.slice(0, HELD_SHOWN).map((unit, i, shown) => (
                 <Fragment key={unit.id}>
                   {i > 0 && (i === shown.length - 1 && held.length <= HELD_SHOWN ? " & " : ", ")}
-                  <Link href={`/kit/${unit.id}`} className="text-foreground underline-offset-4 hover:underline">
+                  <Link href={`/equipment/${unit.id}`} className="text-foreground underline-offset-4 hover:underline">
                     {unit.name}
                     {unit.count > 1 && ` ×${unit.count}`}
                   </Link>
@@ -75,7 +75,7 @@ export default async function Home() {
               {held.length > HELD_SHOWN && (
                 <>
                   {" & "}
-                  <Link href="/kit" className="text-foreground underline-offset-4 hover:underline">
+                  <Link href="/equipment" className="text-foreground underline-offset-4 hover:underline">
                     {held.length - HELD_SHOWN} more
                   </Link>
                 </>
@@ -104,7 +104,7 @@ export default async function Home() {
             {duties.map(({ duty, event, count }, i) => {
               const next = i === 0;
               const when = duty.direction === "to" ? event.start : event.end;
-              const unit = allKit.find((k) => k.id === duty.kitUnitId);
+              const unit = allEquipment.find((k) => k.id === duty.equipmentUnitId);
               return (
                 <li key={duty.id}>
                   <Link
@@ -126,7 +126,7 @@ export default async function Home() {
                     </span>
                     <span>
                       <span className="block font-heading text-[21px] leading-none">
-                        {kitNames.get(duty.kitUnitId) ?? "Kit Unit"}
+                        {equipmentNames.get(duty.equipmentUnitId) ?? "Equipment Unit"}
                         {unit && unit.quantity > 1 && ` ×${count}`}
                       </span>
                       <span className={cn("mt-1 block truncate text-xs", next ? "text-lead-foreground/70" : "text-muted-foreground")}>

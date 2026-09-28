@@ -12,9 +12,9 @@ describe("formatDutySummary", () => {
     const text = formatDutySummary({
       ...base,
       items: [
-        { kitName: "Ball bag A", count: 1, quantity: 1, to: "Tom", from: "Tom" },
-        { kitName: "Tackle shields", count: 1, quantity: 1, to: "Sam", from: "Priya" },
-        { kitName: "Cones", count: 1, quantity: 1, to: null, from: null },
+        { equipmentName: "Ball bag A", count: 1, quantity: 1, to: "Tom", from: "Tom" },
+        { equipmentName: "Tackle shields", count: 1, quantity: 1, to: "Sam", from: "Priya" },
+        { equipmentName: "Cones", count: 1, quantity: 1, to: null, from: null },
       ],
     });
     expect(text).toBe(
@@ -30,7 +30,7 @@ describe("formatDutySummary", () => {
   it("flags only the unassigned side when one Duty is filled", () => {
     const text = formatDutySummary({
       ...base,
-      items: [{ kitName: "Cones", count: 1, quantity: 1, to: "Sam", from: null }],
+      items: [{ equipmentName: "Cones", count: 1, quantity: 1, to: "Sam", from: null }],
     });
     expect(text.split("\n")[1]).toBe("Cones: Sam → / ← ❗unassigned");
   });
@@ -40,10 +40,10 @@ describe("formatDutySummary", () => {
     expect(text).toBe("🏉 Wed 2 Dec — 1sts & 2nds Training, 19:00, Harlington");
   });
 
-  it("shows the count after the Kit Unit's name when its Quantity is more than 1", () => {
+  it("shows the count after the Equipment Unit's name when its Quantity is more than 1", () => {
     const text = formatDutySummary({
       ...base,
-      items: [{ kitName: "Tackle shields", count: 4, quantity: 8, to: "Tom", from: "Tom" }],
+      items: [{ equipmentName: "Tackle shields", count: 4, quantity: 8, to: "Tom", from: "Tom" }],
     });
     expect(text.split("\n")[1]).toBe("Tackle shields ×4: Tom → / ← Tom");
   });

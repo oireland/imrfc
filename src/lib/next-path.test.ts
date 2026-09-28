@@ -17,6 +17,6 @@ describe("eventIdInPath", () => {
   it("finds the Event a shared link points at", () => {
     expect(eventIdInPath("/events/abc-123?x=1")).toBe("abc-123");
     expect(eventIdInPath("/events")).toBeNull();
-    expect(eventIdInPath("/kit/abc")).toBeNull();
+    expect(eventIdInPath("/equipment/abc")).toBeNull();
   });
 });

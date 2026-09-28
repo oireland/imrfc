@@ -9,7 +9,7 @@ import { getCurrentUser } from "@/lib/session";
 
 const LINKS = [
   { href: "/stores", label: "Stores" },
-  { href: "/admin/kit", label: "Kit" },
+  { href: "/admin/equipment", label: "Equipment" },
   { href: "/admin/series", label: "Series" },
   { href: "/admin/checklists", label: "Checklists" },
   { href: "/admin/users", label: "Users" },

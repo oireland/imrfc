@@ -22,7 +22,7 @@ type Tab = {
 const TABS: Tab[] = [
   { href: "/", label: "Home", icon: House, isActive: (p) => p === "/" },
   { href: "/events", label: "Events", icon: CalendarDays, isActive: (p) => p.startsWith("/events") },
-  { href: "/kit", label: "Kit", icon: Package, isActive: (p) => p.startsWith("/kit") },
+  { href: "/equipment", label: "Equipment", icon: Package, isActive: (p) => p.startsWith("/equipment") },
   { href: "/profile", label: "Profile", icon: User, isActive: (p) => p.startsWith("/profile") },
 ];
 
@@ -31,7 +31,7 @@ const COMMITTEE_TABS: Tab[] = [
   { href: "/admin", label: "Admin", icon: ShieldCheck, isActive: (p) => p.startsWith("/admin") || p.startsWith("/stores") },
 ];
 
-/** The fixed, frosted bottom tab bar: Home, Events, Kit, Profile, plus Players and Admin for Committee and above. */
+/** The fixed, frosted bottom tab bar: Home, Events, Equipment, Profile, plus Players and Admin for Committee and above. */
 export function BottomTabs({ showAdmin, pendingCount = 0 }: BottomTabsProps) {
   const pathname = usePathname();
   const tabs = showAdmin ? [TABS[0], TABS[1], TABS[2], COMMITTEE_TABS[0], COMMITTEE_TABS[1], TABS[3]] : TABS;

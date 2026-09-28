@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { gatherConfirmSources, gatherFromDutyUsers, needsSourceChoice, validateHolderSplit } from "./confirm-source-rules";
-import type { Portion } from "@/features/kit";
+import type { Portion } from "@/features/equipment";
 
 const portion = (over: Partial<Portion>): Portion => ({
   id: "p",
-  kitUnitId: "k",
+  equipmentUnitId: "k",
   count: 1,
   whereaboutsType: "store",
   storeId: null,

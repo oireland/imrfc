@@ -3,42 +3,42 @@ import postgres from "postgres";
 import { TEST_DATABASE_URL } from "./support/test-db";
 import { signIn } from "./support/sign-in";
 
-test("A split Kit Unit shows its count in each Whereabouts group, and moving a portion updates it", async ({ page }) => {
+test("A split Equipment Unit shows its count in each Whereabouts group, and moving a portion updates it", async ({ page }) => {
   const sql = postgres(TEST_DATABASE_URL);
   const run = crypto.randomUUID().slice(0, 8);
-  const [store, kit, teammate] = Array.from({ length: 3 }, () => crypto.randomUUID());
-  const kitName = `Tackle shields ${run}`;
+  const [store, equipment, teammate] = Array.from({ length: 3 }, () => crypto.randomUUID());
+  const equipmentName = `Tackle shields ${run}`;
   const teammateName = `Priya ${run}`;
   await sql`insert into store (id, name, address) values (${store}, ${`Shed ${run}`}, 'x')`;
-  await sql`insert into kit_unit (id, name, home_id, quantity) values (${kit}, ${kitName}, ${store}, 8)`;
+  await sql`insert into equipment_unit (id, name, home_id, quantity) values (${equipment}, ${equipmentName}, ${store}, 8)`;
   await sql`insert into "user" (id, name, email, access_state) values (${teammate}, ${teammateName}, ${`${run}@example.com`}, 'approved')`;
   // Split across two Places: 5 at the Shed, 3 with a teammate.
-  await sql`insert into kit_portion (id, kit_unit_id, count, whereabouts_type, store_id) values (${crypto.randomUUID()}, ${kit}, 5, 'store', ${store})`;
-  await sql`insert into kit_portion (id, kit_unit_id, count, whereabouts_type, holder_id) values (${crypto.randomUUID()}, ${kit}, 3, 'holder', ${teammate})`;
+  await sql`insert into equipment_portion (id, equipment_unit_id, count, whereabouts_type, store_id) values (${crypto.randomUUID()}, ${equipment}, 5, 'store', ${store})`;
+  await sql`insert into equipment_portion (id, equipment_unit_id, count, whereabouts_type, holder_id) values (${crypto.randomUUID()}, ${equipment}, 3, 'holder', ${teammate})`;
 
   await signIn(page);
 
-  // The Kit view shows the split Kit Unit once per group, each with its count there.
-  await page.goto("/kit");
-  await expect(page.getByText(`${kitName} ×5`, { exact: true })).toBeVisible();
-  await expect(page.getByText(`${kitName} ×3`, { exact: true })).toBeVisible();
+  // The Equipment view shows the split Equipment Unit once per group, each with its count there.
+  await page.goto("/equipment");
+  await expect(page.getByText(`${equipmentName} ×5`, { exact: true })).toBeVisible();
+  await expect(page.getByText(`${equipmentName} ×3`, { exact: true })).toBeVisible();
 
   // Its detail page shows the whole split.
-  await page.goto(`/kit/${kit}`);
+  await page.goto(`/equipment/${equipment}`);
   const now = page.locator("dd.font-medium");
   await expect(now).toContainText(`5 at Shed ${run}`);
   await expect(now).toContainText(`3 with ${teammateName}`);
 
-  // Taking some of the Shed's portion (from the Kit view's sheet) moves only that many, leaving the rest alone.
-  await page.goto("/kit");
-  await page.getByRole("button", { name: `I've got ${kitName} ×5` }).click();
+  // Taking some of the Shed's portion (from the Equipment view's sheet) moves only that many, leaving the rest alone.
+  await page.goto("/equipment");
+  await page.getByRole("button", { name: `I've got ${equipmentName} ×5` }).click();
   const sheet = page.getByRole("dialog");
   await sheet.getByRole("button", { name: "One fewer" }).click();
   await sheet.getByRole("button", { name: "One fewer" }).click();
   await sheet.getByRole("button", { name: "One fewer" }).click();
   await sheet.getByRole("button", { name: "I've got 2" }).click();
-  await expect(page.getByText(`${kitName} ×2`, { exact: true })).toBeVisible();
-  await page.goto(`/kit/${kit}`);
+  await expect(page.getByText(`${equipmentName} ×2`, { exact: true })).toBeVisible();
+  await page.goto(`/equipment/${equipment}`);
   const after = page.locator("dd.font-medium");
   await expect(after).toContainText(`3 at Shed ${run}`);
   await expect(after).toContainText("2 with you");
@@ -52,9 +52,9 @@ test("A split Kit Unit shows its count in each Whereabouts group, and moving a p
   await expect(page.locator("dd.font-medium")).toContainText("3 with you");
 
   // Test people would otherwise pile up in every person picker on the dev database.
-  await sql`delete from movement_log_entry where kit_unit_id = ${kit}`;
-  await sql`delete from kit_portion where kit_unit_id = ${kit}`;
-  await sql`delete from kit_unit where id = ${kit}`;
+  await sql`delete from movement_log_entry where equipment_unit_id = ${equipment}`;
+  await sql`delete from equipment_portion where equipment_unit_id = ${equipment}`;
+  await sql`delete from equipment_unit where id = ${equipment}`;
   await sql`delete from store where id = ${store}`;
   await sql`delete from "user" where id = ${teammate}`;
   await sql.end();

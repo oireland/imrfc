@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { groupByWhereabouts, quickMoveFor, type KitRow } from "./whereabouts";
-import type { KitUnit } from "./index";
+import { groupByWhereabouts, quickMoveFor, type EquipmentRow } from "./whereabouts";
+import type { EquipmentUnit } from "./index";
 import type { Portion } from "./portions";
 
-function unit(overrides: Partial<KitUnit>): KitUnit {
+function unit(overrides: Partial<EquipmentUnit>): EquipmentUnit {
   return {
-    id: "kit-1",
+    id: "equipment-1",
     name: "Ball bag A",
     description: "",
     homeId: "store-1",
@@ -19,7 +19,7 @@ function unit(overrides: Partial<KitUnit>): KitUnit {
 function portion(overrides: Partial<Portion>): Portion {
   return {
     id: crypto.randomUUID(),
-    kitUnitId: "kit-1",
+    equipmentUnitId: "equipment-1",
     count: 1,
     whereaboutsType: "store",
     storeId: "store-1",
@@ -29,18 +29,18 @@ function portion(overrides: Partial<Portion>): Portion {
   };
 }
 
-function row(unitOverrides: Partial<KitUnit>, portionOverrides: Partial<Portion>): KitRow {
+function row(unitOverrides: Partial<EquipmentUnit>, portionOverrides: Partial<Portion>): EquipmentRow {
   return { unit: unit(unitOverrides), portion: portion(portionOverrides) };
 }
 
 describe("groupByWhereabouts", () => {
-  it("groups Kit Units by Store", () => {
+  it("groups Equipment Units by Store", () => {
     const rows = [row({}, { storeId: "store-1" }), row({}, { storeId: "store-1" })];
 
     expect(groupByWhereabouts(rows)).toEqual([{ type: "store", storeId: "store-1", rows }]);
   });
 
-  it("groups Kit Units by Holder", () => {
+  it("groups Equipment Units by Holder", () => {
     const held = row({}, { whereaboutsType: "holder", storeId: null, holderId: "user-1" });
 
     expect(groupByWhereabouts([held])).toEqual([{ type: "holder", holderId: "user-1", rows: [held] }]);
@@ -56,7 +56,7 @@ describe("groupByWhereabouts", () => {
     ]);
   });
 
-  it("puts the viewer's own Kit Units first", () => {
+  it("puts the viewer's own Equipment Units first", () => {
     const stored = row({}, { storeId: "store-1" });
     const theirs = row({}, { whereaboutsType: "holder", storeId: null, holderId: "other" });
     const mine = row({}, { whereaboutsType: "holder", storeId: null, holderId: "me" });
@@ -68,7 +68,7 @@ describe("groupByWhereabouts", () => {
     ]);
   });
 
-  it("puts Unconfirmed Kit Units in a final group", () => {
+  it("puts Unconfirmed Equipment Units in a final group", () => {
     const stored = row({}, { storeId: "store-1" });
     const lost = row({}, { whereaboutsType: "unconfirmed", storeId: null, lastSeenEventId: "e1" });
 
@@ -78,7 +78,7 @@ describe("groupByWhereabouts", () => {
     ]);
   });
 
-  it("shows a split Kit Unit once per group, each with its own count there", () => {
+  it("shows a split Equipment Unit once per group, each with its own count there", () => {
     const atShed = row({ name: "Tackle shields", quantity: 8 }, { storeId: "shed", count: 4 });
     const withSam = row({ name: "Tackle shields", quantity: 8 }, { whereaboutsType: "holder", storeId: null, holderId: "sam", count: 4 });
 
@@ -90,7 +90,7 @@ describe("groupByWhereabouts", () => {
 });
 
 describe("quickMoveFor", () => {
-  it("offers to take a Kit Unit that is in a Store", () => {
+  it("offers to take an Equipment Unit that is in a Store", () => {
     expect(quickMoveFor(row({}, { whereaboutsType: "store", storeId: "store-1" }), "me")).toMatchObject({
       count: 1,
       from: { type: "store", storeId: "store-1" },
@@ -98,7 +98,7 @@ describe("quickMoveFor", () => {
     });
   });
 
-  it("offers to take a Kit Unit someone else holds or that is Unconfirmed", () => {
+  it("offers to take an Equipment Unit someone else holds or that is Unconfirmed", () => {
     expect(quickMoveFor(row({}, { whereaboutsType: "holder", storeId: null, holderId: "other" }), "me")).toMatchObject({
       to: { type: "holder", holderId: "me" },
     });
@@ -107,13 +107,13 @@ describe("quickMoveFor", () => {
     });
   });
 
-  it("offers to return a Kit Unit I hold to its Home", () => {
+  it("offers to return an Equipment Unit I hold to its Home", () => {
     expect(
       quickMoveFor(row({ homeId: "home-store" }, { whereaboutsType: "holder", storeId: null, holderId: "me" }), "me"),
     ).toMatchObject({ to: { type: "store", storeId: "home-store" } });
   });
 
-  it("only offers the count in that Portion, for a split Kit Unit", () => {
+  it("only offers the count in that Portion, for a split Equipment Unit", () => {
     const withSam = row({ quantity: 8 }, { whereaboutsType: "holder", storeId: null, holderId: "sam", count: 4 });
     expect(quickMoveFor(withSam, "sam")).toMatchObject({ count: 4, from: { type: "holder", holderId: "sam" } });
   });

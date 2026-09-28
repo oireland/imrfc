@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { store } from "@/features/stores";
-import { createKitUnit, raiseQuantity } from "@/features/kit";
+import { createEquipmentUnit, raiseQuantity } from "@/features/equipment";
 import { cancelEvent, createEvent } from "@/features/events";
 import { claimDuty, ensureDuties } from "@/features/duties";
 import { blockUser, user } from "@/features/users";
@@ -18,7 +18,7 @@ async function setup() {
     ["tom", "sam"].map((id) => ({ id, name: id, email: `${id}@x.org`, accessState: "approved" as const })),
   );
   await db.insert(store).values({ id: "shed", name: "Shed", address: "x" });
-  const made = await createKitUnit(db, { name: "Ball bag A", homeId: "shed" });
+  const made = await createEquipmentUnit(db, { name: "Ball bag A", homeId: "shed" });
   if (!made.ok) throw new Error(made.error);
   const created = await createEvent(db, {
     title: "Tuesday Training",
@@ -28,7 +28,7 @@ async function setup() {
     venue: "Har-Ha",
   });
   if (!created.ok) throw new Error(created.error);
-  return { db, kit: made.kitUnit, event: created.event };
+  return { db, equipment: made.equipmentUnit, event: created.event };
 }
 
 describe("Feed Token", () => {
@@ -65,8 +65,8 @@ describe("renderFeed", () => {
   });
 
   it("writes only the User's own Duties into the description", async () => {
-    const { db, kit, event } = await setup();
-    const [toDuty] = (await ensureDuties(db, event.id, [kit.id])).filter((d) => d.direction === "to");
+    const { db, equipment, event } = await setup();
+    const [toDuty] = (await ensureDuties(db, event.id, [equipment.id])).filter((d) => d.direction === "to");
     await claimDuty(db, toDuty.id, "tom");
 
     const mine = await renderFeed(db, await getFeedToken(db, "tom"));
@@ -76,9 +76,9 @@ describe("renderFeed", () => {
   });
 
   it("names the others sharing a Duty: 'with Sam'", async () => {
-    const { db, kit, event } = await setup();
+    const { db, equipment, event } = await setup();
     await db.update(user).set({ name: "Sam Okafor" }).where(eq(user.id, "sam"));
-    const [toDuty] = (await ensureDuties(db, event.id, [kit.id])).filter((d) => d.direction === "to");
+    const [toDuty] = (await ensureDuties(db, event.id, [equipment.id])).filter((d) => d.direction === "to");
     await claimDuty(db, toDuty.id, "tom");
     await claimDuty(db, toDuty.id, "sam");
 
@@ -86,10 +86,10 @@ describe("renderFeed", () => {
     expect(mine.status === 200 && mine.body).toContain("You're bringing: Ball bag A with Sam Okafor");
   });
 
-  it("shows the count in the description when the Kit Unit's Quantity is more than 1", async () => {
-    const { db, kit, event } = await setup();
-    await raiseQuantity(db, kit.id, "tom", 7); // Quantity now 8
-    const [toDuty] = (await ensureDuties(db, event.id, [kit.id])).filter((d) => d.direction === "to");
+  it("shows the count in the description when the Equipment Unit's Quantity is more than 1", async () => {
+    const { db, equipment, event } = await setup();
+    await raiseQuantity(db, equipment.id, "tom", 7); // Quantity now 8
+    const [toDuty] = (await ensureDuties(db, event.id, [equipment.id])).filter((d) => d.direction === "to");
     await claimDuty(db, toDuty.id, "tom");
 
     const mine = await renderFeed(db, await getFeedToken(db, "tom"));
@@ -127,20 +127,20 @@ describe("Query efficiency", () => {
     const { db, event } = await setup();
     const { addToChecklist } = await import("@/features/checklists");
     const addClaimedDuty = async (name: string) => {
-      const unit = await createKitUnit(db, { name, homeId: "shed" });
+      const unit = await createEquipmentUnit(db, { name, homeId: "shed" });
       if (!unit.ok) throw new Error(unit.error);
-      await addToChecklist(db, { scope: "event", scopeId: event.id }, unit.kitUnit.id);
-      const [dutyRow] = (await ensureDuties(db, event.id, [unit.kitUnit.id])).filter((d) => d.direction === "to");
+      await addToChecklist(db, { scope: "event", scopeId: event.id }, unit.equipmentUnit.id);
+      const [dutyRow] = (await ensureDuties(db, event.id, [unit.equipmentUnit.id])).filter((d) => d.direction === "to");
       await claimDuty(db, dutyRow.id, "tom");
     };
     const token = await getFeedToken(db, "tom");
 
-    await addClaimedDuty("Kit A");
+    await addClaimedDuty("Equipment A");
     const fewSelects = countSelects(db);
     await renderFeed(db, token);
     const selectsWithOneDuty = fewSelects();
 
-    for (let i = 0; i < 8; i++) await addClaimedDuty(`Kit ${i}`);
+    for (let i = 0; i < 8; i++) await addClaimedDuty(`Equipment ${i}`);
     const manySelects = countSelects(db);
     await renderFeed(db, token);
     expect(manySelects()).toBe(selectsWithOneDuty);

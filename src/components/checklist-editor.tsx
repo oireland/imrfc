@@ -12,7 +12,7 @@ import {
   setChecklistItemCount,
   type ChecklistScope,
 } from "@/features/checklists";
-import { listKitUnits } from "@/features/kit";
+import { listEquipmentUnits } from "@/features/equipment";
 import { isCommitteeOrAbove } from "@/features/users";
 import { requireApprovedUser } from "@/lib/session";
 
@@ -26,7 +26,7 @@ export async function ChecklistEditor({
   path: string;
   inheritedFrom?: string;
 }) {
-  const [own, units] = await Promise.all([getChecklist(db, target), listKitUnits(db)]);
+  const [own, units] = await Promise.all([getChecklist(db, target), listEquipmentUnits(db)]);
   const active = units.filter((u) => u.status === "active");
   const names = new Map(units.map((u) => [u.id, u.name]));
   const quantities = new Map(units.map((u) => [u.id, u.quantity]));
@@ -35,14 +35,14 @@ export async function ChecklistEditor({
     "use server";
     const user = await requireApprovedUser();
     if (!isCommitteeOrAbove(user.role)) return;
-    await addToChecklist(db, target, String(formData.get("kitUnitId")));
+    await addToChecklist(db, target, String(formData.get("equipmentUnitId")));
     revalidatePath(path);
   }
   async function remove(formData: FormData) {
     "use server";
     const user = await requireApprovedUser();
     if (!isCommitteeOrAbove(user.role)) return;
-    await removeFromChecklist(db, target, String(formData.get("kitUnitId")));
+    await removeFromChecklist(db, target, String(formData.get("equipmentUnitId")));
     revalidatePath(path);
   }
   async function setCount(formData: FormData) {
@@ -50,7 +50,7 @@ export async function ChecklistEditor({
     const user = await requireApprovedUser();
     if (!isCommitteeOrAbove(user.role)) return;
     const raw = String(formData.get("count"));
-    await setChecklistItemCount(db, target, String(formData.get("kitUnitId")), raw === "all" ? null : Number(raw));
+    await setChecklistItemCount(db, target, String(formData.get("equipmentUnitId")), raw === "all" ? null : Number(raw));
     revalidatePath(path);
   }
   async function clear() {
@@ -65,24 +65,24 @@ export async function ChecklistEditor({
     <div className="flex flex-col gap-3 text-sm">
       {own === undefined ? (
         <p className="text-muted-foreground">
-          {inheritedFrom ? `Using ${inheritedFrom}. Add kit to give it its own list.` : "Nothing on the list yet."}
+          {inheritedFrom ? `Using ${inheritedFrom}. Add equipment to give it its own list.` : "Nothing on the list yet."}
         </p>
       ) : (
         <>
           <ul className="flex flex-col divide-y divide-border">
             {own.map((item) => {
-              const quantity = quantities.get(item.kitUnitId) ?? 1;
+              const quantity = quantities.get(item.equipmentUnitId) ?? 1;
               return (
-                <li key={item.kitUnitId} className="flex items-center justify-between gap-2 py-1.5 first:pt-0">
-                  {names.get(item.kitUnitId) ?? item.kitUnitId}
+                <li key={item.equipmentUnitId} className="flex items-center justify-between gap-2 py-1.5 first:pt-0">
+                  {names.get(item.equipmentUnitId) ?? item.equipmentUnitId}
                   <div className="flex items-center gap-2">
                     {quantity > 1 && (
                       <form action={setCount}>
-                        <ChecklistCountSelect kitUnitId={item.kitUnitId} quantity={quantity} count={item.count} />
+                        <ChecklistCountSelect equipmentUnitId={item.equipmentUnitId} quantity={quantity} count={item.count} />
                       </form>
                     )}
                     <form action={remove}>
-                      <input type="hidden" name="kitUnitId" value={item.kitUnitId} />
+                      <input type="hidden" name="equipmentUnitId" value={item.equipmentUnitId} />
                       <SubmitButton variant="link" size="sm" className="text-destructive-text">
                         Remove
                       </SubmitButton>
@@ -102,11 +102,11 @@ export async function ChecklistEditor({
       )}
       <form action={add} className="flex flex-wrap items-end gap-2">
         <div className="flex flex-col gap-1">
-          <Label htmlFor={`add-kit-unit-${target.scopeId}`}>Add kit</Label>
-          <NativeSelect id={`add-kit-unit-${target.scopeId}`} name="kitUnitId" required>
-            <NativeSelectOption value="">Choose kit…</NativeSelectOption>
+          <Label htmlFor={`add-equipment-unit-${target.scopeId}`}>Add equipment</Label>
+          <NativeSelect id={`add-equipment-unit-${target.scopeId}`} name="equipmentUnitId" required>
+            <NativeSelectOption value="">Choose equipment…</NativeSelectOption>
             {active
-              .filter((u) => !own?.some((i) => i.kitUnitId === u.id))
+              .filter((u) => !own?.some((i) => i.equipmentUnitId === u.id))
               .map((u) => (
                 <NativeSelectOption key={u.id} value={u.id}>
                   {u.name}

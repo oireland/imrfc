@@ -1,6 +1,6 @@
-/** A Checklist line: a Kit Unit and how many it asks for. null count means "all of them",
- * so it follows the Kit Unit's Quantity as it changes. */
-export type ChecklistLine = { kitUnitId: string; count: number | null };
+/** A Checklist line: an Equipment Unit and how many it asks for. null count means "all of them",
+ * so it follows the Equipment Unit's Quantity as it changes. */
+export type ChecklistLine = { equipmentUnitId: string; count: number | null };
 
 export type ChecklistLevels = {
   event?: ChecklistLine[];
@@ -21,7 +21,7 @@ export function resolveChecklist(levels: ChecklistLevels): ResolvedChecklist {
   return { source: "none", items: [] };
 }
 
-/** How many of a Kit Unit a Checklist line actually asks for: "all" follows the current
+/** How many of an Equipment Unit a Checklist line actually asks for: "all" follows the current
  * Quantity, and an explicit number is capped at it. */
 export function effectiveCount(count: number | null, quantity: number): number {
   if (count === null) return quantity;

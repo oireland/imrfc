@@ -114,7 +114,7 @@ describe("readEventsCsv", () => {
   });
 
   it("rejects columns it doesn't know, and the same column twice", () => {
-    expect(read(`${HEADER},kit`)).toEqual({ ok: false, errors: ['The header has a column we don\'t recognise: "kit".'] });
+    expect(read(`${HEADER},equipment`)).toEqual({ ok: false, errors: ['The header has a column we don\'t recognise: "equipment".'] });
     expect(read(`${HEADER},Title`)).toEqual({ ok: false, errors: ['The header has "title" more than once.'] });
   });
 

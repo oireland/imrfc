@@ -1,8 +1,8 @@
 // Duty Summary: plain text for the club WhatsApp group. Pure, no database or Next.js.
 
 export type DutySummaryItem = {
-  kitName: string;
-  /** The count this Checklist line asks for, and the Kit Unit's Quantity (shown as "×N" only when > 1). */
+  equipmentName: string;
+  /** The count this Checklist line asks for, and the Equipment Unit's Quantity (shown as "×N" only when > 1). */
   count: number;
   quantity: number;
   to: string | null;
@@ -27,8 +27,8 @@ export function formatDutySummary({
 }): string {
   const date = part(start, { weekday: "short", day: "numeric", month: "short" }).replace(",", "");
   const time = part(start, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-  const lines = items.map(({ kitName, count, quantity, to, from }) => {
-    const label = quantity > 1 ? `${kitName} ×${count}` : kitName;
+  const lines = items.map(({ equipmentName, count, quantity, to, from }) => {
+    const label = quantity > 1 ? `${equipmentName} ×${count}` : equipmentName;
     return !to && !from
       ? `${label}: ${UNASSIGNED}`
       : `${label}: ${to ? `${to} →` : `${UNASSIGNED} →`} / ${from ? `← ${from}` : `← ${UNASSIGNED}`}`;
