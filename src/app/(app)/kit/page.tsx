@@ -37,10 +37,9 @@ export default async function KitViewPage() {
   const activeUnits = allUnits.filter((u: KitUnit) => u.status === "active");
   const inactiveUnits = allUnits.filter((u: KitUnit) => u.status !== "active");
   const portions = await listPortionsFor(db, activeUnits.map((u: KitUnit) => u.id));
-  const lastSeen = new Map<string, string>();
-  for (const eventId of new Set(portions.flatMap((p) => (p.lastSeenEventId ? [p.lastSeenEventId] : [])))) {
-    lastSeen.set(eventId, (await getEvent(db, eventId))?.title ?? "an event");
-  }
+  const lastSeenIds = [...new Set(portions.flatMap((p) => (p.lastSeenEventId ? [p.lastSeenEventId] : [])))];
+  const lastSeenEvents = await Promise.all(lastSeenIds.map((id) => getEvent(db, id)));
+  const lastSeen = new Map(lastSeenIds.map((id, i) => [id, lastSeenEvents[i]?.title ?? "an event"]));
   const storesById = new Map(stores.map((s: Store) => [s.id, s]));
   const storeName = (id: string) => storesById.get(id)?.name ?? "Store";
   const unitsById = new Map(activeUnits.map((u: KitUnit) => [u.id, u]));
