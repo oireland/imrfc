@@ -50,6 +50,36 @@ describe("summarizeAvailability", () => {
     expect(summary.noReply.map((r) => r.name)).toEqual(["Tom"]);
   });
 
+  it("marks replies after the Reply By as late", () => {
+    const summary = summarizeAvailability({
+      players,
+      replies: [reply({ userId: "sam", createdAt: at(10) }), reply({ userId: "jo", setById: "jo", createdAt: at(1) })],
+      viewer: { id: "tom", committee: true },
+      replyBy: at(5),
+    });
+    expect(summary.available.map((r) => [r.name, r.late])).toEqual([
+      ["Jo", false],
+      ["Sam", true],
+    ]);
+  });
+
+  it("gives each No reply Player the time they were last nudged", () => {
+    const summary = summarizeAvailability({
+      players,
+      replies: [],
+      viewer: { id: "tom", committee: true },
+      nudges: [
+        { userId: "sam", createdAt: at(1) },
+        { userId: "sam", createdAt: at(3) },
+      ],
+    });
+    expect(summary.noReply.map((r) => [r.name, r.nudgedAt])).toEqual([
+      ["Jo", null],
+      ["Sam", at(3)],
+      ["Tom", null],
+    ]);
+  });
+
   it("leaves out Players with Playing off, even if they replied", () => {
     const summary = summarizeAvailability({
       players,

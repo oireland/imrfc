@@ -1,8 +1,14 @@
+import path from "node:path";
 import nodemailer from "nodemailer";
 
 export interface MailSender {
-  send(message: { to: string; subject: string; text: string }): Promise<void>;
+  /** `text` is always sent; `html` (see email-layout.ts) is the styled version beside it. */
+  send(message: { to: string; subject: string; text: string; html?: string }): Promise<void>;
 }
+
+// The crest an HTML email shows as <img src="cid:crest">, attached inline so it loads
+// without signing in (the app's own routes are behind sign-in).
+const crest = { filename: "crest.png", path: path.join(process.cwd(), "src/app/icon.png"), cid: "crest" };
 
 /** Logs to the console instead of sending — used in tests. */
 export const consoleMailSender: MailSender = {
@@ -23,7 +29,11 @@ function smtpMailSender(): MailSender {
   });
   return {
     async send(message) {
-      await transport.sendMail({ from: "IMRFC <noreply@imrfc.co.uk>", ...message });
+      await transport.sendMail({
+        from: "IMRFC <noreply@imrfc.co.uk>",
+        ...message,
+        attachments: message.html?.includes("cid:crest") ? [crest] : undefined,
+      });
     },
   };
 }

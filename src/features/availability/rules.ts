@@ -34,7 +34,13 @@ export type AvailabilityRow = {
   reason: string | null;
   /** The name of whoever replied for the Player, or null if they replied themself. */
   setBy: string | null;
+  /** The reply came after the Reply By. */
+  late: boolean;
+  /** When a No reply Player was last nudged, or null if never. */
+  nudgedAt: Date | null;
 };
+
+export type Nudge = { userId: string; createdAt: Date };
 
 export type AvailabilitySummary = {
   available: AvailabilityRow[];
@@ -54,22 +60,32 @@ export function latestReplies(replies: Reply[]): Map<string, Reply> {
 
 /**
  * Sorts Players with Playing on into Available, Not available and No reply by their
- * latest reply. Reasons are shown only to Committee and to the Player themself.
+ * latest reply. Reasons are shown only to Committee and to the Player themself. Replies
+ * after the Reply By are late; No reply Players carry when they were last nudged.
  */
 export function summarizeAvailability({
   players,
   replies,
   viewer,
   nameOf,
+  replyBy = null,
+  nudges = [],
 }: {
   players: AvailabilityPlayer[];
   replies: Reply[];
   viewer: { id: string; committee: boolean };
   /** Names for whoever set a reply, when they aren't in `players`. */
   nameOf?: (userId: string) => string | undefined;
+  replyBy?: Date | null;
+  nudges?: Nudge[];
 }): AvailabilitySummary {
   const names = new Map(players.map((p) => [p.id, p.name]));
   const latest = latestReplies(replies);
+  const lastNudged = new Map<string, Date>();
+  for (const n of nudges) {
+    const current = lastNudged.get(n.userId);
+    if (!current || n.createdAt > current) lastNudged.set(n.userId, n.createdAt);
+  }
   const summary: AvailabilitySummary = { available: [], notAvailable: [], noReply: [] };
   const playing = players.filter((p) => p.playing).sort((a, b) => a.name.localeCompare(b.name));
   for (const player of playing) {
@@ -80,8 +96,10 @@ export function summarizeAvailability({
       note: r?.note ?? "",
       reason: r && (viewer.committee || viewer.id === player.id) ? r.reason : null,
       setBy: r && r.setById !== player.id ? (names.get(r.setById) ?? nameOf?.(r.setById) ?? "Someone") : null,
+      late: !!r && !!replyBy && r.createdAt > replyBy,
+      nudgedAt: null,
     };
-    if (!r) summary.noReply.push({ ...row, reason: null });
+    if (!r) summary.noReply.push({ ...row, reason: null, nudgedAt: lastNudged.get(player.id) ?? null });
     else if (r.status === "available") summary.available.push({ ...row, reason: null });
     else summary.notAvailable.push(row);
   }
