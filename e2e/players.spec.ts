@@ -36,8 +36,8 @@ test("Bottom tabs drop Events, and Committee sees Players alongside Admin", asyn
   await expect(nav.getByRole("link", { name: "Players" })).toBeVisible();
   await expect(nav.getByRole("link", { name: "Admin" })).toBeVisible();
 
-  // Home's "What's coming up" links across to Events instead.
-  await expect(page.getByRole("link", { name: /See all/ })).toHaveAttribute("href", "/events");
+  // Home's "What's coming up" title links across to Events instead.
+  await expect(page.getByRole("link", { name: "What's coming up" })).toHaveAttribute("href", "/events");
 });
 
 test("Committee sets a Player's Positions and switches Playing off, and they move to Not playing", async ({ page, baseURL }) => {
