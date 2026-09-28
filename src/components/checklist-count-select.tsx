@@ -2,19 +2,19 @@
 
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 
-/** How many of a Kit Unit a Checklist line asks for; auto-submits its form on change. */
+/** How many of an Equipment Unit a Checklist line asks for; auto-submits its form on change. */
 export function ChecklistCountSelect({
-  kitUnitId,
+  equipmentUnitId,
   quantity,
   count,
 }: {
-  kitUnitId: string;
+  equipmentUnitId: string;
   quantity: number;
   count: number | null;
 }) {
   return (
     <>
-      <input type="hidden" name="kitUnitId" value={kitUnitId} />
+      <input type="hidden" name="equipmentUnitId" value={equipmentUnitId} />
       <NativeSelect
         name="count"
         size="sm"

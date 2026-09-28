@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
-import { kitPortion, kitUnit, movementLogEntry } from "./schema";
-import { validateKitUnit, type NewKitUnit } from "./rules";
+import { equipmentPortion, equipmentUnit, movementLogEntry } from "./schema";
+import { validateEquipmentUnit, type NewEquipmentUnit } from "./rules";
 import {
   lowerQuantity as lowerQuantityRule,
   moveMultiple,
@@ -13,35 +13,35 @@ import {
   type Portion,
 } from "./portions";
 
-export { kitUnit, kitPortion } from "./schema";
-export { validateKitUnit } from "./rules";
-export type { NewKitUnit } from "./rules";
+export { equipmentUnit, equipmentPortion } from "./schema";
+export { validateEquipmentUnit } from "./rules";
+export type { NewEquipmentUnit } from "./rules";
 export { describeWhereabouts, groupByWhereabouts, quickMoveFor } from "./whereabouts";
-export type { KitRow, QuickMove, WhereaboutsGroup, WhereaboutsNames } from "./whereabouts";
+export type { EquipmentRow, QuickMove, WhereaboutsGroup, WhereaboutsNames } from "./whereabouts";
 export { singlePlace, totalQuantity } from "./portions";
 export type { Place, Portion } from "./portions";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
 
-export type KitUnit = typeof kitUnit.$inferSelect;
-export type KitStatus = KitUnit["status"];
+export type EquipmentUnit = typeof equipmentUnit.$inferSelect;
+export type EquipmentStatus = EquipmentUnit["status"];
 export type MovementLogEntry = typeof movementLogEntry.$inferSelect;
 export type MoveTarget = { type: "store"; storeId: string } | { type: "holder"; holderId: string };
 export type MoveSource = Place;
 
-async function loadPortions(db: Db, kitUnitId: string): Promise<Portion[]> {
-  return db.select().from(kitPortion).where(eq(kitPortion.kitUnitId, kitUnitId));
+async function loadPortions(db: Db, equipmentUnitId: string): Promise<Portion[]> {
+  return db.select().from(equipmentPortion).where(eq(equipmentPortion.equipmentUnitId, equipmentUnitId));
 }
 
-/** Replaces every Portion of a Kit Unit with the given set. */
-async function savePortions(db: Db, kitUnitId: string, portions: Portion[]) {
-  await db.delete(kitPortion).where(eq(kitPortion.kitUnitId, kitUnitId));
+/** Replaces every Portion of an Equipment Unit with the given set. */
+async function savePortions(db: Db, equipmentUnitId: string, portions: Portion[]) {
+  await db.delete(equipmentPortion).where(eq(equipmentPortion.equipmentUnitId, equipmentUnitId));
   if (portions.length === 0) return;
-  await db.insert(kitPortion).values(
+  await db.insert(equipmentPortion).values(
     portions.map((p) => ({
       id: crypto.randomUUID(),
-      kitUnitId,
+      equipmentUnitId,
       count: p.count,
       whereaboutsType: p.whereaboutsType,
       storeId: p.storeId,
@@ -51,24 +51,24 @@ async function savePortions(db: Db, kitUnitId: string, portions: Portion[]) {
   );
 }
 
-export async function listKitUnits(
+export async function listEquipmentUnits(
   db: Db,
   { includeRetired = false }: { includeRetired?: boolean } = {},
-): Promise<KitUnit[]> {
-  if (includeRetired) return db.select().from(kitUnit);
-  return db.select().from(kitUnit).where(ne(kitUnit.status, "retired"));
+): Promise<EquipmentUnit[]> {
+  if (includeRetired) return db.select().from(equipmentUnit);
+  return db.select().from(equipmentUnit).where(ne(equipmentUnit.status, "retired"));
 }
 
-export async function createKitUnit(
+export async function createEquipmentUnit(
   db: Db,
-  input: NewKitUnit,
-): Promise<{ ok: true; kitUnit: KitUnit } | { ok: false; error: string }> {
-  const result = validateKitUnit(input);
+  input: NewEquipmentUnit,
+): Promise<{ ok: true; equipmentUnit: EquipmentUnit } | { ok: false; error: string }> {
+  const result = validateEquipmentUnit(input);
   if (!result.ok) return result;
 
   const quantity = input.quantity ?? 1;
   const [row] = await db
-    .insert(kitUnit)
+    .insert(equipmentUnit)
     .values({
       id: crypto.randomUUID(),
       name: input.name,
@@ -76,25 +76,25 @@ export async function createKitUnit(
       quantity,
     })
     .returning();
-  await db.insert(kitPortion).values({
+  await db.insert(equipmentPortion).values({
     id: crypto.randomUUID(),
-    kitUnitId: row.id,
+    equipmentUnitId: row.id,
     count: quantity,
     whereaboutsType: "store",
     storeId: input.homeId,
   });
-  return { ok: true, kitUnit: row };
+  return { ok: true, equipmentUnit: row };
 }
 
-export async function setKitStatus(db: Db, id: string, status: KitStatus) {
-  await db.update(kitUnit).set({ status }).where(eq(kitUnit.id, id));
+export async function setEquipmentStatus(db: Db, id: string, status: EquipmentStatus) {
+  await db.update(equipmentUnit).set({ status }).where(eq(equipmentUnit.id, id));
 }
 
-/** Hard-deletes a Kit Unit added by mistake, along with its Portions and Movement Log. */
-export async function deleteKitUnit(db: Db, id: string) {
-  await db.delete(movementLogEntry).where(eq(movementLogEntry.kitUnitId, id));
-  await db.delete(kitPortion).where(eq(kitPortion.kitUnitId, id));
-  await db.delete(kitUnit).where(eq(kitUnit.id, id));
+/** Hard-deletes an Equipment Unit added by mistake, along with its Portions and Movement Log. */
+export async function deleteEquipmentUnit(db: Db, id: string) {
+  await db.delete(movementLogEntry).where(eq(movementLogEntry.equipmentUnitId, id));
+  await db.delete(equipmentPortion).where(eq(equipmentPortion.equipmentUnitId, id));
+  await db.delete(equipmentUnit).where(eq(equipmentUnit.id, id));
 }
 
 export async function setConditionNote(
@@ -103,10 +103,10 @@ export async function setConditionNote(
   userId: string,
   conditionNote: string,
 ) {
-  await db.update(kitUnit).set({ conditionNote }).where(eq(kitUnit.id, id));
+  await db.update(equipmentUnit).set({ conditionNote }).where(eq(equipmentUnit.id, id));
   await db.insert(movementLogEntry).values({
     id: crypto.randomUUID(),
-    kitUnitId: id,
+    equipmentUnitId: id,
     kind: "condition_note",
     userId,
     conditionNote,
@@ -133,17 +133,17 @@ function logSource(from: Place) {
  * Records a Move. With no `count`/`from`, the whole Quantity moves (every Portion
  * consolidates into one, at the target) — how Duties confirm today. With `from`
  * (and optionally a `count`, defaulting to everything there), only that Portion moves —
- * an ad-hoc Move on a counted Kit Unit that is split across places.
+ * an ad-hoc Move on a counted Equipment Unit that is split across places.
  */
 export async function recordMove(
   db: Db,
-  kitUnitId: string,
+  equipmentUnitId: string,
   userId: string,
   target: MoveTarget,
   reason: "ad_hoc" | "duty" = "ad_hoc",
   options?: { count?: number; from?: Place },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const portions = await loadPortions(db, kitUnitId);
+  const portions = await loadPortions(db, equipmentUnitId);
 
   let nextPortions: Portion[];
   let movedCount: number;
@@ -161,11 +161,11 @@ export async function recordMove(
     nextPortions = wholeQuantityMove(portions, target);
   }
 
-  await savePortions(db, kitUnitId, nextPortions);
+  await savePortions(db, equipmentUnitId, nextPortions);
 
   await db.insert(movementLogEntry).values({
     id: crypto.randomUUID(),
-    kitUnitId,
+    equipmentUnitId,
     kind: "move",
     userId,
     reason,
@@ -205,27 +205,27 @@ function pairFlows(
 
 /**
  * Records a Move gathered from several source Places and/or split across several
- * target Places (Shared Duties: several People bringing or holding a Kit Unit).
+ * target Places (Shared Duties: several People bringing or holding an Equipment Unit).
  * Logs one Movement Log entry per source/target flow (skipping any that are a no-op —
  * the same Place on both ends).
  */
 export async function recordSplitMove(
   db: Db,
-  kitUnitId: string,
+  equipmentUnitId: string,
   userId: string,
   reason: "ad_hoc" | "duty",
   { sources, targets }: { sources: { from: Place; count: number }[]; targets: { to: MoveTarget; count: number }[] },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const portions = await loadPortions(db, kitUnitId);
+  const portions = await loadPortions(db, equipmentUnitId);
   const moved = moveMultiple(portions, { sources, targets });
   if (!moved.ok) return moved;
-  await savePortions(db, kitUnitId, moved.portions);
+  await savePortions(db, equipmentUnitId, moved.portions);
 
   const flows = pairFlows(sources, targets).filter((f) => !samePlace(f.from, f.to));
   for (const f of flows) {
     await db.insert(movementLogEntry).values({
       id: crypto.randomUUID(),
-      kitUnitId,
+      equipmentUnitId,
       kind: "move",
       userId,
       reason,
@@ -248,11 +248,11 @@ function portionCountAt(portions: Portion[], place: Place): number {
 }
 
 /**
- * The Kit Unit's Whereabouts is unknown: the count at the given source Place (or the
+ * The Equipment Unit's Whereabouts is unknown: the count at the given source Place (or the
  * whole Quantity, with no `from`) was last seen at the given Event. No Move is recorded.
  */
-export async function setUnconfirmed(db: Db, kitUnitId: string, lastSeenEventId: string, from?: Place, count?: number) {
-  const portions = await loadPortions(db, kitUnitId);
+export async function setUnconfirmed(db: Db, equipmentUnitId: string, lastSeenEventId: string, from?: Place, count?: number) {
+  const portions = await loadPortions(db, equipmentUnitId);
   const target: Place = { type: "unconfirmed", lastSeenEventId };
   let nextPortions: Portion[];
   if (from) {
@@ -263,48 +263,48 @@ export async function setUnconfirmed(db: Db, kitUnitId: string, lastSeenEventId:
   } else {
     nextPortions = wholeQuantityMove(portions, target);
   }
-  await savePortions(db, kitUnitId, nextPortions);
+  await savePortions(db, equipmentUnitId, nextPortions);
 }
 
-export async function getKitUnit(db: Db, id: string): Promise<KitUnit | undefined> {
-  const [row] = await db.select().from(kitUnit).where(eq(kitUnit.id, id));
+export async function getEquipmentUnit(db: Db, id: string): Promise<EquipmentUnit | undefined> {
+  const [row] = await db.select().from(equipmentUnit).where(eq(equipmentUnit.id, id));
   return row;
 }
 
-/** Several Kit Units by id in one query, e.g. to look up their Quantities together. */
-export async function listKitUnitsByIds(db: Db, ids: string[]): Promise<KitUnit[]> {
+/** Several Equipment Units by id in one query, e.g. to look up their Quantities together. */
+export async function listEquipmentUnitsByIds(db: Db, ids: string[]): Promise<EquipmentUnit[]> {
   if (ids.length === 0) return [];
-  return db.select().from(kitUnit).where(inArray(kitUnit.id, ids));
+  return db.select().from(equipmentUnit).where(inArray(equipmentUnit.id, ids));
 }
 
-/** A Kit Unit's Portions: where it is right now, split by count. */
-export async function getPortions(db: Db, kitUnitId: string): Promise<Portion[]> {
-  return loadPortions(db, kitUnitId);
+/** An Equipment Unit's Portions: where it is right now, split by count. */
+export async function getPortions(db: Db, equipmentUnitId: string): Promise<Portion[]> {
+  return loadPortions(db, equipmentUnitId);
 }
 
-/** Every Portion of the given Kit Units, for building the Kit view in one query. */
-export async function listPortionsFor(db: Db, kitUnitIds: string[]): Promise<Portion[]> {
-  if (kitUnitIds.length === 0) return [];
-  return db.select().from(kitPortion).where(inArray(kitPortion.kitUnitId, kitUnitIds));
+/** Every Portion of the given Equipment Units, for building the Equipment view in one query. */
+export async function listPortionsFor(db: Db, equipmentUnitIds: string[]): Promise<Portion[]> {
+  if (equipmentUnitIds.length === 0) return [];
+  return db.select().from(equipmentPortion).where(inArray(equipmentPortion.equipmentUnitId, equipmentUnitIds));
 }
 
-/** Raises a Kit Unit's Quantity; the extra count starts at Home. Logged in the Movement Log. */
+/** Raises an Equipment Unit's Quantity; the extra count starts at Home. Logged in the Movement Log. */
 export async function raiseQuantity(
   db: Db,
-  kitUnitId: string,
+  equipmentUnitId: string,
   userId: string,
   addCount: number,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!Number.isInteger(addCount) || addCount < 1) return { ok: false, error: "Enter how many were bought." };
-  const [unit, portions] = await Promise.all([getKitUnit(db, kitUnitId), loadPortions(db, kitUnitId)]);
-  if (!unit) return { ok: false, error: "That kit no longer exists." };
+  const [unit, portions] = await Promise.all([getEquipmentUnit(db, equipmentUnitId), loadPortions(db, equipmentUnitId)]);
+  if (!unit) return { ok: false, error: "That equipment no longer exists." };
 
   const nextPortions = raiseQuantityRule(portions, { storeId: unit.homeId, addCount });
-  await db.update(kitUnit).set({ quantity: unit.quantity + addCount }).where(eq(kitUnit.id, kitUnitId));
-  await savePortions(db, kitUnitId, nextPortions);
+  await db.update(equipmentUnit).set({ quantity: unit.quantity + addCount }).where(eq(equipmentUnit.id, equipmentUnitId));
+  await savePortions(db, equipmentUnitId, nextPortions);
   await db.insert(movementLogEntry).values({
     id: crypto.randomUUID(),
-    kitUnitId,
+    equipmentUnitId,
     kind: "move",
     userId,
     reason: "ad_hoc",
@@ -316,26 +316,26 @@ export async function raiseQuantity(
   return { ok: true };
 }
 
-/** Lowers a Kit Unit's Quantity; Committee picks the Place when split. Logged in the Movement Log. */
+/** Lowers an Equipment Unit's Quantity; Committee picks the Place when split. Logged in the Movement Log. */
 export async function lowerQuantity(
   db: Db,
-  kitUnitId: string,
+  equipmentUnitId: string,
   userId: string,
   removeCount: number,
   from?: Place,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!Number.isInteger(removeCount) || removeCount < 1) return { ok: false, error: "Enter how many were lost." };
-  const [unit, portions] = await Promise.all([getKitUnit(db, kitUnitId), loadPortions(db, kitUnitId)]);
-  if (!unit) return { ok: false, error: "That kit no longer exists." };
+  const [unit, portions] = await Promise.all([getEquipmentUnit(db, equipmentUnitId), loadPortions(db, equipmentUnitId)]);
+  if (!unit) return { ok: false, error: "That equipment no longer exists." };
 
   const result = lowerQuantityRule(portions, { removeCount, from });
   if (!result.ok) return result;
 
-  await db.update(kitUnit).set({ quantity: unit.quantity - removeCount }).where(eq(kitUnit.id, kitUnitId));
-  await savePortions(db, kitUnitId, result.portions);
+  await db.update(equipmentUnit).set({ quantity: unit.quantity - removeCount }).where(eq(equipmentUnit.id, equipmentUnitId));
+  await savePortions(db, equipmentUnitId, result.portions);
   await db.insert(movementLogEntry).values({
     id: crypto.randomUUID(),
-    kitUnitId,
+    equipmentUnitId,
     kind: "move",
     userId,
     reason: "ad_hoc",
@@ -347,45 +347,45 @@ export async function lowerQuantity(
 }
 
 /**
- * Sets a Kit Unit's Quantity to a new total: raising logs it as bought, lowering as lost
+ * Sets an Equipment Unit's Quantity to a new total: raising logs it as bought, lowering as lost
  * (Committee picks the Place when split). An unchanged Quantity does nothing.
  */
 export async function setQuantity(
   db: Db,
-  kitUnitId: string,
+  equipmentUnitId: string,
   userId: string,
   quantity: number,
   from?: Place,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!Number.isInteger(quantity)) return { ok: false, error: "Enter how many there are now." };
-  if (quantity < 1) return { ok: false, error: "Can't lower a kit unit's quantity below 1." };
-  const unit = await getKitUnit(db, kitUnitId);
-  if (!unit) return { ok: false, error: "That kit no longer exists." };
+  if (quantity < 1) return { ok: false, error: "Can't lower an equipment unit's quantity below 1." };
+  const unit = await getEquipmentUnit(db, equipmentUnitId);
+  if (!unit) return { ok: false, error: "That equipment no longer exists." };
 
-  if (quantity > unit.quantity) return raiseQuantity(db, kitUnitId, userId, quantity - unit.quantity);
-  if (quantity < unit.quantity) return lowerQuantity(db, kitUnitId, userId, unit.quantity - quantity, from);
+  if (quantity > unit.quantity) return raiseQuantity(db, equipmentUnitId, userId, quantity - unit.quantity);
+  if (quantity < unit.quantity) return lowerQuantity(db, equipmentUnitId, userId, unit.quantity - quantity, from);
   return { ok: true };
 }
 
-export async function listMovementLog(db: Db, kitUnitId: string): Promise<MovementLogEntry[]> {
+export async function listMovementLog(db: Db, equipmentUnitId: string): Promise<MovementLogEntry[]> {
   return db
     .select()
     .from(movementLogEntry)
-    .where(eq(movementLogEntry.kitUnitId, kitUnitId))
+    .where(eq(movementLogEntry.equipmentUnitId, equipmentUnitId))
     .orderBy(desc(movementLogEntry.createdAt));
 }
 
-/** Kit Units currently with this User as Holder (Retired ones are out of circulation), with the count held. */
-export async function listKitHeldBy(db: Db, userId: string): Promise<(KitUnit & { count: number })[]> {
-  const held: (Portion & { kitUnitId: string })[] = await db
+/** Equipment Units currently with this User as Holder (Retired ones are out of circulation), with the count held. */
+export async function listEquipmentHeldBy(db: Db, userId: string): Promise<(EquipmentUnit & { count: number })[]> {
+  const held: (Portion & { equipmentUnitId: string })[] = await db
     .select()
-    .from(kitPortion)
-    .where(and(eq(kitPortion.whereaboutsType, "holder"), eq(kitPortion.holderId, userId)));
+    .from(equipmentPortion)
+    .where(and(eq(equipmentPortion.whereaboutsType, "holder"), eq(equipmentPortion.holderId, userId)));
   if (held.length === 0) return [];
-  const units: KitUnit[] = await db
+  const units: EquipmentUnit[] = await db
     .select()
-    .from(kitUnit)
-    .where(and(inArray(kitUnit.id, held.map((p) => p.kitUnitId)), ne(kitUnit.status, "retired")));
-  const countByUnit = new Map(held.map((p) => [p.kitUnitId, p.count]));
+    .from(equipmentUnit)
+    .where(and(inArray(equipmentUnit.id, held.map((p) => p.equipmentUnitId)), ne(equipmentUnit.status, "retired")));
+  const countByUnit = new Map(held.map((p) => [p.equipmentUnitId, p.count]));
   return units.map((u) => ({ ...u, count: countByUnit.get(u.id) ?? 0 }));
 }

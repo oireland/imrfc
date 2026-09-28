@@ -5,38 +5,38 @@ describe("findBoundaryViolations", () => {
   it("reports a feature importing another feature's internals", () => {
     const violations = findBoundaryViolations([
       {
-        path: "src/features/kit/moves.ts",
+        path: "src/features/equipment/moves.ts",
         source: `import { roleOf } from "@/features/users/roles";`,
       },
     ]);
 
     expect(violations).toEqual([
-      { file: "src/features/kit/moves.ts", imports: "@/features/users/roles" },
+      { file: "src/features/equipment/moves.ts", imports: "@/features/users/roles" },
     ]);
   });
 
   it("reports a relative import that reaches into another feature", () => {
     const violations = findBoundaryViolations([
       {
-        path: "src/features/kit/moves.ts",
+        path: "src/features/equipment/moves.ts",
         source: `import { roleOf } from "../users/roles";`,
       },
     ]);
 
     expect(violations).toEqual([
-      { file: "src/features/kit/moves.ts", imports: "../users/roles" },
+      { file: "src/features/equipment/moves.ts", imports: "../users/roles" },
     ]);
   });
 
   it("allows another feature's entry point and a feature's own internals", () => {
     const violations = findBoundaryViolations([
       {
-        path: "src/features/kit/moves.ts",
+        path: "src/features/equipment/moves.ts",
         source: [
           `import { roleOf } from "@/features/users";`,
           `import { locationName } from "../locations";`,
           `import { whereabouts } from "./whereabouts";`,
-          `import { KitStatus } from "@/features/kit/status";`,
+          `import { EquipmentStatus } from "@/features/equipment/status";`,
           `import { eq } from "drizzle-orm";`,
         ].join("\n"),
       },

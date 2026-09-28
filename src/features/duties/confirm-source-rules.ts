@@ -1,7 +1,7 @@
-// Source selection for Confirming a Duty when a Kit Unit's Whereabouts is split across
+// Source selection for Confirming a Duty when an Equipment Unit's Whereabouts is split across
 // several Places, and the "who has how many" split for several People on a Duty. Pure,
 // no database.
-import type { Place, Portion } from "@/features/kit";
+import type { Place, Portion } from "@/features/equipment";
 
 export type SourcePart = { place: Place; count: number };
 export type HolderPart = { userId: string; count: number };

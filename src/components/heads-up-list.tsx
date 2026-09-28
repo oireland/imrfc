@@ -2,7 +2,7 @@ import { CircleAlert } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import type { HeadsUp } from "@/features/duties";
 
-/** Heads-ups about the kit plan: gentler than Clashes, never blocking. */
+/** Heads-ups about the equipment plan: gentler than Clashes, never blocking. */
 export function HeadsUpList({ headsUps }: { headsUps: HeadsUp[] }) {
   if (headsUps.length === 0) return null;
   return (

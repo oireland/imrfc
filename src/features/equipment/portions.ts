@@ -1,6 +1,6 @@
 // Whereabouts as portions: pure functions over plain data, no database or Next.js.
-// A Kit Unit's Whereabouts is one or more Portions, each a count at exactly one Place.
-// Portion counts always add up to the Kit Unit's Quantity.
+// An Equipment Unit's Whereabouts is one or more Portions, each a count at exactly one Place.
+// Portion counts always add up to the Equipment Unit's Quantity.
 
 export type Place =
   | { type: "store"; storeId: string }
@@ -9,7 +9,7 @@ export type Place =
 
 export type Portion = {
   id: string;
-  kitUnitId: string;
+  equipmentUnitId: string;
   count: number;
   whereaboutsType: "store" | "holder" | "unconfirmed";
   storeId: string | null;
@@ -34,7 +34,7 @@ export function totalQuantity(portions: Portion[]): number {
   return portions.reduce((sum, p) => sum + p.count, 0);
 }
 
-/** The single Place a Kit Unit is at, or undefined when it is split across several. */
+/** The single Place an Equipment Unit is at, or undefined when it is split across several. */
 export function singlePlace(portions: Portion[]): Place | undefined {
   if (portions.length !== 1) return undefined;
   return toPlace(portions[0]);
@@ -74,7 +74,7 @@ export function movePortion(
   const reduced = portions.map((p) => (placeKey(p) === fromKey ? { ...p, count: p.count - count } : p));
   const added: Portion = {
     id: crypto.randomUUID(),
-    kitUnitId: portions[0]?.kitUnitId ?? "",
+    equipmentUnitId: portions[0]?.equipmentUnitId ?? "",
     count,
     ...placeFields(to),
   };
@@ -84,7 +84,7 @@ export function movePortion(
 /** Consolidates every Portion into one, at the target Place — moving the whole Quantity at once. */
 export function wholeQuantityMove(portions: Portion[], to: Place): Portion[] {
   const total = totalQuantity(portions);
-  return [{ id: crypto.randomUUID(), kitUnitId: portions[0]?.kitUnitId ?? "", count: total, ...placeFields(to) }];
+  return [{ id: crypto.randomUUID(), equipmentUnitId: portions[0]?.equipmentUnitId ?? "", count: total, ...placeFields(to) }];
 }
 
 /**
@@ -108,15 +108,15 @@ export function moveMultiple(
   }
   const added = targets
     .filter(({ count }) => count > 0)
-    .map(({ to, count }) => ({ id: crypto.randomUUID(), kitUnitId: portions[0]?.kitUnitId ?? "", count, ...placeFields(to) }));
+    .map(({ to, count }) => ({ id: crypto.randomUUID(), equipmentUnitId: portions[0]?.equipmentUnitId ?? "", count, ...placeFields(to) }));
   return { ok: true, portions: mergePortions([...working, ...added]) };
 }
 
-/** Raising a Kit Unit's Quantity: the extra count starts at Home. */
+/** Raising an Equipment Unit's Quantity: the extra count starts at Home. */
 export function raiseQuantity(portions: Portion[], { storeId, addCount }: { storeId: string; addCount: number }): Portion[] {
   const added: Portion = {
     id: crypto.randomUUID(),
-    kitUnitId: portions[0]?.kitUnitId ?? "",
+    equipmentUnitId: portions[0]?.equipmentUnitId ?? "",
     count: addCount,
     whereaboutsType: "store",
     storeId,
@@ -126,13 +126,13 @@ export function raiseQuantity(portions: Portion[], { storeId, addCount }: { stor
   return mergePortions([...portions, added]);
 }
 
-/** Lowering a Kit Unit's Quantity: Committee picks the Place when split, otherwise it's automatic. */
+/** Lowering an Equipment Unit's Quantity: Committee picks the Place when split, otherwise it's automatic. */
 export function lowerQuantity(
   portions: Portion[],
   { removeCount, from }: { removeCount: number; from?: Place },
 ): { ok: true; portions: Portion[] } | { ok: false; error: string } {
   const total = totalQuantity(portions);
-  if (total - removeCount < 1) return { ok: false, error: "Can't lower a kit unit's quantity below 1." };
+  if (total - removeCount < 1) return { ok: false, error: "Can't lower an equipment unit's quantity below 1." };
 
   const place = from ?? singlePlace(portions);
   if (!place) return { ok: false, error: "Choose where to lower it from." };

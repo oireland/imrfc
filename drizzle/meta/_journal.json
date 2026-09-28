@@ -148,6 +148,13 @@
       "when": 1790584116526,
       "tag": "0020_announce-and-nudge",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790598234148,
+      "tag": "0021_kit-is-now-equipment",
+      "breakpoints": true
     }
   ]
 }

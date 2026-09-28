@@ -1,6 +1,6 @@
 # IMRFC Club Hub
 
-The shared vocabulary for Imperial Medicals RFC's events and kit-tracking app: where the club's kit is, who is bringing it to and from each event, when events happen, and who is injured.
+The shared vocabulary for Imperial Medicals RFC's events and equipment-tracking app: where the club's equipment is, who is bringing it to and from each event, when events happen, and who is injured.
 
 ## People
 
@@ -16,15 +16,15 @@ _Avoid_: Permission, rank
 The base Role: can see everything except other Players' Injuries, claim Duties, Confirm their own Duties, record Moves and report their own Injuries.
 
 **Committee**:
-The Role that runs things: creates and edits Events, Series, Kit Units, Stores and Checklists, assigns or Confirms any Duty, and sees every Player's Injuries. Captains are Committee.
-_Avoid_: Captain, organiser, kit manager (as system concepts)
+The Role that runs things: creates and edits Events, Series, Equipment Units, Stores and Checklists, assigns or Confirms any Duty, and sees every Player's Injuries. Captains are Committee.
+_Avoid_: Captain, organiser, equipment manager (as system concepts)
 
 **Admin**:
 The Role that controls access: approves and blocks Users and changes Roles.
 
 **Access State**:
 Whether a User may use the app: Pending (signed up, awaiting approval), Approved, or Blocked.
-_Avoid_: Status (reserved for Kit Units), active/inactive
+_Avoid_: Status (reserved for Equipment Units), active/inactive
 
 ## Players
 
@@ -104,46 +104,46 @@ Where an Event happens, written as free text on the Event (a ground's name, a pu
 _Avoid_: Location, ground (as system concepts)
 
 **Store**:
-A named place with an address where Kit Units are kept between Events. The only kind of place the app keeps as a record.
+A named place with an address where Equipment Units are kept between Events. The only kind of place the app keeps as a record.
 _Avoid_: Location, storage, cupboard, shed (these last are names of Stores, not the concept)
 
-## Kit
+## Equipment
 
-**Kit Unit**:
+**Equipment Unit**:
 A named, trackable piece of club equipment, or several interchangeable ones counted by a Quantity (e.g. "Ball bag A", "Tackle shields" ×8, "Cones" ×2 sets, "Bibs – orange").
-_Avoid_: Item, equipment, kit (when referring to one thing)
+_Avoid_: Item, kit, equipment (when referring to one thing)
 
 **Quantity**:
-How many of a Kit Unit the club has, in whatever counts naturally for it (8 shields, 2 sets of cones). Defaults to 1 and is only shown when more than 1. Counts things that travel separately, never the contents of a container (the balls in a ball bag).
+How many of an Equipment Unit the club has, in whatever counts naturally for it (8 shields, 2 sets of cones). Defaults to 1 and is only shown when more than 1. Counts things that travel separately, never the contents of a container (the balls in a ball bag).
 _Avoid_: Stock, amount, number
 
 **Home**:
-The Store a Kit Unit normally returns to; the default Destination for its From Duties.
+The Store an Equipment Unit normally returns to; the default Destination for its From Duties.
 _Avoid_: Default location
 
-**Kit Status**:
-Whether a Kit Unit is in circulation: Active, Missing or Retired. It applies to the whole unit; losing some of a counted unit lowers its Quantity instead. Only Active units can go on a Checklist. Kit Units are never deleted.
+**Equipment Status**:
+Whether an Equipment Unit is in circulation: Active, Missing or Retired. It applies to the whole unit; losing some of a counted unit lowers its Quantity instead. Only Active units can go on a Checklist. Equipment Units are never deleted.
 
 **Condition Note**:
-Free text describing a Kit Unit's current state (e.g. "2 balls need pumping").
+Free text describing an Equipment Unit's current state (e.g. "2 balls need pumping").
 
 **Whereabouts**:
-Where a Kit Unit is right now: at a Store, with a Holder, or Unconfirmed. A counted Kit Unit can be split across several places, each with a count ("4 at the Shed, 4 with Sam"); the counts always add up to its Quantity.
+Where an Equipment Unit is right now: at a Store, with a Holder, or Unconfirmed. A counted Equipment Unit can be split across several places, each with a count ("4 at the Shed, 4 with Sam"); the counts always add up to its Quantity.
 _Avoid_: Location, position
 
 **Holder**:
-The User a Kit Unit is currently with.
+The User an Equipment Unit is currently with.
 _Avoid_: Owner, keeper
 
 **Unconfirmed**:
-The Whereabouts of a Kit Unit whose From Duty was never Confirmed; shown as "last seen at" the Event.
+The Whereabouts of an Equipment Unit whose From Duty was never Confirmed; shown as "last seen at" the Event.
 
 **Move**:
-A recorded change of a Kit Unit's Whereabouts, either by Confirming a Duty or ad hoc ("I've got it", "give it to Priya", "put it in the Shed"). For a counted unit a Move carries a count and the place it came from.
+A recorded change of an Equipment Unit's Whereabouts, either by Confirming a Duty or ad hoc ("I've got it", "give it to Priya", "put it in the Shed"). For a counted unit a Move carries a count and the place it came from.
 _Avoid_: Transfer, check-in/check-out
 
 **Movement Log**:
-The permanent history of every Move and Condition Note change for a Kit Unit.
+The permanent history of every Move and Condition Note change for an Equipment Unit.
 _Avoid_: Audit trail
 
 ## Events
@@ -182,24 +182,24 @@ _Avoid_: Deleted
 ## Duties
 
 **Checklist**:
-The Kit Units an Event needs, each with how many (all of them unless lowered). Resolved in order: Event's own Checklist, else its Series' Checklist, else its Event Type's Default Checklist.
-_Avoid_: Kit list, requirements
+The Equipment Units an Event needs, each with how many (all of them unless lowered). Resolved in order: Event's own Checklist, else its Series' Checklist, else its Event Type's Default Checklist.
+_Avoid_: Equipment list, requirements
 
 **Default Checklist**:
 The Checklist an Event Type supplies to Events that don't override it.
 
 **Duty**:
-Responsibility of one or more Users to carry one Kit Unit (the count its Checklist asks for) for one Event, in one direction.
+Responsibility of one or more Users to carry one Equipment Unit (the count its Checklist asks for) for one Event, in one direction.
 _Avoid_: Job, task, assignment (that's how a Duty gets filled)
 
 **To Duty**:
-The Duty to bring a Kit Unit from its Whereabouts to the Event.
+The Duty to bring an Equipment Unit from its Whereabouts to the Event.
 
 **From Duty**:
-The Duty to take a Kit Unit from the Event to a Destination. It goes to the To Duty's Users unless handed to someone else.
+The Duty to take an Equipment Unit from the Event to a Destination. It goes to the To Duty's Users unless handed to someone else.
 
 **Destination**:
-Where a From Duty ends: a Store, or the Duty's Users becoming Holders. Defaults to the Kit Unit's Home.
+Where a From Duty ends: a Store, or the Duty's Users becoming Holders. Defaults to the Equipment Unit's Home.
 
 **Claim**:
 A User taking a Duty for themselves, or joining the Users already on it.
@@ -209,15 +209,15 @@ _Avoid_: Volunteer, sign up
 A Committee User putting one or more named Users on a Duty.
 
 **Confirm**:
-Marking a Duty as done, which records a Move. Only a Confirmed Duty changes a Kit Unit's Whereabouts.
+Marking a Duty as done, which records a Move. Only a Confirmed Duty changes an Equipment Unit's Whereabouts.
 _Avoid_: Complete, tick off, check in
 
 **Clash**:
-A warning that a Kit Unit is double-booked: Events that overlap, or that are back-to-back with nobody taking it away from the first, between them need more of it than its Quantity. Clashes warn; they never block.
+A warning that an Equipment Unit is double-booked: Events that overlap, or that are back-to-back with nobody taking it away from the first, between them need more of it than its Quantity. Clashes warn; they never block.
 _Avoid_: Conflict, error
 
 **Heads-up**:
-A gentler warning about an Event's kit plan that isn't a Clash: nobody is on a Duty and the Event starts within 48 hours, a Kit Unit on the Checklist is Missing or Retired, or the Holder needs to pass a Kit Unit to whoever is bringing it.
+A gentler warning about an Event's equipment plan that isn't a Clash: nobody is on a Duty and the Event starts within 48 hours, an Equipment Unit on the Checklist is Missing or Retired, or the Holder needs to pass an Equipment Unit to whoever is bringing it.
 _Avoid_: Clash (for these), alert
 
 **Duty Summary**:

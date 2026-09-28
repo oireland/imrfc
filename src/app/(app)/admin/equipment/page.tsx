@@ -2,13 +2,13 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import {
-  deleteKitUnit,
-  listKitUnits,
+  deleteEquipmentUnit,
+  listEquipmentUnits,
   setConditionNote,
-  setKitStatus,
-  type KitStatus,
-  type KitUnit,
-} from "@/features/kit";
+  setEquipmentStatus,
+  type EquipmentStatus,
+  type EquipmentUnit,
+} from "@/features/equipment";
 import { isCommitteeOrAbove } from "@/features/users";
 import { getCurrentUser } from "@/lib/session";
 import { Badge } from "@/components/ui/badge";
@@ -20,60 +20,60 @@ import { SubmitButton } from "@/components/submit-button";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { BackLink } from "@/components/back-link";
 
-const STATUSES: KitStatus[] = ["active", "missing", "retired"];
+const STATUSES: EquipmentStatus[] = ["active", "missing", "retired"];
 
-const STATUS_LABEL: Record<KitStatus, string> = {
+const STATUS_LABEL: Record<EquipmentStatus, string> = {
   active: "Active",
   missing: "Missing",
   retired: "Retired",
 };
 
-const STATUS_BADGE_VARIANT: Record<KitStatus, "secondary" | "destructive" | "outline"> = {
+const STATUS_BADGE_VARIANT: Record<EquipmentStatus, "secondary" | "destructive" | "outline"> = {
   active: "secondary",
   missing: "destructive",
   retired: "outline",
 };
 
-export default async function KitUnitsPage() {
+export default async function EquipmentUnitsPage() {
   const user = await getCurrentUser();
   if (!user || !isCommitteeOrAbove(user.role)) redirect("/");
 
-  const units = await listKitUnits(db, { includeRetired: true });
+  const units = await listEquipmentUnits(db, { includeRetired: true });
 
   async function changeStatus(formData: FormData) {
     "use server";
-    await setKitStatus(db, String(formData.get("kitUnitId")), formData.get("status") as KitStatus);
-    revalidatePath("/admin/kit");
+    await setEquipmentStatus(db, String(formData.get("equipmentUnitId")), formData.get("status") as EquipmentStatus);
+    revalidatePath("/admin/equipment");
   }
 
   async function changeNote(formData: FormData) {
     "use server";
     await setConditionNote(
       db,
-      String(formData.get("kitUnitId")),
+      String(formData.get("equipmentUnitId")),
       user!.id,
       String(formData.get("conditionNote")),
     );
-    revalidatePath("/admin/kit");
+    revalidatePath("/admin/equipment");
   }
 
   async function remove(formData: FormData) {
     "use server";
-    await deleteKitUnit(db, String(formData.get("kitUnitId")));
-    revalidatePath("/admin/kit");
+    await deleteEquipmentUnit(db, String(formData.get("equipmentUnitId")));
+    revalidatePath("/admin/equipment");
   }
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
         <BackLink href="/admin">Admin</BackLink>
-        <h2 className="font-heading text-[40px] leading-none tracking-tight">Kit</h2>
+        <h2 className="font-heading text-[40px] leading-none tracking-tight">Equipment</h2>
       </div>
 
       <Card className="py-0">
         <div className="divide-y divide-border">
-          {units.length === 0 && <p className="p-4 text-muted-foreground">No kit yet.</p>}
-          {units.map((k: KitUnit) => (
+          {units.length === 0 && <p className="p-4 text-muted-foreground">No equipment yet.</p>}
+          {units.map((k: EquipmentUnit) => (
             <div key={k.id} className="flex flex-col gap-3 p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -81,7 +81,7 @@ export default async function KitUnitsPage() {
                   <Badge variant={STATUS_BADGE_VARIANT[k.status]}>{STATUS_LABEL[k.status]}</Badge>
                 </div>
                 <form action={changeStatus} className="flex items-center gap-2">
-                  <input type="hidden" name="kitUnitId" value={k.id} />
+                  <input type="hidden" name="equipmentUnitId" value={k.id} />
                   <NativeSelect
                     name="status"
                     defaultValue={k.status}
@@ -100,7 +100,7 @@ export default async function KitUnitsPage() {
                 </form>
               </div>
               <form action={changeNote} className="flex items-center gap-2">
-                <input type="hidden" name="kitUnitId" value={k.id} />
+                <input type="hidden" name="equipmentUnitId" value={k.id} />
                 <Label htmlFor={`note-${k.id}`} className="sr-only">
                   Condition of {k.name}
                 </Label>
@@ -117,7 +117,7 @@ export default async function KitUnitsPage() {
               </form>
               <div className="flex justify-end">
                 <form id={`delete-${k.id}`} action={remove}>
-                  <input type="hidden" name="kitUnitId" value={k.id} />
+                  <input type="hidden" name="equipmentUnitId" value={k.id} />
                 </form>
                 <ConfirmSubmit
                   formId={`delete-${k.id}`}

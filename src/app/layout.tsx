@@ -23,7 +23,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "IMRFC",
-  description: "Events and kit tracking for Imperial Medicals RFC",
+  description: "Events and equipment tracking for Imperial Medicals RFC",
 };
 
 export const viewport: Viewport = {

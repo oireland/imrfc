@@ -4,13 +4,13 @@ Capitalised domain terms are defined in [CONTEXT.md](CONTEXT.md). Build order is
 
 ## Problem
 
-Imperial Medicals RFC keeps forgetting kit and keeps asking the same questions on WhatsApp: *when is training, where is the ball bag, who's bringing the shields?* There is no single place for upcoming Events, no record of where Kit Units are, and no clear owner for carrying kit to and from each Event.
+Imperial Medicals RFC keeps forgetting equipment and keeps asking the same questions on WhatsApp: *when is training, where is the ball bag, who's bringing the shields?* There is no single place for upcoming Events, no record of where Equipment Units are, and no clear owner for carrying equipment to and from each Event.
 
 ## Goals
 
 1. One place to see every upcoming and past Event.
-2. Always know each Kit Unit's Whereabouts.
-3. Every Kit Unit an Event needs has a named person bringing it (To Duty) and taking it away (From Duty).
+2. Always know each Equipment Unit's Whereabouts.
+3. Every Equipment Unit an Event needs has a named person bringing it (To Duty) and taking it away (From Duty).
 4. Nobody from outside the club gets in.
 5. Easy to extend — Availability/RSVP is the reference extension (see [Extensions](#extensions)).
 
@@ -34,10 +34,10 @@ Imperial Medicals RFC keeps forgetting kit and keeps asking the same questions o
 
 | Capability | Member | Committee | Admin |
 |---|:-:|:-:|:-:|
-| View Events, Kit, Duties, Movement Log | ✓ | ✓ | ✓ |
+| View Events, Equipment, Duties, Movement Log | ✓ | ✓ | ✓ |
 | Claim a Duty, Confirm own Duty, hand own Duty on | ✓ | ✓ | ✓ |
 | Record an ad-hoc Move, edit Condition Note | ✓ | ✓ | ✓ |
-| Create/edit Events, Series, Kit Units, Stores, Checklists | | ✓ | ✓ |
+| Create/edit Events, Series, Equipment Units, Stores, Checklists | | ✓ | ✓ |
 | Assign / unassign / Confirm any Duty | | ✓ | ✓ |
 | Set own Positions, switch own Playing off/on, report and update own Injuries | ✓ | ✓ | ✓ |
 | See Players, everyone's Injuries and duty record; report/update anyone's Injuries; Clear a Concussion | | ✓ | ✓ |
@@ -50,7 +50,7 @@ Imperial Medicals RFC keeps forgetting kit and keeps asking the same questions o
 When a User is Blocked:
 - Their sessions are revoked and their Feed Token stops working.
 - They are taken off their Duties on future Events; a Duty left with nobody on it is flagged to Committee.
-- Kit Units they Hold stay with them, flagged "with blocked user".
+- Equipment Units they Hold stay with them, flagged "with blocked user".
 - Their history (Moves, past Duties) is kept.
 
 ## Stores and Venues
@@ -58,16 +58,16 @@ When a User is Blocked:
 - **Store**: name, address, maps link. Managed by Committee. Never hard-deleted (archive).
 - **Venues are free text** on each Event and Series (e.g. "Harlington", or an away ground's address), so nobody has to add a record for every away fixture. Venue boxes suggest venues already used; an Event's venue links to a Google Maps search.
 
-## Kit
+## Equipment
 
-- **Kit Unit**: name, description (free text of contents), Quantity (default 1), Home (a Store), Kit Status, Condition Note.
+- **Equipment Unit**: name, description (free text of contents), Quantity (default 1), Home (a Store), Equipment Status, Condition Note.
 - **Quantity** counts interchangeable things that travel separately (8 tackle shields, 2 sets of cones, 3 water bottle carriers) in whatever unit is natural; there is no unit-of-measure field. Counts are hidden when the Quantity is 1. Committee lowers it when some are lost and raises it when more are bought (the extra ones start at Home); both are logged in the Movement Log.
-- Kinds of unit include balls/ball bags, tackle shields, cones, bibs, water bottles, physio kit — no fixed category list in v1.
-- **Kit Status**: Active / Missing / Retired. Only Active units may be added to a Checklist. Never hard-deleted.
+- Kinds of unit include balls/ball bags, tackle shields, cones, bibs, water bottles, physio equipment — no fixed category list in v1.
+- **Equipment Status**: Active / Missing / Retired. Only Active units may be added to a Checklist. Never hard-deleted.
 - **Whereabouts** is one or more portions, each a count at exactly one of: a Store, a Holder (User), or Unconfirmed (last seen at an Event). Portion counts add up to the Quantity; a Quantity-1 unit has exactly one portion.
 - Any User may record an **ad-hoc Move**: "I've got it" (Holder = me), "give it to [User]" (Holder = another approved User) or "put it in [Store]". For a counted unit it asks how many and from where, defaulting to everything at that place.
 - Every Move and every Condition Note change goes in the **Movement Log** (who, what, from, to, when, why — Duty or ad hoc).
-- **Kit view**: all Active Kit Units grouped by Whereabouts — each Store, each Holder, then Unconfirmed. A split unit appears in each group with its count there. Missing/Retired in a secondary list.
+- **Equipment view**: all Active Equipment Units grouped by Whereabouts — each Store, each Holder, then Unconfirmed. A split unit appears in each group with its count there. Missing/Retired in a secondary list.
 
 ## Events
 
@@ -92,21 +92,21 @@ When a User is Blocked:
 ## Checklists and Duties
 
 - **Checklist resolution**: Event Checklist → Series Checklist → Event Type Default Checklist. Committee can edit any level.
-- Each Checklist line asks for a count of its Kit Unit: **all of them** by default (kept as "all", so it follows Quantity changes), or a lower number, capped at the Quantity.
-- For each Kit Unit on an Event's Checklist there is one **To Duty** and one **From Duty**, each with **zero or more Users**.
+- Each Checklist line asks for a count of its Equipment Unit: **all of them** by default (kept as "all", so it follows Quantity changes), or a lower number, capped at the Quantity.
+- For each Equipment Unit on an Event's Checklist there is one **To Duty** and one **From Duty**, each with **zero or more Users**.
 - **Claim** (any User) puts you on a Duty — joining anyone already on it. **Assign** (Committee) is a multi-select of Users. Claiming or being assigned the To Duty also puts you on the From Duty by default. Each User can take themselves off or hand their place on to someone else.
-- **Destination** of a From Duty defaults to the Kit Unit's Home; editable per Event: another Store, or "stays with the Duty's User".
+- **Destination** of a From Duty defaults to the Equipment Unit's Home; editable per Event: another Store, or "stays with the Duty's User".
 - **Confirm**:
   - To Duty Confirmed → Move: the count comes "to the Event" (represented as Holder = the Duty's Users).
   - From Duty Confirmed → Move to the Destination (Store, or Holders = the Duty's Users).
   - Any User on the Duty or any Committee member may Confirm, which confirms it for everyone on it.
-  - The confirm sheet asks **where they came from** when the Kit Unit is split across places, and **who has how many** when the Duty has several Users and the count is more than 1. Both default (everything from the one place / all with whoever confirms), so a single person carrying a single thing sees no extra step.
+  - The confirm sheet asks **where they came from** when the Equipment Unit is split across places, and **who has how many** when the Duty has several Users and the count is more than 1. Both default (everything from the one place / all with whoever confirms), so a single person carrying a single thing sees no extra step.
 - **Unconfirmed**: once an Event has ended, if its From Duty isn't Confirmed, the portion taken there shows Unconfirmed — "last seen at [Event]" (with its count for a counted unit). The app never assumes a Move happened.
-- **Clashes** (warnings only, shown on the Event and the Kit Unit) are only about double-booked kit: Events whose times overlap, or are back-to-back without anyone on the From Duty in between, that between them ask for more of a Kit Unit than its Quantity (4 + 4 of 8 shields is fine; 6 + 4 is a Clash).
+- **Clashes** (warnings only, shown on the Event and the Equipment Unit) are only about double-booked equipment: Events whose times overlap, or are back-to-back without anyone on the From Duty in between, that between them ask for more of an Equipment Unit than its Quantity (4 + 4 of 8 shields is fine; 6 + 4 is a Clash).
 - **Heads-ups** (gentler warnings, same places) cover the rest:
-  - Nobody is taking a Kit Unit to, or back from, an Event that starts within 48h.
-  - Kit Unit on a Checklist is Missing/Retired (it was Active when added).
-  - Kit Unit's current Holder isn't the person bringing it to the next Event that needs it ("Sam needs to pass Tackle Shields to Tom before Alumni Day"), and the people bringing it can't get enough from Stores and what they already hold. Nothing is said while nobody is bringing it yet.
+  - Nobody is taking an Equipment Unit to, or back from, an Event that starts within 48h.
+  - Equipment Unit on a Checklist is Missing/Retired (it was Active when added).
+  - Equipment Unit's current Holder isn't the person bringing it to the next Event that needs it ("Sam needs to pass Tackle Shields to Tom before Alumni Day"), and the people bringing it can't get enough from Stores and what they already hold. Nothing is said while nobody is bringing it yet.
 - **Duty Summary**: "Copy WhatsApp message" button on an Event, producing e.g.
 
   ```
@@ -219,11 +219,11 @@ Lets Players say whether they can make a Training or Match, and lets Committee s
 
 ## Screens (mobile-first)
 
-- **Bottom tabs**: Members get Home · Events · Kit · Profile; Committee and Admin get Home · Events · Kit · Players · Admin · Profile. The What's coming up title on Home also links to Events (with a chevron).
-- **Home**: "Can you make it?" for announced Events I haven't replied to, my Duties (upcoming, soonest first), next few Events, Kit Units I Hold, and a card for each of my open Injuries ("Hamstring — out since 21 Sep · Update").
-- **Events**: Upcoming (the Calendar / Agenda view with an All · Training · Matches · Socials filter; the Agenda lists every upcoming Event) and Past events, plus CSV import → Event detail (details, maps link, Share, **Availability** for Training and Matches, Clashes, **Who's bringing what**, Duty Summary button). Who's bringing what has one row per Kit Unit on the Checklist with its Whereabouts, a Bring slot and a Take back slot (who, done or not, gold for yours, "Needs someone" within 48h) and its heads-ups. Tapping a slot opens a sheet with only the actions the viewer may take (claim, mark as done, hand on / give it to someone from a tap-a-name list, where it goes back to, take someone off).
-- **Kit**: grouped by Whereabouts → Kit Unit detail (Whereabouts, Condition Note, upcoming Duties, Movement Log, "I've got it", then "give it to someone" and "put it away in [Store]" below it).
-- **Admin** (Committee/Admin sections as permitted): Pending Users, Users & Roles, Stores, Kit Units, Event Types & Default Checklists, Series.
+- **Bottom tabs**: Members get Home · Events · Equipment · Profile; Committee and Admin get Home · Events · Equipment · Players · Admin · Profile. The What's coming up title on Home also links to Events (with a chevron).
+- **Home**: "Can you make it?" for announced Events I haven't replied to, my Duties (upcoming, soonest first), next few Events, Equipment Units I Hold, and a card for each of my open Injuries ("Hamstring — out since 21 Sep · Update").
+- **Events**: Upcoming (the Calendar / Agenda view with an All · Training · Matches · Socials filter; the Agenda lists every upcoming Event) and Past events, plus CSV import → Event detail (details, maps link, Share, **Availability** for Training and Matches, Clashes, **Who's bringing what**, Duty Summary button). Who's bringing what has one row per Equipment Unit on the Checklist with its Whereabouts, a Bring slot and a Take back slot (who, done or not, gold for yours, "Needs someone" within 48h) and its heads-ups. Tapping a slot opens a sheet with only the actions the viewer may take (claim, mark as done, hand on / give it to someone from a tap-a-name list, where it goes back to, take someone off).
+- **Equipment**: grouped by Whereabouts → Equipment Unit detail (Whereabouts, Condition Note, upcoming Duties, Movement Log, "I've got it", then "give it to someone" and "put it away in [Store]" below it).
+- **Admin** (Committee/Admin sections as permitted): Pending Users, Users & Roles, Stores, Equipment Units, Event Types & Default Checklists, Series.
 - **Players** (Committee): a summary line ("3 out · 2 playing through it"), name search, an Injured-only filter, Players in position order (by Preferred Position) each with their Fitness, main Injury ("Out · ankle (+1)") and check-in flag, then a collapsed **Not playing** section. "Copy for physio" button.
 - **Player page** (Committee): name, Preferred and Other Positions, Playing switch; Fitness and open Injuries (with the Concussion timeline); Injury history; Duties — upcoming, this season's count (1 Sep–31 Aug: "12 done · 2 never confirmed", Cancelled Events left out) and the last 5 past Duties, each done or never confirmed; this season's Availability record. Actions: report an Injury, update status, edit Positions.
 - **Profile**: name, a **Playing** section (Playing switch, Positions, my open Injuries and history with the same Concussion timeline, report an Injury, the privacy line), Calendar Feed URL (copy/reset), sign out.
@@ -233,7 +233,7 @@ Lets Players say whether they can make a Training or Match, and lets Committee s
 
 - **"Clubhouse" look:** warm, minimal neutrals; editorial serif headings (Instrument Serif, one weight, never bolded) with Inter Tight for everything else; generous space; large rounded cards. Tailwind + shadcn/ui. All colours come from one theme file of CSS tokens (`src/app/globals.css`).
 - **No app name in the UI.** The crest ([docs/brand/crest.png](docs/brand/crest.png), white background, always on a white round tile) sits top-right of Home and above the signed-out screens. On Home it is also the **colour theme menu**: System (default) / Light / Dark, saved on the User and applied as `<html data-theme>`.
-- **The crest's colours are accents only:** gold marks what is yours (Your Duty markers, the active tab dot, the "With you" Kit group); navy marks your next Duty and Matches.
+- **The crest's colours are accents only:** gold marks what is yours (Your Duty markers, the active tab dot, the "With you" Equipment group); navy marks your next Duty and Matches.
 - **Home:** greeting ("Evening, Ollie."), Your duties as small 2-up cards (the next one navy), then **What's coming up** with Calendar and Agenda tabs and the same All · Training · Matches · Socials filter as Events; its title (with a chevron) links to Events. Events uses the same view, plus Past events. The tab and filter are in the URL (`?view=agenda&type=match`) so either can be bookmarked.
 - **Agenda** (and the selected day's list under the Calendar): each Training and Match shows your reply ("You're in · Change" / "You're out · Change") or, if you haven't replied and still can, I'm in / I'm out buttons; I'm out asks why, as on Event detail.
 - **Calendar:** a month grid where every Event is readable in its day (name wraps to three lines, then its time); Training, Match and Social have distinct colours; your Duties get a gold edge. Tap a day to select it and see its Events; Committee tap again (or an empty day) to quick-add an Event, Google-Calendar style.
@@ -268,13 +268,13 @@ Every signed-in screen is checked with axe in light, dark (device) and Dark chos
 
 Code is organised **by feature**, not by layer. Each feature owns its domain rules in plain TypeScript, independent of Next.js, which makes them testable in isolation and lets new features attach without editing existing ones. See [ADR 0002](docs/adr/0002-feature-modules.md).
 
-Features: `users` (access, roles, blocking), `locations`, `kit` (units, whereabouts, moves), `events` (events, series, teams), `duties` (checklists, duties, confirm, clashes, summary), `calendar-feed`, `players` (Playing, Positions), `availability` (replies, Announce, Nudge, chase message), `selection` (planned: selection board, team sheets), `injuries` (Injuries, Fitness, Concussion timeline, Physio Summary).
+Features: `users` (access, roles, blocking), `locations`, `equipment` (units, whereabouts, moves), `events` (events, series, teams), `duties` (checklists, duties, confirm, clashes, summary), `calendar-feed`, `players` (Playing, Positions), `availability` (replies, Announce, Nudge, chase message), `selection` (planned: selection board, team sheets), `injuries` (Injuries, Fitness, Concussion timeline, Physio Summary).
 
 ## Out of scope for v1
 
 - Duty reminders (email / push), scheduled Announce, and emails when an Event changes or is Cancelled.
 - Fixture import (BUCS/LUSL scraping or calendar import).
-- Itemised kit contents (e.g. counting the balls inside a ball bag). Quantity counts things that travel separately, not what's inside a container.
+- Itemised equipment contents (e.g. counting the balls inside a ball bag). Quantity counts things that travel separately, not what's inside a container.
 - Team-filtered Calendar Feeds, team membership.
 - Multiple clubs.
 - Committee-only comments on Players (e.g. punctuality) — dropped.
@@ -287,7 +287,7 @@ Features: `users` (access, roles, blocking), `locations`, `kit` (units, whereabo
 
 **Selection** comes next, bringing in the team-selection system another committee member built (selection board with two pitches coloured by reply, click a shirt to see who can play there, drag to pick; team sheets with Default fields and match-day roles, as PDF and Word). It joins as a `selection` feature that asks `availability`'s entry point for each Player's reply to a Match and `players` for Positions, and later `injuries` for Fitness (and could then narrow the Physio Summary to a match's squad). To be grilled before it is built — open questions include a shared board with live updates between admins and how PDFs are produced on free hosting.
 
-Other planned extensions: duty reminders (email/web push — iOS supports push for installed PWAs), fixture import, team-filtered feeds, itemised kit contents.
+Other planned extensions: duty reminders (email/web push — iOS supports push for installed PWAs), fixture import, team-filtered feeds, itemised equipment contents.
 
 ## Open items
 

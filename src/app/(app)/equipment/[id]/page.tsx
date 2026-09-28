@@ -12,7 +12,7 @@ import { formatWhen } from "@/lib/format-time";
 import { listClashes, listHeadsUps } from "@/features/duties";
 import {
   describeWhereabouts,
-  getKitUnit,
+  getEquipmentUnit,
   getPortions,
   listMovementLog,
   quickMoveFor,
@@ -21,7 +21,7 @@ import {
   type MovementLogEntry,
   type Place,
   type Portion,
-} from "@/features/kit";
+} from "@/features/equipment";
 import { getEvent } from "@/features/events";
 import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
 import { listStores, type Store } from "@/features/stores";
@@ -43,11 +43,11 @@ function parsePlace(value: string): Place {
   return { type: "unconfirmed", lastSeenEventId: id };
 }
 
-export default async function KitUnitDetailPage({ params }: PageProps<"/kit/[id]">) {
+export default async function EquipmentUnitDetailPage({ params }: PageProps<"/equipment/[id]">) {
   const { id } = await params;
   const user = await requireApprovedUser();
 
-  const found = await getKitUnit(db, id);
+  const found = await getEquipmentUnit(db, id);
   if (!found) notFound();
   const unit = found;
 
@@ -70,8 +70,8 @@ export default async function KitUnitDetailPage({ params }: PageProps<"/kit/[id]
   for (const eventId of new Set(portions.flatMap((p) => (p.lastSeenEventId ? [p.lastSeenEventId] : [])))) {
     eventNames.set(eventId, (await getEvent(db, eventId))?.title ?? "an event");
   }
-  const clashes = allClashes.filter((c) => c.kitUnitId === id);
-  const headsUps = allHeadsUps.filter((h) => h.kitUnitId === id);
+  const clashes = allClashes.filter((c) => c.equipmentUnitId === id);
+  const headsUps = allHeadsUps.filter((h) => h.equipmentUnitId === id);
   const storesById = new Map(stores.map((s: Store) => [s.id, s]));
   const storeName = (storeId: string | null) => (storeId && storesById.get(storeId)?.name) || "a store";
   const whereaboutsLabel = describeWhereabouts(portions, {
@@ -106,14 +106,14 @@ export default async function KitUnitDetailPage({ params }: PageProps<"/kit/[id]
     "use server";
     const { id: userId } = await requireApprovedUser();
     const portionId = String(formData.get("portionId"));
-    const [current, currentPortions] = await Promise.all([getKitUnit(db, id), getPortions(db, id)]);
+    const [current, currentPortions] = await Promise.all([getEquipmentUnit(db, id), getPortions(db, id)]);
     const portion = currentPortions.find((p) => p.id === portionId) ?? currentPortions[0];
     if (!current || !portion) return;
     const count = formData.get("count");
     const move = quickMoveFor({ unit: current, portion }, userId, count ? Number(count) : undefined);
     await recordMove(db, id, userId, move.to, "ad_hoc", { count: move.count, from: move.from });
-    revalidatePath(`/kit/${id}`);
-    revalidatePath("/kit");
+    revalidatePath(`/equipment/${id}`);
+    revalidatePath("/equipment");
   }
 
   async function giveTo(formData: FormData) {
@@ -125,8 +125,8 @@ export default async function KitUnitDetailPage({ params }: PageProps<"/kit/[id]
     const recipient = (await listApprovedUsers(db)).find((p) => p.id === holderId && p.accessState === "approved");
     if (!recipient || !count) return;
     await recordMove(db, id, userId, { type: "holder", holderId }, "ad_hoc", { count, from });
-    revalidatePath(`/kit/${id}`);
-    revalidatePath("/kit");
+    revalidatePath(`/equipment/${id}`);
+    revalidatePath("/equipment");
   }
 
   async function putInStore(formData: FormData) {
@@ -139,8 +139,8 @@ export default async function KitUnitDetailPage({ params }: PageProps<"/kit/[id]
       count,
       from,
     });
-    revalidatePath(`/kit/${id}`);
-    revalidatePath("/kit");
+    revalidatePath(`/equipment/${id}`);
+    revalidatePath("/equipment");
   }
 
   async function changeQuantity(formData: FormData) {
@@ -150,8 +150,8 @@ export default async function KitUnitDetailPage({ params }: PageProps<"/kit/[id]
     const quantity = Number(formData.get("quantity"));
     const fromValue = String(formData.get("from") ?? "");
     await setQuantity(db, id, userId, quantity, fromValue ? parsePlace(fromValue) : undefined);
-    revalidatePath(`/kit/${id}`);
-    revalidatePath("/kit");
+    revalidatePath(`/equipment/${id}`);
+    revalidatePath("/equipment");
   }
 
   function PortionActions({ portion }: { portion: Portion }) {
@@ -246,7 +246,7 @@ export default async function KitUnitDetailPage({ params }: PageProps<"/kit/[id]
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <BackLink href="/kit">Kit</BackLink>
+        <BackLink href="/equipment">Equipment</BackLink>
         <h2 className="font-heading text-[40px] leading-none tracking-tight">
           {unit.name}
           {split && <span className="text-muted-foreground"> ×{unit.quantity}</span>}

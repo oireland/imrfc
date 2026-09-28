@@ -6,7 +6,7 @@ import { ClashList } from "@/components/clash-list";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { CopySummary } from "@/components/copy-summary";
 import { EditEventButton } from "@/components/edit-event-button";
-import { EventDuties, type DutyKit, type DutySlot, type HolderOption, type SourceOption } from "@/components/event-duties";
+import { EventDuties, type DutyEquipment, type DutySlot, type HolderOption, type SourceOption } from "@/components/event-duties";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BackLink } from "@/components/back-link";
@@ -15,7 +15,7 @@ import { ShareButton } from "@/components/share-button";
 import { formatWhen } from "@/lib/format-time";
 import { mapsSearchUrl } from "@/lib/maps";
 import { resolveEventChecklist } from "@/features/checklists";
-import { describeWhereabouts, listKitUnits, listPortionsFor, type KitUnit, type Portion } from "@/features/kit";
+import { describeWhereabouts, listEquipmentUnits, listPortionsFor, type EquipmentUnit, type Portion } from "@/features/equipment";
 import {
   actOnDuty,
   dutyActions,
@@ -91,19 +91,19 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     return result;
   }
 
-  const [resolved, kitUnits] = await Promise.all([
+  const [resolved, equipmentUnits] = await Promise.all([
     resolveEventChecklist(db, {
       eventId: id,
       seriesId: eventDetails.seriesId,
       eventType: eventDetails.eventType,
     }),
-    listKitUnits(db),
+    listEquipmentUnits(db),
   ]);
-  const kitNames = new Map(kitUnits.map((u) => [u.id, u.name]));
-  const kitUnitIds = resolved.items.map((i) => i.kitUnitId);
-  const countByUnit = new Map(resolved.items.map((i) => [i.kitUnitId, i.count]));
+  const equipmentNames = new Map(equipmentUnits.map((u) => [u.id, u.name]));
+  const equipmentUnitIds = resolved.items.map((i) => i.equipmentUnitId);
+  const countByUnit = new Map(resolved.items.map((i) => [i.equipmentUnitId, i.count]));
   const [duties, people, stores] = await Promise.all([
-    ensureDuties(db, id, kitUnitIds),
+    ensureDuties(db, id, equipmentUnitIds),
     listApprovedUsers(db),
     listStores(db),
   ]);
@@ -115,12 +115,12 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
   const personName = new Map(people.map((p) => [p.id, displayName(p)]));
   const committee = isCommitteeOrAbove(user.role);
   const dutyFor = (kid: string, direction: Duty["direction"]) =>
-    duties.find((d) => d.kitUnitId === kid && d.direction === direction)!;
+    duties.find((d) => d.equipmentUnitId === kid && d.direction === direction)!;
 
-  const kitById = new Map(kitUnits.map((u: KitUnit) => [u.id, u]));
-  const portions = await listPortionsFor(db, kitUnitIds);
+  const equipmentById = new Map(equipmentUnits.map((u: EquipmentUnit) => [u.id, u]));
+  const portions = await listPortionsFor(db, equipmentUnitIds);
   const portionsByUnit = new Map<string, Portion[]>();
-  for (const p of portions) portionsByUnit.set(p.kitUnitId, [...(portionsByUnit.get(p.kitUnitId) ?? []), p]);
+  for (const p of portions) portionsByUnit.set(p.equipmentUnitId, [...(portionsByUnit.get(p.equipmentUnitId) ?? []), p]);
   const eventTitleFor = async (eventId: string) => (await getEvent(db, eventId))?.title ?? "an event";
   const eventNames = new Map<string, string>();
   for (const eventId of new Set(portions.flatMap((p) => (p.lastSeenEventId ? [p.lastSeenEventId] : [])))) {
@@ -128,25 +128,25 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
   }
   const storeName = (storeId: string | null) => stores.find((s: Store) => s.id === storeId)?.name ?? "a store";
   const nameOf = (userId: string | null) => (userId === user.id ? "You" : userId ? (personName.get(userId) ?? "Someone") : null);
-  const whereaboutsNow = (kitUnitId: string) =>
-    describeWhereabouts(portionsByUnit.get(kitUnitId) ?? [], {
+  const whereaboutsNow = (equipmentUnitId: string) =>
+    describeWhereabouts(portionsByUnit.get(equipmentUnitId) ?? [], {
       storeName: (sid) => storeName(sid),
       personName: (holderId) => (holderId === user.id ? "you" : (nameOf(holderId) ?? "someone")),
       eventName: (eventId) => eventNames.get(eventId) ?? "an event",
     });
   const namesOf = (userIds: string[]) => joinNames(userIds.map((uid) => (uid === user.id ? "You" : (nameOf(uid) ?? "Someone"))));
-  const dutyKit: DutyKit[] = kitUnitIds.map((kid) => {
-    const unit = kitById.get(kid);
+  const dutyEquipment: DutyEquipment[] = equipmentUnitIds.map((kid) => {
+    const unit = equipmentById.get(kid);
     const homeId = unit?.homeId ?? null;
     const count = countByUnit.get(kid) ?? 1;
-    const kitPortions = portionsByUnit.get(kid) ?? [];
+    const equipmentPortions = portionsByUnit.get(kid) ?? [];
     const toDuty = dutyFor(kid, "to");
     const fromDuty = dutyFor(kid, "from");
 
     const slot = (d: Duty): DutySlot => {
-      const needsSource = d.direction === "to" && needsSourceChoice(kitPortions, { dutyUserIds: d.userIds, count });
+      const needsSource = d.direction === "to" && needsSourceChoice(equipmentPortions, { dutyUserIds: d.userIds, count });
       const sourceOptions: SourceOption[] = needsSource
-        ? gatherConfirmSources(kitPortions, { dutyUserIds: d.userIds, homeStoreId: homeId ?? "", count }).sources.map((s) => ({
+        ? gatherConfirmSources(equipmentPortions, { dutyUserIds: d.userIds, homeStoreId: homeId ?? "", count }).sources.map((s) => ({
             value:
               s.place.type === "store"
                 ? `store:${s.place.storeId}`
@@ -189,8 +189,8 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     };
 
     return {
-      kitUnitId: kid,
-      kitName: kitNames.get(kid) ?? "Kit",
+      equipmentUnitId: kid,
+      equipmentName: equipmentNames.get(kid) ?? "Equipment",
       count,
       quantity: unit?.quantity ?? 1,
       now: !unit ? "" : whereaboutsNow(kid),
@@ -207,17 +207,17 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
       ],
       to: slot(toDuty),
       from: slot(fromDuty),
-      headsUps: headsUps.filter((h) => h.kitUnitId === kid).map((h) => h.message),
+      headsUps: headsUps.filter((h) => h.equipmentUnitId === kid).map((h) => h.message),
     };
   });
   const summary = formatDutySummary({
     title: eventDetails.title,
     start: eventDetails.start,
     venueName: eventDetails.venue,
-    items: kitUnitIds.map((kid) => ({
-      kitName: kitNames.get(kid) ?? kid,
+    items: equipmentUnitIds.map((kid) => ({
+      equipmentName: equipmentNames.get(kid) ?? kid,
       count: countByUnit.get(kid) ?? 1,
-      quantity: kitById.get(kid)?.quantity ?? 1,
+      quantity: equipmentById.get(kid)?.quantity ?? 1,
       to: dutyFor(kid, "to").userIds.length > 0 ? joinNames(dutyFor(kid, "to").userIds.map((uid) => personName.get(uid) ?? "Someone")) : null,
       from: dutyFor(kid, "from").userIds.length > 0 ? joinNames(dutyFor(kid, "from").userIds.map((uid) => personName.get(uid) ?? "Someone")) : null,
     })),
@@ -314,7 +314,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
                   formId={`cancel-event-${id}`}
                   triggerLabel="Cancel event"
                   title="Cancel this event?"
-                  description="Nobody will need to bring kit to it. It stays in the calendar, marked as cancelled."
+                  description="Nobody will need to bring equipment to it. It stays in the calendar, marked as cancelled."
                   confirmLabel="Cancel event"
                 />
               </form>
@@ -326,7 +326,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
       <AvailabilitySlot eventId={id} viewer={user} />
       <ClashList clashes={clashes} />
       <EventDuties
-        kit={dutyKit}
+        equipment={dutyEquipment}
         eventTitle={eventDetails.title}
         soon={headsUps.some((h) => h.kind === "unfilled_duty")}
         viewerId={user.id}
@@ -337,7 +337,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
       {committee && (
         <Card>
           <CardHeader>
-            <CardTitle>Kit needed</CardTitle>
+            <CardTitle>Equipment needed</CardTitle>
             {checklistSource && <p className="text-sm text-muted-foreground">{checklistSource}</p>}
           </CardHeader>
           <CardContent>

@@ -1,46 +1,46 @@
 // Heads-up rules: pure functions over plain data, no database or Next.js.
 import { joinNames } from "./names-rules";
-import { byStart, dutyUsers, heldBy, inStores, itemCount, needsUnit, HOUR, type PlanEvent, type PlanKit } from "./plan";
+import { byStart, dutyUsers, heldBy, inStores, itemCount, needsUnit, HOUR, type PlanEvent, type PlanEquipment } from "./plan";
 
 /** A Duty still unfilled this close to its Event is worth a heads-up. */
 const UNFILLED_WARNING_WINDOW = 48 * HOUR;
 
 export type HeadsUp = {
   kind: "unfilled_duty" | "unavailable" | "pass_on";
-  kitUnitId: string;
+  equipmentUnitId: string;
   eventIds: string[];
   message: string;
 };
 
 /** The Holder to name in a "needs to pass it on" message: whoever holds the most, other than the bringers. */
-function otherHolder(unit: PlanKit, bringers: string[]): string | undefined {
+function otherHolder(unit: PlanEquipment, bringers: string[]): string | undefined {
   const others = unit.portions.filter((p) => p.holderId && !bringers.includes(p.holderId) && p.count > 0);
   if (others.length === 0) return undefined;
   return [...others].sort((a, b) => b.count - a.count)[0].holderId ?? undefined;
 }
 
 /**
- * Things about an Event's kit plan worth a nudge that aren't Clashes: nobody carrying
- * kit to or from an Event that's nearly here, kit on the list that's Missing or
- * Retired, and kit that must change hands before the Event because the person
+ * Things about an Event's equipment plan worth a nudge that aren't Clashes: nobody carrying
+ * equipment to or from an Event that's nearly here, equipment on the list that's Missing or
+ * Retired, and equipment that must change hands before the Event because the person
  * bringing it can't get enough from Stores plus what they already hold. `events`
  * are the upcoming, uncancelled Events.
  */
 export function findHeadsUps({
   now,
-  kit,
+  equipment,
   events,
   personName,
 }: {
   now: Date;
-  kit: PlanKit[];
+  equipment: PlanEquipment[];
   events: PlanEvent[];
   personName: (userId: string) => string;
 }): HeadsUp[] {
   const headsUps: HeadsUp[] = [];
   const sorted = byStart(events);
 
-  for (const unit of kit) {
+  for (const unit of equipment) {
     const needing = sorted.filter((e) => needsUnit(e, unit.id));
 
     const next = needing[0];
@@ -54,7 +54,7 @@ export function findHeadsUps({
         if (holder) {
           headsUps.push({
             kind: "pass_on",
-            kitUnitId: unit.id,
+            equipmentUnitId: unit.id,
             eventIds: [next.id],
             message: `${personName(holder)} needs to pass ${unit.name} to ${joinNames(bringers.map(personName))} before ${next.title}.`,
           });
@@ -66,7 +66,7 @@ export function findHeadsUps({
       for (const e of needing) {
         headsUps.push({
           kind: "unavailable",
-          kitUnitId: unit.id,
+          equipmentUnitId: unit.id,
           eventIds: [e.id],
           message: `${unit.name} is on the list for ${e.title} but has been ${unit.status === "missing" ? "marked missing" : "retired"}.`,
         });
@@ -77,15 +77,15 @@ export function findHeadsUps({
   for (const e of sorted) {
     const untilStart = e.start.getTime() - now.getTime();
     if (untilStart < 0 || untilStart > UNFILLED_WARNING_WINDOW) continue;
-    for (const { kitUnitId } of e.items) {
-      const nobodyTo = dutyUsers(e, kitUnitId, "to").length === 0;
-      const nobodyFrom = dutyUsers(e, kitUnitId, "from").length === 0;
+    for (const { equipmentUnitId } of e.items) {
+      const nobodyTo = dutyUsers(e, equipmentUnitId, "to").length === 0;
+      const nobodyFrom = dutyUsers(e, equipmentUnitId, "from").length === 0;
       if (!nobodyTo && !nobodyFrom) continue;
-      const name = kit.find((k) => k.id === kitUnitId)?.name ?? "kit";
+      const name = equipment.find((k) => k.id === equipmentUnitId)?.name ?? "equipment";
       const way = nobodyTo && nobodyFrom ? "to or back from" : nobodyTo ? "to" : "back from";
       headsUps.push({
         kind: "unfilled_duty",
-        kitUnitId,
+        equipmentUnitId,
         eventIds: [e.id],
         message: `Nobody is taking ${name} ${way} ${e.title}, and it starts within 48 hours.`,
       });

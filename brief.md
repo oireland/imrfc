@@ -8,7 +8,7 @@ Both of these issues result in repeatedly asking via Whatsapp the same questions
 ## Goal
 To build a system for seeing upcoming events, tracking where equipment is, and assigning people to take equipment to events like trianing and matches.
 The "Upcoming Events" can be training, matches, and social events.
-For kit tracking, there are two separate "views" - where equipment is stored, and who is taking it to/from an event.
+For equipment tracking, there are two separate "views" - where equipment is stored, and who is taking it to/from an event.
 
 ## Tech
 This needs to be free to build. We'll make a nextjs app and host it on vercel. 

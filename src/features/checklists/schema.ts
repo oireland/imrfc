@@ -1,5 +1,5 @@
 import { integer, pgTable, text, unique } from "drizzle-orm/pg-core";
-import { kitUnit } from "@/features/kit";
+import { equipmentUnit } from "@/features/equipment";
 
 // A row here means that level has its own Checklist (possibly empty). Scope ids
 // are plain text — an Event type name, a Series id or an Event id — so this
@@ -21,12 +21,12 @@ export const checklistItem = pgTable(
     checklistId: text("checklist_id")
       .notNull()
       .references(() => checklist.id),
-    kitUnitId: text("kit_unit_id")
+    equipmentUnitId: text("equipment_unit_id")
       .notNull()
-      .references(() => kitUnit.id),
-    // How many of the Kit Unit this line asks for: null means "all of them", so it
-    // follows the Kit Unit's Quantity; a number is capped at the Quantity when resolved.
+      .references(() => equipmentUnit.id),
+    // How many of the Equipment Unit this line asks for: null means "all of them", so it
+    // follows the Equipment Unit's Quantity; a number is capped at the Quantity when resolved.
     count: integer("count"),
   },
-  (t) => [unique().on(t.checklistId, t.kitUnitId)],
+  (t) => [unique().on(t.checklistId, t.equipmentUnitId)],
 );

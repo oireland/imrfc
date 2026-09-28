@@ -40,8 +40,8 @@ function subscribeNever() {
 }
 
 const GUIDE = [
-  { label: "Home", body: "Your duties, what's coming up, and any kit you're holding." },
-  { label: "Kit", body: "Where every kit unit is right now, and who's got it." },
+  { label: "Home", body: "Your duties, what's coming up, and any equipment you're holding." },
+  { label: "Equipment", body: "Where every equipment unit is right now, and who's got it." },
   { label: "Profile", body: "Your name, position, calendar feed, and theme." },
 ] as const;
 
@@ -133,7 +133,7 @@ export function OnboardingDialog({
                     <span className="font-medium">Players</span> — everyone&apos;s position and duty record.
                   </p>
                   <p className="text-sm">
-                    <span className="font-medium">Admin</span> — pending users, stores, kit units, events and
+                    <span className="font-medium">Admin</span> — pending users, stores, equipment units, events and
                     checklists.
                   </p>
                 </>

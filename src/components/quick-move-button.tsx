@@ -8,13 +8,13 @@ import { Button } from "@/components/ui/button";
 
 type Props = {
   action: (formData: FormData) => Promise<void>;
-  /** Hidden fields the action needs to find the Portion (portionId, and kitUnitId on the Kit view). */
+  /** Hidden fields the action needs to find the Portion (portionId, and equipmentUnitId on the Equipment view). */
   fields: Record<string, string>;
   /** How many are in this Portion; above 1, you choose how many to move. */
   available: number;
   /** Where the quick Move goes: to me ("I've got it"), or back Home to the named Store. */
   returnTo: string | null;
-  /** The kit's name as shown on the row, for the sheet title and screen readers. */
+  /** The equipment's name as shown on the row, for the sheet title and screen readers. */
   name: string;
 };
 
@@ -66,7 +66,7 @@ function HiddenFields({ fields }: { fields: Record<string, string> }) {
 }
 
 /**
- * The Kit view's small quick-Move button. For a single thing it moves straight away;
+ * The Equipment view's small quick-Move button. For a single thing it moves straight away;
  * when there are several, it opens a sheet to choose how many.
  */
 export function QuickMoveRowButton({ action, fields, available, returnTo, name }: Props) {

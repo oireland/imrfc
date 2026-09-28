@@ -31,22 +31,22 @@ test.describe("Design pass: every screen is accessible at phone width, light and
 
   let sql: ReturnType<typeof postgres>;
   let eventId: string;
-  let kitId: string;
+  let equipmentId: string;
 
   test.beforeAll(async () => {
     sql = postgres(TEST_DATABASE_URL);
     const run = crypto.randomUUID().slice(0, 8);
     const store = crypto.randomUUID();
-    kitId = crypto.randomUUID();
+    equipmentId = crypto.randomUUID();
     eventId = crypto.randomUUID();
     const list = crypto.randomUUID();
     await sql`insert into store (id, name, address) values (${store}, ${`Shed ${run}`}, 'x')`;
-    await sql`insert into kit_unit (id, name, home_id) values (${kitId}, ${`Ball bag ${run}`}, ${store})`;
-    await sql`insert into kit_portion (id, kit_unit_id, count, whereabouts_type, store_id) values (${crypto.randomUUID()}, ${kitId}, 1, 'store', ${store})`;
+    await sql`insert into equipment_unit (id, name, home_id) values (${equipmentId}, ${`Ball bag ${run}`}, ${store})`;
+    await sql`insert into equipment_portion (id, equipment_unit_id, count, whereabouts_type, store_id) values (${crypto.randomUUID()}, ${equipmentId}, 1, 'store', ${store})`;
     await sql`insert into event (id, title, event_type, start, "end", venue)
       values (${eventId}, ${`Training ${run}`}, 'training', now() + interval '1 day', now() + interval '1 day 2 hours', 'Harlington')`;
     await sql`insert into checklist (id, scope, scope_id) values (${list}, 'event', ${eventId})`;
-    await sql`insert into checklist_item (id, checklist_id, kit_unit_id) values (${crypto.randomUUID()}, ${list}, ${kitId})`;
+    await sql`insert into checklist_item (id, checklist_id, equipment_unit_id) values (${crypto.randomUUID()}, ${list}, ${equipmentId})`;
   });
 
   test.afterAll(async () => {
@@ -67,12 +67,12 @@ test.describe("Design pass: every screen is accessible at phone width, light and
         "/events",
         "/events?tab=past",
         `/events/${eventId}`,
-        "/kit",
-        `/kit/${kitId}`,
+        "/equipment",
+        `/equipment/${equipmentId}`,
         "/stores",
         "/profile",
         "/admin",
-        "/admin/kit",
+        "/admin/equipment",
         "/events/import",
         "/admin/series",
         "/admin/checklists",

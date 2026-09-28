@@ -33,10 +33,10 @@ export type DutySlot = {
   holderOptions: HolderOption[];
 };
 
-export type DutyKit = {
-  kitUnitId: string;
-  kitName: string;
-  /** The Checklist line's effective count, and the Kit Unit's Quantity (shown as "×N" only when > 1). */
+export type DutyEquipment = {
+  equipmentUnitId: string;
+  equipmentName: string;
+  /** The Checklist line's effective count, and the Equipment Unit's Quantity (shown as "×N" only when > 1). */
   count: number;
   quantity: number;
   /** Where it is now, e.g. "In Reynold's Locker". */
@@ -100,18 +100,18 @@ function Avatar({ mine, people }: { mine: boolean; people: string[] }) {
 }
 
 /**
- * "Who's bringing what": one row per Kit Unit on the Checklist, with the trip there
+ * "Who's bringing what": one row per Equipment Unit on the Checklist, with the trip there
  * and the trip back as two slots. Tapping a slot opens a sheet with what you can do.
  */
 export function EventDuties({
-  kit,
+  equipment,
   eventTitle,
   soon,
   viewerId,
   people,
   act,
 }: {
-  kit: DutyKit[];
+  equipment: DutyEquipment[];
   eventTitle: string;
   /** The Event starts within 48 hours: unfilled slots say so. */
   soon: boolean;
@@ -120,10 +120,10 @@ export function EventDuties({
   act: (dutyId: string, request: DutyRequest) => Promise<Result>;
 }) {
   // Ids, not the objects: the sheet must show fresh data after each action refreshes the page.
-  const [open, setOpen] = useState<{ kitUnitId: string; direction: DutySlot["direction"] } | null>(null);
-  const openItem = open && kit.find((k) => k.kitUnitId === open.kitUnitId);
+  const [open, setOpen] = useState<{ equipmentUnitId: string; direction: DutySlot["direction"] } | null>(null);
+  const openItem = open && equipment.find((k) => k.equipmentUnitId === open.equipmentUnitId);
   const openSlot = openItem && (open.direction === "to" ? openItem.to : openItem.from);
-  const done = kit.flatMap((k) => [k.to, k.from]).filter((d) => d.confirmed).length;
+  const done = equipment.flatMap((k) => [k.to, k.from]).filter((d) => d.confirmed).length;
 
   return (
     <section aria-labelledby="duties" className="flex flex-col gap-3">
@@ -131,29 +131,29 @@ export function EventDuties({
         <h2 id="duties" className="font-heading text-[28px] leading-none">
           Who&apos;s bringing what
         </h2>
-        {kit.length > 0 && (
+        {equipment.length > 0 && (
           <span className="text-sm text-muted-foreground">
-            {done} of {kit.length * 2} done
+            {done} of {equipment.length * 2} done
           </span>
         )}
       </div>
 
-      {kit.length === 0 ? (
-        <p className="rounded-3xl bg-card px-5 py-6 text-sm text-muted-foreground shadow-card">No kit needed for this one.</p>
+      {equipment.length === 0 ? (
+        <p className="rounded-3xl bg-card px-5 py-6 text-sm text-muted-foreground shadow-card">No equipment needed for this one.</p>
       ) : (
         <ul className="flex flex-col divide-y divide-border rounded-3xl bg-card shadow-card">
-          {kit.map((item) => (
-            <li key={item.kitUnitId} className="flex flex-col gap-3 px-4 py-4">
+          {equipment.map((item) => (
+            <li key={item.equipmentUnitId} className="flex flex-col gap-3 px-4 py-4">
               <div className="flex items-baseline justify-between gap-3">
                 <span className="font-heading text-[22px] leading-none">
-                  {item.kitName}
+                  {item.equipmentName}
                   {item.quantity > 1 && ` ×${item.count}`}
                 </span>
                 <span className="truncate text-xs text-muted-foreground">{item.now}</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {[item.to, item.from].map((slot) => (
-                  <Slot key={slot.id} slot={slot} kitName={item.kitName} soon={soon} onOpen={() => setOpen({ kitUnitId: item.kitUnitId, direction: slot.direction })} />
+                  <Slot key={slot.id} slot={slot} equipmentName={item.equipmentName} soon={soon} onOpen={() => setOpen({ equipmentUnitId: item.equipmentUnitId, direction: slot.direction })} />
                 ))}
               </div>
               {item.headsUps.map((text) => (
@@ -183,11 +183,11 @@ export function EventDuties({
   );
 }
 
-function Slot({ slot, kitName, soon, onOpen }: { slot: DutySlot; kitName: string; soon: boolean; onOpen: () => void }) {
+function Slot({ slot, equipmentName, soon, onOpen }: { slot: DutySlot; equipmentName: string; soon: boolean; onOpen: () => void }) {
   const Icon = slot.direction === "to" ? ArrowUpRight : ArrowDownLeft;
   const personLabel = joinNames(slot.people);
   const soloYou = slot.mine && slot.people.length === 1;
-  const label = `${verb(slot)} ${kitName}: ${slot.voided ? "cancelled" : soloYou ? "you" : personLabel || "nobody yet"}${slot.confirmed ? ", done" : ""}`;
+  const label = `${verb(slot)} ${equipmentName}: ${slot.voided ? "cancelled" : soloYou ? "you" : personLabel || "nobody yet"}${slot.confirmed ? ", done" : ""}`;
   return (
     <button
       type="button"
@@ -233,7 +233,7 @@ function DutySheet({
   act,
   onClose,
 }: {
-  item: DutyKit;
+  item: DutyEquipment;
   slot: DutySlot;
   eventTitle: string;
   viewerId: string;
@@ -325,7 +325,7 @@ function DutySheet({
                     ? "Where it goes back to"
                     : view === "confirmSplit"
                       ? "Before we mark it done"
-                      : item.kitName}
+                      : item.equipmentName}
             </p>
             {view === "main" && (
               <p className="text-sm text-muted-foreground">{slot.direction === "to" ? item.now : `Goes back to ${item.goesBackTo}`}</p>
@@ -354,8 +354,8 @@ function DutySheet({
                   run(
                     { action: "claim" },
                     slot.direction === "to"
-                      ? `You're bringing ${item.kitName}`
-                      : `You're taking ${item.kitName} back`,
+                      ? `You're bringing ${item.equipmentName}`
+                      : `You're taking ${item.equipmentName} back`,
                   )
                 }
               >

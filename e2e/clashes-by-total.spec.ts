@@ -3,25 +3,25 @@ import postgres from "postgres";
 import { TEST_DATABASE_URL } from "./support/test-db";
 import { signIn } from "./support/sign-in";
 
-test("Clashes fire by total count, not just by overlap, once a Kit Unit is counted", async ({ page }) => {
+test("Clashes fire by total count, not just by overlap, once an Equipment Unit is counted", async ({ page }) => {
   const sql = postgres(TEST_DATABASE_URL);
   const run = crypto.randomUUID().slice(0, 8);
-  const [store, kit, eventA, eventB, listA, listB] = Array.from({ length: 6 }, () => crypto.randomUUID());
-  const kitName = `Tackle shields ${run}`;
+  const [store, equipment, eventA, eventB, listA, listB] = Array.from({ length: 6 }, () => crypto.randomUUID());
+  const equipmentName = `Tackle shields ${run}`;
   const titleA = `1st XV v Kings ${run}`;
   const titleB = `2nd XV v UCL ${run}`;
   await sql`insert into store (id, name, address) values (${store}, ${`Shed ${run}`}, 'x')`;
-  await sql`insert into kit_unit (id, name, home_id, quantity) values (${kit}, ${kitName}, ${store}, 8)`;
-  await sql`insert into kit_portion (id, kit_unit_id, count, whereabouts_type, store_id) values (${crypto.randomUUID()}, ${kit}, 8, 'store', ${store})`;
+  await sql`insert into equipment_unit (id, name, home_id, quantity) values (${equipment}, ${equipmentName}, ${store}, 8)`;
+  await sql`insert into equipment_portion (id, equipment_unit_id, count, whereabouts_type, store_id) values (${crypto.randomUUID()}, ${equipment}, 8, 'store', ${store})`;
   // Two overlapping Matches, each asking for 4 of the 8 shields.
   await sql`insert into event (id, title, event_type, start, "end", venue)
     values (${eventA}, ${titleA}, 'training', now() + interval '1 hour', now() + interval '3 hours', 'Harlington')`;
   await sql`insert into event (id, title, event_type, start, "end", venue)
     values (${eventB}, ${titleB}, 'training', now() + interval '2 hours', now() + interval '4 hours', 'Harlington')`;
   await sql`insert into checklist (id, scope, scope_id) values (${listA}, 'event', ${eventA})`;
-  await sql`insert into checklist_item (id, checklist_id, kit_unit_id, count) values (${crypto.randomUUID()}, ${listA}, ${kit}, 4)`;
+  await sql`insert into checklist_item (id, checklist_id, equipment_unit_id, count) values (${crypto.randomUUID()}, ${listA}, ${equipment}, 4)`;
   await sql`insert into checklist (id, scope, scope_id) values (${listB}, 'event', ${eventB})`;
-  await sql`insert into checklist_item (id, checklist_id, kit_unit_id, count) values (${crypto.randomUUID()}, ${listB}, ${kit}, 4)`;
+  await sql`insert into checklist_item (id, checklist_id, equipment_unit_id, count) values (${crypto.randomUUID()}, ${listB}, ${equipment}, 4)`;
 
   await signIn(page);
 
@@ -37,16 +37,16 @@ test("Clashes fire by total count, not just by overlap, once a Kit Unit is count
   await page.goto(`/events/${eventA}`);
   await expect(page.getByRole("alert")).toBeVisible();
   await expect(page.getByRole("alert")).toContainText(
-    `${titleA} and ${titleB} need 10 ${kitName} between them, but the club only has 8.`,
+    `${titleA} and ${titleB} need 10 ${equipmentName} between them, but the club only has 8.`,
   );
 
   await sql`delete from duty where event_id in (${eventA}, ${eventB})`;
   await sql`delete from checklist_item where checklist_id in (${listA}, ${listB})`;
   await sql`delete from checklist where id in (${listA}, ${listB})`;
   await sql`delete from event where id in (${eventA}, ${eventB})`;
-  await sql`delete from movement_log_entry where kit_unit_id = ${kit}`;
-  await sql`delete from kit_portion where kit_unit_id = ${kit}`;
-  await sql`delete from kit_unit where id = ${kit}`;
+  await sql`delete from movement_log_entry where equipment_unit_id = ${equipment}`;
+  await sql`delete from equipment_portion where equipment_unit_id = ${equipment}`;
+  await sql`delete from equipment_unit where id = ${equipment}`;
   await sql`delete from store where id = ${store}`;
   await sql.end();
 });

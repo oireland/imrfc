@@ -66,7 +66,7 @@ export default async function ProfilePage() {
           <form action={saveName} className="flex flex-col gap-1.5">
             <Label htmlFor="profile-name">Your name</Label>
             {!user.name.trim() && (
-              <p className="text-xs text-muted-foreground">Add your name so teammates know who has the kit.</p>
+              <p className="text-xs text-muted-foreground">Add your name so teammates know who has the equipment.</p>
             )}
             <div className="flex gap-2">
               <Input id="profile-name" name="name" defaultValue={user.name} required autoComplete="name" className="flex-1" />

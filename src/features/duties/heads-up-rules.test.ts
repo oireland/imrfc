@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { findHeadsUps } from "./heads-up-rules";
-import type { PlanEvent, PlanKit } from "./plan";
+import type { PlanEvent, PlanEquipment } from "./plan";
 
 const at = (iso: string) => new Date(iso);
 const now = at("2026-10-01T09:00:00Z");
 const names: Record<string, string> = { tom: "Tom Reed", sam: "Sam Okafor" };
 const personName = (id: string) => names[id];
 
-const kit = (over: Partial<PlanKit> = {}): PlanKit => ({
+const equipment = (over: Partial<PlanEquipment> = {}): PlanEquipment => ({
   id: "shields",
   name: "Tackle Shields",
   status: "active",
@@ -21,112 +21,112 @@ const event = (over: Partial<PlanEvent> = {}): PlanEvent => ({
   title: "Alumni Day",
   start: at("2026-10-20T13:00:00Z"),
   end: at("2026-10-20T17:00:00Z"),
-  items: [{ kitUnitId: "shields", count: 1 }],
+  items: [{ equipmentUnitId: "shields", count: 1 }],
   duties: [
-    { kitUnitId: "shields", direction: "to", userIds: ["tom"] },
-    { kitUnitId: "shields", direction: "from", userIds: ["tom"] },
+    { equipmentUnitId: "shields", direction: "to", userIds: ["tom"] },
+    { equipmentUnitId: "shields", direction: "from", userIds: ["tom"] },
   ],
   ...over,
 });
 
 const tomorrow = { start: at("2026-10-02T13:00:00Z"), end: at("2026-10-02T17:00:00Z") };
-const messages = (kitUnits: PlanKit[], events: PlanEvent[]) =>
-  findHeadsUps({ now, kit: kitUnits, events, personName }).map((h) => h.message);
+const messages = (equipmentUnits: PlanEquipment[], events: PlanEvent[]) =>
+  findHeadsUps({ now, equipment: equipmentUnits, events, personName }).map((h) => h.message);
 
 describe("findHeadsUps", () => {
   it("has nothing to say when the plan looks right", () => {
-    expect(findHeadsUps({ now, kit: [kit()], events: [event()], personName })).toEqual([]);
+    expect(findHeadsUps({ now, equipment: [equipment()], events: [event()], personName })).toEqual([]);
   });
 
-  it("says nobody is taking the kit to the Event when it starts within 48 hours", () => {
-    const soon = event({ ...tomorrow, duties: [{ kitUnitId: "shields", direction: "from", userIds: ["tom"] }] });
+  it("says nobody is taking the equipment to the Event when it starts within 48 hours", () => {
+    const soon = event({ ...tomorrow, duties: [{ equipmentUnitId: "shields", direction: "from", userIds: ["tom"] }] });
 
-    expect(findHeadsUps({ now, kit: [kit()], events: [soon], personName })).toEqual([
+    expect(findHeadsUps({ now, equipment: [equipment()], events: [soon], personName })).toEqual([
       {
         kind: "unfilled_duty",
-        kitUnitId: "shields",
+        equipmentUnitId: "shields",
         eventIds: ["e1"],
         message: "Nobody is taking Tackle Shields to Alumni Day, and it starts within 48 hours.",
       },
     ]);
   });
 
-  it("says nobody is taking the kit back from the Event", () => {
-    const soon = event({ ...tomorrow, duties: [{ kitUnitId: "shields", direction: "to", userIds: ["tom"] }] });
+  it("says nobody is taking the equipment back from the Event", () => {
+    const soon = event({ ...tomorrow, duties: [{ equipmentUnitId: "shields", direction: "to", userIds: ["tom"] }] });
 
-    expect(messages([kit()], [soon])).toEqual([
+    expect(messages([equipment()], [soon])).toEqual([
       "Nobody is taking Tackle Shields back from Alumni Day, and it starts within 48 hours.",
     ]);
   });
 
-  it("says it once when nobody is taking the kit either way", () => {
-    expect(messages([kit()], [event({ ...tomorrow, duties: [] })])).toEqual([
+  it("says it once when nobody is taking the equipment either way", () => {
+    expect(messages([equipment()], [event({ ...tomorrow, duties: [] })])).toEqual([
       "Nobody is taking Tackle Shields to or back from Alumni Day, and it starts within 48 hours.",
     ]);
   });
 
   it("stays quiet about unfilled Duties more than 48 hours out", () => {
-    expect(messages([kit()], [event({ duties: [] })])).toEqual([]);
+    expect(messages([equipment()], [event({ duties: [] })])).toEqual([]);
   });
 
-  it("says when kit on the Checklist is Missing or Retired", () => {
-    expect(messages([kit({ status: "missing" })], [event()])).toEqual([
+  it("says when equipment on the Checklist is Missing or Retired", () => {
+    expect(messages([equipment({ status: "missing" })], [event()])).toEqual([
       "Tackle Shields is on the list for Alumni Day but has been marked missing.",
     ]);
-    expect(messages([kit({ status: "retired" })], [event()])).toEqual([
+    expect(messages([equipment({ status: "retired" })], [event()])).toEqual([
       "Tackle Shields is on the list for Alumni Day but has been retired.",
     ]);
   });
 
-  it("says the Holder needs to pass the kit on when someone else is bringing it to the next Event", () => {
-    const shields = kit({ portions: [{ storeId: null, holderId: "sam", count: 1 }] });
-    expect(findHeadsUps({ now, kit: [shields], events: [event()], personName })).toEqual([
+  it("says the Holder needs to pass the equipment on when someone else is bringing it to the next Event", () => {
+    const shields = equipment({ portions: [{ storeId: null, holderId: "sam", count: 1 }] });
+    expect(findHeadsUps({ now, equipment: [shields], events: [event()], personName })).toEqual([
       {
         kind: "pass_on",
-        kitUnitId: "shields",
+        equipmentUnitId: "shields",
         eventIds: ["e1"],
         message: "Sam Okafor needs to pass Tackle Shields to Tom Reed before Alumni Day.",
       },
     ]);
   });
 
-  it("doesn't ask the Holder to pass kit on when nobody is bringing it yet", () => {
+  it("doesn't ask the Holder to pass equipment on when nobody is bringing it yet", () => {
     const unfilled = event({ duties: [] });
-    const shields = kit({ portions: [{ storeId: null, holderId: "sam", count: 1 }] });
+    const shields = equipment({ portions: [{ storeId: null, holderId: "sam", count: 1 }] });
 
     expect(messages([shields], [unfilled])).toEqual([]);
   });
 
   describe("Quantity", () => {
     it("says nothing when the bringer already holds enough", () => {
-      const shields = kit({ quantity: 8, portions: [{ storeId: null, holderId: "tom", count: 4 }] });
-      const soon = event({ items: [{ kitUnitId: "shields", count: 4 }] });
+      const shields = equipment({ quantity: 8, portions: [{ storeId: null, holderId: "tom", count: 4 }] });
+      const soon = event({ items: [{ equipmentUnitId: "shields", count: 4 }] });
 
       expect(messages([shields], [soon])).toEqual([]);
     });
 
     it("says nothing when Stores plus what the bringer holds is enough", () => {
-      const shields = kit({
+      const shields = equipment({
         quantity: 8,
         portions: [
           { storeId: "shed", holderId: null, count: 4 },
           { storeId: null, holderId: "tom", count: 2 },
         ],
       });
-      const soon = event({ items: [{ kitUnitId: "shields", count: 6 }] });
+      const soon = event({ items: [{ equipmentUnitId: "shields", count: 6 }] });
 
       expect(messages([shields], [soon])).toEqual([]);
     });
 
     it("says the Holder needs to pass some on when the bringer can't get enough from Stores and their own", () => {
-      const shields = kit({
+      const shields = equipment({
         quantity: 8,
         portions: [
           { storeId: null, holderId: "tom", count: 2 },
           { storeId: null, holderId: "sam", count: 6 },
         ],
       });
-      const soon = event({ items: [{ kitUnitId: "shields", count: 6 }] });
+      const soon = event({ items: [{ equipmentUnitId: "shields", count: 6 }] });
 
       expect(messages([shields], [soon])).toEqual([
         "Sam Okafor needs to pass Tackle Shields to Tom Reed before Alumni Day.",

@@ -3,7 +3,7 @@ import postgres from "postgres";
 import { TEST_DATABASE_URL } from "./support/test-db";
 import { signIn } from "./support/sign-in";
 
-test("Committee add Kit Units and Events from the Kit and Events pages, with a confirmation toast", async ({
+test("Committee add Equipment Units and Events from the Equipment and Events pages, with a confirmation toast", async ({
   page,
  
 }) => {
@@ -14,17 +14,17 @@ test("Committee add Kit Units and Events from the Kit and Events pages, with a c
   await sql`insert into store (id, name, address) values (${crypto.randomUUID()}, ${storeName}, 'x')`;
   await signIn(page);
 
-  const kitName = `Cones ${run}`;
-  await page.goto("/kit");
-  await page.getByRole("button", { name: "Add kit" }).click();
-  const kitSheet = page.getByRole("dialog");
-  await kitSheet.getByLabel("Name").fill(kitName);
-  await kitSheet.getByLabel("Home").selectOption({ label: storeName });
-  await kitSheet.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByText("Kit added")).toBeVisible();
-  await expect(page).toHaveURL(/\/kit$/);
-  await page.getByRole("button", { name: `I've got ${kitName}` }).click();
-  await expect(page.getByRole("region", { name: "With you" }).getByRole("link", { name: kitName })).toBeVisible();
+  const equipmentName = `Cones ${run}`;
+  await page.goto("/equipment");
+  await page.getByRole("button", { name: "Add equipment" }).click();
+  const equipmentSheet = page.getByRole("dialog");
+  await equipmentSheet.getByLabel("Name").fill(equipmentName);
+  await equipmentSheet.getByLabel("Home").selectOption({ label: storeName });
+  await equipmentSheet.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("Equipment added")).toBeVisible();
+  await expect(page).toHaveURL(/\/equipment$/);
+  await page.getByRole("button", { name: `I've got ${equipmentName}` }).click();
+  await expect(page.getByRole("region", { name: "With you" }).getByRole("link", { name: equipmentName })).toBeVisible();
 
   const title = `Training ${run}`;
   // A near-future day, so it lands in the Agenda tab's soonest-15 list, distinct from other tests' events.

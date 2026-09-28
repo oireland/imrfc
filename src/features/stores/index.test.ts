@@ -8,10 +8,10 @@ describe("createStore", () => {
     const db = await createTestDb();
     await migrate(db);
 
-    const result = await createStore(db, { name: "Kit shed", address: "Ethos, SW7" });
+    const result = await createStore(db, { name: "Equipment shed", address: "Ethos, SW7" });
 
     expect(result.ok).toBe(true);
-    expect(await listStores(db)).toMatchObject([{ name: "Kit shed", archived: false }]);
+    expect(await listStores(db)).toMatchObject([{ name: "Equipment shed", archived: false }]);
   });
 
   it("rejects a Store without a name", async () => {
@@ -29,14 +29,14 @@ describe("listStores", () => {
   it("excludes archived Stores by default", async () => {
     const db = await createTestDb();
     await migrate(db);
-    await createStore(db, { name: "Kit shed", address: "SW7" });
+    await createStore(db, { name: "Equipment shed", address: "SW7" });
     const created = await createStore(db, { name: "Old cupboard", address: "SW7" });
     if (!created.ok) throw new Error("expected Store to be created");
     await archiveStore(db, created.store.id);
 
     const stores = await listStores(db);
 
-    expect(stores.map((s) => s.name)).toEqual(["Kit shed"]);
+    expect(stores.map((s) => s.name)).toEqual(["Equipment shed"]);
   });
 });
 
