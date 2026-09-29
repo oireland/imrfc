@@ -1,4 +1,4 @@
-import { eq, ne } from "drizzle-orm";
+import { count, eq, ne } from "drizzle-orm";
 import type { Role } from "./access";
 import type { RugbyPosition } from "./positions";
 import { session, user } from "./schema";
@@ -20,6 +20,11 @@ export type AppUser = PendingUser;
 
 export async function listPendingUsers(db: Db): Promise<PendingUser[]> {
   return db.select().from(user).where(eq(user.accessState, "pending"));
+}
+
+export async function countPendingUsers(db: Db): Promise<number> {
+  const [row] = await db.select({ n: count() }).from(user).where(eq(user.accessState, "pending"));
+  return row.n;
 }
 
 export async function listApprovedUsers(db: Db): Promise<PendingUser[]> {

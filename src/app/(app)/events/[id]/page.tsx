@@ -24,8 +24,7 @@ import {
   formatDutySummary,
   gatherConfirmSources,
   joinNames,
-  listClashes,
-  listHeadsUps,
+  listPlanWarnings,
   needsSourceChoice,
   type Duty,
   type DutyRequest,
@@ -36,6 +35,7 @@ import {
   editEvent,
   editOccurrence,
   getEvent,
+  listEventTitles,
   listTeams,
   listVenues,
   londonParts,
@@ -49,7 +49,17 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
   const { id } = await params;
   const user = await requireApprovedUser();
 
-  const eventDetails = await getEvent(db, id);
+  const committee = isCommitteeOrAbove(user.role);
+  // Everything that doesn't depend on the Event itself starts at once.
+  const [eventDetails, equipmentUnits, people, stores, warnings, venues, allTeams] = await Promise.all([
+    getEvent(db, id),
+    listEquipmentUnits(db),
+    listApprovedUsers(db),
+    listStores(db),
+    listPlanWarnings(db),
+    committee ? listVenues(db) : [],
+    committee ? listTeams(db) : [],
+  ]);
   if (!eventDetails) notFound();
   const seriesId = eventDetails.seriesId;
 
@@ -91,41 +101,26 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     return result;
   }
 
-  const [resolved, equipmentUnits] = await Promise.all([
-    resolveEventChecklist(db, {
-      eventId: id,
-      seriesId: eventDetails.seriesId,
-      eventType: eventDetails.eventType,
-    }),
-    listEquipmentUnits(db),
-  ]);
+  const resolved = await resolveEventChecklist(db, {
+    eventId: id,
+    seriesId: eventDetails.seriesId,
+    eventType: eventDetails.eventType,
+  });
   const equipmentNames = new Map(equipmentUnits.map((u) => [u.id, u.name]));
   const equipmentUnitIds = resolved.items.map((i) => i.equipmentUnitId);
   const countByUnit = new Map(resolved.items.map((i) => [i.equipmentUnitId, i.count]));
-  const [duties, people, stores] = await Promise.all([
-    ensureDuties(db, id, equipmentUnitIds),
-    listApprovedUsers(db),
-    listStores(db),
-  ]);
-  const [clashes, headsUps] = await Promise.all([
-    listClashes(db).then((all) => all.filter((c) => c.eventIds.includes(id))),
-    listHeadsUps(db).then((all) => all.filter((h) => h.eventIds.includes(id))),
-  ]);
+  const [duties, portions] = await Promise.all([ensureDuties(db, id, equipmentUnitIds), listPortionsFor(db, equipmentUnitIds)]);
+  const clashes = warnings.clashes.filter((c) => c.eventIds.includes(id));
+  const headsUps = warnings.headsUps.filter((h) => h.eventIds.includes(id));
   const approved = people.filter((p) => p.accessState === "approved");
   const personName = new Map(people.map((p) => [p.id, displayName(p)]));
-  const committee = isCommitteeOrAbove(user.role);
   const dutyFor = (kid: string, direction: Duty["direction"]) =>
     duties.find((d) => d.equipmentUnitId === kid && d.direction === direction)!;
 
   const equipmentById = new Map(equipmentUnits.map((u: EquipmentUnit) => [u.id, u]));
-  const portions = await listPortionsFor(db, equipmentUnitIds);
   const portionsByUnit = new Map<string, Portion[]>();
   for (const p of portions) portionsByUnit.set(p.equipmentUnitId, [...(portionsByUnit.get(p.equipmentUnitId) ?? []), p]);
-  const eventTitleFor = async (eventId: string) => (await getEvent(db, eventId))?.title ?? "an event";
-  const eventNames = new Map<string, string>();
-  for (const eventId of new Set(portions.flatMap((p) => (p.lastSeenEventId ? [p.lastSeenEventId] : [])))) {
-    eventNames.set(eventId, await eventTitleFor(eventId));
-  }
+  const eventNames = await listEventTitles(db, portions.flatMap((p) => (p.lastSeenEventId ? [p.lastSeenEventId] : [])));
   const storeName = (storeId: string | null) => stores.find((s: Store) => s.id === storeId)?.name ?? "a store";
   const nameOf = (userId: string | null) => (userId === user.id ? "You" : userId ? (personName.get(userId) ?? "Someone") : null);
   const whereaboutsNow = (equipmentUnitId: string) =>
@@ -229,8 +224,6 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     none: "",
   }[resolved.source];
 
-  const venues = committee ? await listVenues(db) : [];
-  const allTeams = committee ? await listTeams(db) : [];
   const editInitial = {
     date: londonParts(eventDetails.start).date,
     startTime: londonParts(eventDetails.start).time,

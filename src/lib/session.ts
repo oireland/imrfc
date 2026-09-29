@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { AccessState, RugbyPosition, Role, ThemePreference } from "@/features/users";
@@ -15,7 +16,8 @@ export type CurrentUser = {
   playing: boolean;
 };
 
-export async function getCurrentUser(): Promise<CurrentUser | null> {
+/** Cached per request: layouts, the page and its actions share one session lookup. */
+export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return null;
   const { id, name, email, role, accessState, theme, preferredPosition, otherPositions, playing } =
@@ -31,7 +33,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     otherPositions: otherPositions ?? [],
     playing: playing ?? true,
   };
-}
+});
 
 /** Redirects to sign-in, the waiting screen, or the blocked screen; otherwise returns the Approved User. */
 export async function requireApprovedUser(): Promise<CurrentUser> {

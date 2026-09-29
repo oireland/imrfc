@@ -1,7 +1,8 @@
-import { and, asc, desc, eq, gte, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import { event, eventTeam, matchDetails, team } from "./schema";
 import { classifyEvent, validateEvent, type NewEvent } from "./rules";
 
+export { event } from "./schema";
 export { validateEvent, classifyEvent } from "./rules";
 export {
   createSeries,
@@ -137,6 +138,16 @@ export async function listNextEvents(db: Db, limit: number): Promise<Event[]> {
     .where(and(gte(event.end, now), eq(event.cancelled, false)))
     .orderBy(asc(event.start))
     .limit(limit);
+}
+
+/** Each of `ids`' titles, by Event id, in one query. Ids with no Event are left out. */
+export async function listEventTitles(db: Db, ids: string[]): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  const rows: { id: string; title: string }[] = await db
+    .select({ id: event.id, title: event.title })
+    .from(event)
+    .where(inArray(event.id, [...new Set(ids)]));
+  return new Map(rows.map((r) => [r.id, r.title]));
 }
 
 export async function getEvent(db: Db, id: string): Promise<EventWithDetails | undefined> {

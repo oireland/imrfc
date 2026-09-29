@@ -9,7 +9,7 @@ import { QuickMoveBlockButton } from "@/components/quick-move-button";
 import { ClashList } from "@/components/clash-list";
 import { HeadsUpList } from "@/components/heads-up-list";
 import { formatWhen } from "@/lib/format-time";
-import { listClashes, listHeadsUps } from "@/features/duties";
+import { listPlanWarnings } from "@/features/duties";
 import {
   describeWhereabouts,
   getEquipmentUnit,
@@ -22,7 +22,7 @@ import {
   type Place,
   type Portion,
 } from "@/features/equipment";
-import { getEvent } from "@/features/events";
+import { listEventTitles } from "@/features/events";
 import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
 import { listStores, type Store } from "@/features/stores";
 import { requireApprovedUser } from "@/lib/session";
@@ -47,18 +47,16 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
   const { id } = await params;
   const user = await requireApprovedUser();
 
-  const found = await getEquipmentUnit(db, id);
-  if (!found) notFound();
-  const unit = found;
-
-  const [stores, portions, log, allClashes, allHeadsUps, people] = await Promise.all([
+  const [found, stores, portions, log, warnings, people] = await Promise.all([
+    getEquipmentUnit(db, id),
     listStores(db),
     getPortions(db, id),
     listMovementLog(db, id),
-    listClashes(db),
-    listHeadsUps(db),
+    listPlanWarnings(db),
     listApprovedUsers(db),
   ]);
+  if (!found) notFound();
+  const unit = found;
   const personById = new Map(people.map((p) => [p.id, p]));
   const personName = (personId: string | null) => {
     if (personId === user.id) return "you";
@@ -66,12 +64,9 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
     return person ? displayName(person) : "someone";
   };
   const capitalised = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-  const eventNames = new Map<string, string>();
-  for (const eventId of new Set(portions.flatMap((p) => (p.lastSeenEventId ? [p.lastSeenEventId] : [])))) {
-    eventNames.set(eventId, (await getEvent(db, eventId))?.title ?? "an event");
-  }
-  const clashes = allClashes.filter((c) => c.equipmentUnitId === id);
-  const headsUps = allHeadsUps.filter((h) => h.equipmentUnitId === id);
+  const eventNames = await listEventTitles(db, portions.flatMap((p) => (p.lastSeenEventId ? [p.lastSeenEventId] : [])));
+  const clashes = warnings.clashes.filter((c) => c.equipmentUnitId === id);
+  const headsUps = warnings.headsUps.filter((h) => h.equipmentUnitId === id);
   const storesById = new Map(stores.map((s: Store) => [s.id, s]));
   const storeName = (storeId: string | null) => (storeId && storesById.get(storeId)?.name) || "a store";
   const whereaboutsLabel = describeWhereabouts(portions, {

@@ -3,13 +3,13 @@ import { db } from "@/db/client";
 import { FlashToast } from "@/components/flash-toast";
 import { BottomTabs } from "@/components/bottom-tabs";
 import { OnboardingDialog } from "@/components/onboarding-dialog";
-import { canManageUsers, isCommitteeOrAbove, listPendingUsers } from "@/features/users";
+import { canManageUsers, countPendingUsers, isCommitteeOrAbove } from "@/features/users";
 import { needsOnboarding } from "@/features/onboarding";
 import { requireApprovedUser } from "@/lib/session";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await requireApprovedUser();
-  const pendingCount = canManageUsers(user.role) ? (await listPendingUsers(db)).length : 0;
+  const pendingCount = canManageUsers(user.role) ? await countPendingUsers(db) : 0;
   const showAdmin = isCommitteeOrAbove(user.role);
 
   return (

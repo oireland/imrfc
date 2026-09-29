@@ -8,9 +8,10 @@ import { londonDay } from "@/lib/calendar";
 /**
  * What the "What's coming up" calendar needs: Events from three months back to a year
  * ahead (enough to page through), the User's own Duties and replies marked, and the venues
- * already used and the Teams, for the New event sheet.
+ * already used and the Teams, for the New event sheet. Pass `upcomingDuties` when the page has
+ * already loaded the User's upcoming Duties, so they aren't loaded twice.
  */
-export async function loadComingUp(userId: string) {
+export async function loadComingUp(userId: string, upcomingDuties?: Promise<{ event: { id: string } }[]>) {
   const now = new Date();
   const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 3, 1));
   const to = new Date(Date.UTC(now.getUTCFullYear() + 1, now.getUTCMonth() + 1, 1));
@@ -18,7 +19,7 @@ export async function loadComingUp(userId: string) {
     listEventsBetween(db, from, to),
     listVenues(db),
     listTeams(db),
-    listUpcomingDutiesForUser(db, userId),
+    upcomingDuties ?? listUpcomingDutiesForUser(db, userId),
   ]);
   const mine = new Set(duties.map(({ event }) => event.id));
   const replies = await listMyReplies(db, userId, events, now);

@@ -10,6 +10,7 @@ import {
   listVenues,
   listEvents,
   listEventsBetween,
+  listEventTitles,
   listNextEvents,
   listTeams,
   type NewEvent,
@@ -352,5 +353,30 @@ describe("listVenues", () => {
     for (const e of [at("Harlington", 1), at("Hyde Park", 2), at("Harlington", 3), at("  ", 4)]) await createEvent(db, e);
 
     expect(await listVenues(db)).toEqual(["Harlington", "Hyde Park"]);
+  });
+});
+
+describe("listEventTitles", () => {
+  it("names each of several Events in one go, leaving out ids that don't exist", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const make = async (title: string) => {
+      const made = await createEvent(db, {
+        title,
+        eventType: "training",
+        start: new Date(Date.UTC(2999, 0, 1, 19)),
+        end: new Date(Date.UTC(2999, 0, 1, 21)),
+        venue: "Harlington",
+      });
+      if (!made.ok) throw new Error(made.error);
+      return made.event;
+    };
+    const a = await make("Training A");
+    const b = await make("Training B");
+
+    const titles = await listEventTitles(db, [a.id, b.id, "gone"]);
+
+    expect(titles).toEqual(new Map([[a.id, "Training A"], [b.id, "Training B"]]));
+    expect(await listEventTitles(db, [])).toEqual(new Map());
   });
 });

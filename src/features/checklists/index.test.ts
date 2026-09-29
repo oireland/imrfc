@@ -9,8 +9,20 @@ import {
   getChecklist,
   removeFromChecklist,
   resolveEventChecklist,
+  resolveEventChecklists,
   setChecklistItemCount,
 } from "./index";
+
+/** Counts the db's `select` calls from here on. */
+function countSelects(db: { select: (...args: unknown[]) => unknown }): () => number {
+  const original = db.select.bind(db);
+  let count = 0;
+  (db as { select: (...args: unknown[]) => unknown }).select = (...args: unknown[]) => {
+    count++;
+    return original(...args);
+  };
+  return () => count;
+}
 
 async function setup() {
   const db = await createTestDb();
@@ -84,6 +96,49 @@ describe("Checklists", () => {
       source: "none",
       items: [],
     });
+  });
+
+  it("resolves many Events at once, each by Event, then Series, then Default", async () => {
+    const { db, balls, cones } = await setup();
+    await addToChecklist(db, { scope: "event_type", scopeId: "training" }, balls.id);
+    await addToChecklist(db, { scope: "series", scopeId: "s1" }, cones.id);
+    await addToChecklist(db, { scope: "event", scopeId: "own" }, cones.id);
+    await addToChecklist(db, { scope: "event", scopeId: "own" }, balls.id);
+
+    const resolved = await resolveEventChecklists(db, [
+      { eventId: "plain", seriesId: null, eventType: "training" },
+      { eventId: "in-series", seriesId: "s1", eventType: "training" },
+      { eventId: "own", seriesId: "s1", eventType: "training" },
+      { eventId: "social", seriesId: null, eventType: "social" },
+    ]);
+
+    expect(Object.fromEntries(resolved)).toEqual({
+      plain: { source: "default", items: [{ equipmentUnitId: balls.id, count: 1 }] },
+      "in-series": { source: "series", items: [{ equipmentUnitId: cones.id, count: 1 }] },
+      own: {
+        source: "event",
+        items: expect.arrayContaining([
+          { equipmentUnitId: cones.id, count: 1 },
+          { equipmentUnitId: balls.id, count: 1 },
+        ]),
+      },
+      social: { source: "none", items: [] },
+    });
+  });
+
+  it("resolves many Events in the same number of queries as one", async () => {
+    const { db, balls } = await setup();
+    await addToChecklist(db, { scope: "event_type", scopeId: "training" }, balls.id);
+    const events = Array.from({ length: 20 }, (_, i) => ({ eventId: `e${i}`, seriesId: `s${i}`, eventType: "training" }));
+    for (const e of events.slice(0, 10)) await addToChecklist(db, { scope: "event", scopeId: e.eventId }, balls.id);
+
+    const one = countSelects(db);
+    await resolveEventChecklists(db, events.slice(0, 1));
+    const selectsForOne = one();
+
+    const many = countSelects(db);
+    await resolveEventChecklists(db, events);
+    expect(many()).toBe(selectsForOne);
   });
 
   it("sets a line's count and caps it at the Equipment Unit's Quantity when resolved", async () => {
