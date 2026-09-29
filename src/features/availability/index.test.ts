@@ -5,7 +5,8 @@ import { createEvent, type NewEvent } from "@/features/events";
 import { user } from "@/features/users";
 import type { MailSender } from "@/lib/mail";
 import { listEventsBetween } from "@/features/events";
-import { announce, getAvailability, getSeasonRecord, listMyReplies, listWaitingOnReply, nudge, saveReply } from "./index";
+import { announce, getAvailability, getSeasonRecord, listAvailableUserIds, listMyReplies, listWaitingOnReply, nudge, saveReply } from "./index";
+import { availabilityReply } from "./schema";
 
 const now = new Date("2026-10-01T12:00:00Z");
 const tom = { id: "tom", committee: true };
@@ -116,7 +117,9 @@ describe("announce", () => {
     const { mail, sent } = fakeMail();
     const replyBy = new Date("2026-10-02T17:00:00Z");
 
-    expect(await announce(db, { eventId, viewer: tom, replyBy, url: url(eventId), mail }, now)).toEqual({ ok: true, sent: 2 });
+    const result = await announce(db, { eventId, viewer: tom, replyBy, url: url(eventId), mail }, now);
+    expect(result.ok && result.sent).toBe(2);
+    expect(result.ok && result.reachedUserIds.sort()).toEqual(["jo", "tom"]);
 
     expect(sent.map((m) => m.to).sort()).toEqual(["jo@x.org", "tom@x.org"]);
     expect(sent[0].text).toContain(url(eventId));
@@ -168,7 +171,9 @@ describe("nudge", () => {
     await saveReply(db, { eventId, playerId: "sam", viewer: sam, status: "available", note: "", reason: "" }, now);
     const { mail, sent } = fakeMail();
 
-    expect(await nudge(db, { eventId, viewer: tom, playerIds: null, url: url(eventId), mail }, now)).toEqual({ ok: true, sent: 2 });
+    const result = await nudge(db, { eventId, viewer: tom, playerIds: null, url: url(eventId), mail }, now);
+    expect(result.ok && result.sent).toBe(2);
+    expect(result.ok && result.reachedUserIds.sort()).toEqual(["jo", "tom"]);
 
     expect(sent.map((m) => m.to).sort()).toEqual(["jo@x.org", "tom@x.org"]);
     expect(sent[0].subject).toMatch(/^Still need your answer/);
@@ -266,5 +271,37 @@ describe("getSeasonRecord", () => {
       matches: { all: { available: 1, notAvailable: 0, noReply: 0 }, announced: { available: 0, notAvailable: 0, noReply: 0 } },
       training: { all: { available: 0, notAvailable: 1, noReply: 1 }, announced: { available: 0, notAvailable: 1, noReply: 0 } },
     });
+  });
+});
+
+describe("listAvailableUserIds", () => {
+  it("groups Players who replied Available, per Event, leaving out Not available and No reply", async () => {
+    const db = await setup();
+    const trainingId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
+    const matchId = await makeEvent(db, { eventType: "match", start: new Date("2026-10-04T14:00:00Z") });
+
+    await saveReply(db, { eventId: trainingId, playerId: "sam", viewer: sam, status: "available", note: "", reason: "" }, now);
+    await saveReply(db, { eventId: trainingId, playerId: "jo", viewer: tom, status: "not_available", note: "", reason: "Work" }, now);
+    await saveReply(db, { eventId: matchId, playerId: "jo", viewer: tom, status: "available", note: "", reason: "" }, now);
+
+    const byEvent = await listAvailableUserIds(db, [trainingId, matchId]);
+
+    expect(byEvent.get(trainingId)).toEqual(new Set(["sam"]));
+    expect(byEvent.get(matchId)).toEqual(new Set(["jo"]));
+  });
+
+  it("leaves out Blocked Users and Users with Playing off, even if a reply row exists", async () => {
+    const db = await setup();
+    const eventId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
+    // ray has Playing off, bex is Blocked (see setup()) — inserted directly since
+    // saveReply itself already refuses both.
+    await db.insert(availabilityReply).values([
+      { id: "r1", eventId, userId: "ray", status: "available", note: "", reason: "", setById: "ray", createdAt: now },
+      { id: "r2", eventId, userId: "bex", status: "available", note: "", reason: "", setById: "bex", createdAt: now },
+    ]);
+
+    const byEvent = await listAvailableUserIds(db, [eventId]);
+
+    expect(byEvent.get(eventId) ?? new Set()).toEqual(new Set());
   });
 });

@@ -25,7 +25,7 @@ import {
 } from "./rules";
 
 export { takesReplies } from "./rules";
-export { chaseMessage } from "./announce-rules";
+export { askPush, chaseMessage } from "./announce-rules";
 export type { AskedEvent } from "./announce-rules";
 export type { AvailabilityRow, AvailabilitySummary, MyReply, RecordLine, ReplyCounts, ReplyStatus, SeasonRecord, WaitingAsk } from "./rules";
 
@@ -76,6 +76,20 @@ async function playersById(db: Db) {
   const [listing, people] = await Promise.all([listPlayers(db), listApprovedUsers(db)]);
   const blocked = new Set(people.filter((u: { accessState: string }) => u.accessState === "blocked").map((u: { id: string }) => u.id));
   return new Map([...listing.playing, ...listing.notPlaying].filter((p) => !blocked.has(p.id)).map((p) => [p.id, p]));
+}
+
+/** Players who replied Available to each of `eventIds`, grouped by Event, per-event only (no day-grouping). */
+export async function listAvailableUserIds(db: Db, eventIds: string[]): Promise<Map<string, Set<string>>> {
+  if (eventIds.length === 0) return new Map();
+  const [replies, players] = await Promise.all([repliesFor(db, eventIds), playersById(db)]);
+  const byEvent = new Map<string, Set<string>>();
+  for (const reply of replies as (Reply & { eventId: string })[]) {
+    if (reply.status !== "available") continue;
+    const player = players.get(reply.userId);
+    if (!player?.playing) continue;
+    byEvent.set(reply.eventId, (byEvent.get(reply.eventId) ?? new Set()).add(reply.userId));
+  }
+  return byEvent;
 }
 
 async function announcementFor(db: Db, eventIds: string[]) {
@@ -182,7 +196,8 @@ export async function getAvailability(db: Db, eventId: string, viewer: Viewer, n
 }
 
 type AskInput = { eventId: string; viewer: Viewer; url: string; mail: MailSender };
-type AskResult = { ok: true; sent: number } | { ok: false; error: string };
+// `reachedUserIds` is who the email got to, for the caller to also push to (see the `push` feature).
+type AskResult = { ok: true; sent: number; reachedUserIds: string[] } | { ok: false; error: string };
 
 /** Emails each of `playerIds` the Announce or Nudge email; returns who it reached. */
 async function sendAsk(
@@ -228,7 +243,7 @@ export async function announce(db: Db, input: AskInput & { replyBy: Date | null 
     replyBy: input.replyBy,
     mail: input.mail,
   });
-  return { ok: true, sent: reached.length };
+  return { ok: true, sent: reached.length, reachedUserIds: reached };
 }
 
 /** Nudge (Committee): emails a reminder to everyone with No reply, or just `playerIds` among them. */
@@ -249,7 +264,7 @@ export async function nudge(db: Db, input: AskInput & { playerIds: string[] | nu
       reached.map((userId) => ({ id: crypto.randomUUID(), eventId: input.eventId, userId, nudgedById: input.viewer.id, createdAt: now })),
     );
   }
-  return { ok: true, sent: reached.length };
+  return { ok: true, sent: reached.length, reachedUserIds: reached };
 }
 
 async function playerRepliesFor(db: Db, playerId: string, eventIds: string[]): Promise<(Reply & { eventId: string })[]> {

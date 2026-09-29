@@ -23,7 +23,17 @@ export default defineConfig({
   webServer: {
     command: `pnpm next dev --port ${port}`,
     // DEV_SIGN_IN lets specs sign in through /api/dev/sign-in instead of Mailpit, so they run in parallel.
-    env: { BETTER_AUTH_URL: `http://localhost:${port}`, DATABASE_URL: TEST_DATABASE_URL, NEXT_DIST_DIR: ".next/e2e", DEV_SIGN_IN: "1" },
+    env: {
+      BETTER_AUTH_URL: `http://localhost:${port}`,
+      DATABASE_URL: TEST_DATABASE_URL,
+      NEXT_DIST_DIR: ".next/e2e",
+      DEV_SIGN_IN: "1",
+      // A syntactically valid but fake VAPID key so Profile renders the Notifications
+      // toggle; e2e specs mock the browser's push APIs rather than reaching a real one.
+      NEXT_PUBLIC_VAPID_PUBLIC_KEY:
+        "BLc4vXvDESddIn9-x4RQU6ZQDFRDvVsyD5jSjEz-vylhtBoTmMOwn8u9m5ZBjb7lz4jH-7Y_MImBg8SBGgLzKY",
+      CRON_SECRET: "e2e-cron-secret",
+    },
     url: `http://localhost:${port}`,
     reuseExistingServer: !process.env.CI,
   },

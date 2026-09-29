@@ -33,6 +33,6 @@ Vertical slices, built in order, each test-first (red → green → refactor). A
 - [ ] **21. Injuries** — `injuries` feature: report/update from Profile or the Player page, Injury Status history with who/when, Logged by mistake, Fitness (worst open Injury) on the list with the summary line and Injured-only filter, check-in flags, Home card for my open Injuries, privacy line.
 - [ ] **22. Concussion timeline** — Concussion flag, Symptom-free Date, Earliest contact training / Earliest Match, GRAS stages, NHS 111 / GP prompts, Committee-only Clear.
 - [ ] **23. Physio Summary** — "Copy for physio" on the Players page and on Matches.
-- [ ] **24. PWA** — manifest, icons, iOS home-screen meta.
+- [x] **24. PWA & Push** — manifest, icons (generated from `docs/brand/crest.png`), iOS home-screen meta, service worker; `push` feature (subscriptions, morning-of reminders for Duties/Available replies on today's Events, a push alongside Announce/Nudge); Notifications toggle on Profile; daily Vercel Cron. See [ADR 0004](docs/adr/0004-web-push-over-third-party-and-daily-cron-drift.md).
 
 After v1: deploy to Vercel + Neon, choose production mail sender (it must allow ~300 emails/day for Announce). Follow-ups: scheduled Announce; emails when an announced Event changes or is Cancelled.

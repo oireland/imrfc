@@ -17,6 +17,7 @@ import {
   leaveDuty,
   listClashes,
   listDutyRecordForUser,
+  listDutyUserIdsByEvent,
   listHeadsUps,
   listUpcomingDutiesForUser,
   setDestination,
@@ -890,5 +891,40 @@ describe("listDutyRecordForUser", () => {
 
     expect(record.season).toEqual({ done: 1, neverConfirmed: 1 });
     expect(record.last.map((r) => r.event.title)).toEqual(["Never confirmed", "Done", "Last season"]);
+  });
+});
+
+describe("listDutyUserIdsByEvent", () => {
+  it("groups the Users on any of an Event's Duties, across several Events", async () => {
+    const { db, shed } = await setup();
+    const unitA = await createEquipmentUnit(db, { name: "Balls A", homeId: shed.id });
+    if (!unitA.ok) throw new Error(unitA.error);
+    const unitB = await createEquipmentUnit(db, { name: "Balls B", homeId: shed.id });
+    if (!unitB.ok) throw new Error(unitB.error);
+
+    const [toA] = await ensureDuties(db, "e1", [unitA.equipmentUnit.id]);
+    await claimDuty(db, toA.id, "tom");
+    const [toB, fromB] = await ensureDuties(db, "e2", [unitB.equipmentUnit.id]);
+    await claimDuty(db, toB.id, "sam");
+    await claimDuty(db, fromB.id, "priya");
+
+    const byEvent = await listDutyUserIdsByEvent(db, ["e1", "e2", "e3"]);
+
+    expect(byEvent.get("e1")).toEqual(new Set(["tom"]));
+    expect(byEvent.get("e2")).toEqual(new Set(["sam", "priya"]));
+    expect(byEvent.get("e3") ?? new Set()).toEqual(new Set());
+  });
+
+  it("leaves out Duties voided by a Cancelled Event", async () => {
+    const { db, shed } = await setup();
+    const unit = await createEquipmentUnit(db, { name: "Balls", homeId: shed.id });
+    if (!unit.ok) throw new Error(unit.error);
+    const [to] = await ensureDuties(db, "e1", [unit.equipmentUnit.id]);
+    await claimDuty(db, to.id, "tom");
+    await voidDutiesForEvent(db, "e1");
+
+    const byEvent = await listDutyUserIdsByEvent(db, ["e1"]);
+
+    expect(byEvent.get("e1") ?? new Set()).toEqual(new Set());
   });
 });

@@ -16,7 +16,7 @@ Imperial Medicals RFC keeps forgetting equipment and keeps asking the same quest
 
 ## Constraints
 
-- Free to build and run: Next.js on Vercel (hobby), Neon Postgres (free), no paid services.
+- Free to build and run: Next.js on Vercel (hobby), Neon Postgres (free), no paid services — push notifications use the free Web Push standard rather than a third-party push service.
 - Mobile-first; most use is on phones. ~50–150 users.
 - Single club, single tenant. All times Europe/London (BST-aware).
 - Built test-first (TDD). Vercel deployment only once fully working locally.
@@ -217,6 +217,16 @@ Lets Players say whether they can make a Training or Match, and lets Committee s
 - Contains all Events (Cancelled ones marked `STATUS:CANCELLED`) with the User's own Duties in the description ("You're bringing: Ball bag A", "You're bringing: Tackle shields ×4 with Sam").
 - Blocked Users' feeds return 404/410.
 
+## Notifications
+
+The app is a PWA (manifest, icons, installable via "Add to Home Screen"), which enables
+push notifications — no paid service, using the Web Push standard (see [ADR 0004](docs/adr/0004-web-push-over-third-party-and-daily-cron-drift.md)).
+
+- **Notifications** toggle on Profile turns push on/off for that browser/device; off by default. Turning it on asks the browser for permission and subscribes that device.
+- **Morning-of**: once a day, a User with a Duty (To or From) on an Event starting today, or who replied Available to today's Training/Match, gets one push summarising why ("You're on duty for Training", or combined if more than one reason applies).
+- **Announce / Nudge**: alongside the existing email, a User Announce or Nudge reaches also gets a matching push.
+- Tapping a notification opens the app to the relevant Event.
+
 ## Screens (mobile-first)
 
 - **Bottom tabs**: Members get Home · Events · Equipment · Profile; Committee and Admin get Home · Events · Equipment · Players · Admin · Profile. The What's coming up title on Home also links to Events (with a chevron).
@@ -226,8 +236,7 @@ Lets Players say whether they can make a Training or Match, and lets Committee s
 - **Admin** (Committee/Admin sections as permitted): Pending Users, Users & Roles, Stores, Equipment Units, Event Types & Default Checklists, Series.
 - **Players** (Committee): a summary line ("3 out · 2 playing through it"), name search, an Injured-only filter, Players in position order (by Preferred Position) each with their Fitness, main Injury ("Out · ankle (+1)") and check-in flag, then a collapsed **Not playing** section. "Copy for physio" button.
 - **Player page** (Committee): name, Preferred and Other Positions, Playing switch; Fitness and open Injuries (with the Concussion timeline); Injury history; Duties — upcoming, this season's count (1 Sep–31 Aug: "12 done · 2 never confirmed", Cancelled Events left out) and the last 5 past Duties, each done or never confirmed; this season's Availability record. Actions: report an Injury, update status, edit Positions.
-- **Profile**: name, a **Playing** section (Playing switch, Positions, my open Injuries and history with the same Concussion timeline, report an Injury, the privacy line), Calendar Feed URL (copy/reset), sign out.
-- PWA manifest + icons (installable via "Add to Home Screen" on iOS/Android) — nice-to-have, last slice.
+- **Profile**: name, a **Playing** section (Playing switch, Positions, my open Injuries and history with the same Concussion timeline, report an Injury, the privacy line), Calendar Feed URL (copy/reset), a **Notifications** toggle (see [Notifications](#notifications)), sign out.
 
 ## Look and feel
 

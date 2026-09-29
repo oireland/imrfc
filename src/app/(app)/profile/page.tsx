@@ -7,16 +7,19 @@ import { CopyFeedUrl } from "@/components/copy-feed-url";
 import { SignOutButton } from "@/components/sign-out-button";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { SubmitButton } from "@/components/submit-button";
+import { NotificationToggle } from "@/components/notification-toggle";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { RUGBY_POSITIONS, displayName, setName, type RugbyPosition } from "@/features/users";
 import { setPlayerPositions, setPlaying } from "@/features/players";
 import { getFeedToken, resetFeedToken } from "@/features/calendar-feed";
+import { isSubscribed, subscribe, unsubscribe } from "@/features/push";
 import { requireApprovedUser } from "@/lib/session";
 
 export default async function ProfilePage() {
   const user = await requireApprovedUser();
+  const notificationsOn = await isSubscribed(db, user.id);
   const token = await getFeedToken(db, user.id);
   const host = (await headers()).get("host");
   const protocol = host?.startsWith("localhost") ? "http" : "https";
@@ -52,6 +55,18 @@ export default async function ProfilePage() {
     const current = await requireApprovedUser();
     await setPlaying(db, current.id, formData.get("playing") === "true");
     revalidatePath("/profile");
+  }
+
+  async function subscribeToPush(subscription: { endpoint: string; p256dh: string; auth: string }) {
+    "use server";
+    const current = await requireApprovedUser();
+    await subscribe(db, { userId: current.id, subscription });
+  }
+
+  async function unsubscribeFromPush(endpoint: string) {
+    "use server";
+    const current = await requireApprovedUser();
+    await unsubscribe(db, { userId: current.id, endpoint });
   }
 
   return (
@@ -141,6 +156,26 @@ export default async function ProfilePage() {
           </form>
         </CardContent>
       </Card>
+
+      {process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && (
+        <Card>
+          <CardHeader>
+            <h3 className="font-heading text-[22px] leading-tight">Notifications</h3>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground">
+              Get a nudge on your phone the morning of anything you&rsquo;re on duty for or playing in, and whenever
+              you&rsquo;re asked for your availability.
+            </p>
+            <NotificationToggle
+              initiallySubscribed={notificationsOn}
+              vapidPublicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY}
+              subscribe={subscribeToPush}
+              unsubscribe={unsubscribeFromPush}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       <SignOutButton />
     </div>

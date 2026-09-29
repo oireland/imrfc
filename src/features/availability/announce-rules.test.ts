@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chaseMessage, askEmail } from "./announce-rules";
+import { askPush, chaseMessage, askEmail } from "./announce-rules";
 
 const barts = { title: "1st XV v Barts", start: new Date("2026-10-03T13:00:00Z") };
 const ucl = { title: "2nd XV v UCL", start: new Date("2026-10-03T15:00:00Z") };
@@ -39,6 +39,19 @@ describe("askEmail html", () => {
     expect(html).toMatch(new RegExp(`<a href="${url}"[^>]*>Reply now</a>`));
     expect(html).toContain("1st XV v Barts &amp; 2nd XV v UCL");
     expect(html).toContain("Please reply by Fri 2 Oct, 18:00.");
+  });
+});
+
+describe("askPush", () => {
+  it("mirrors the Announce/Nudge email as a short push", () => {
+    expect(askPush({ kind: "announce", events: [barts] })).toEqual({
+      title: "Can you make it?",
+      body: "Can you make it to Sat 3 Oct — 1st XV v Barts?",
+    });
+    expect(askPush({ kind: "nudge", events: [barts] })).toEqual({
+      title: "Still need your answer",
+      body: "You haven't told us yet whether you can make it to Sat 3 Oct — 1st XV v Barts.",
+    });
   });
 });
 
