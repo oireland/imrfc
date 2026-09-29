@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { getEquipmentUnit, listEquipmentUnitsByIds } from "@/features/equipment";
 import { checklist, checklistItem } from "./schema";
 import { effectiveCount, resolveChecklist, type ChecklistLine } from "./rules";
@@ -92,29 +92,70 @@ export async function clearChecklist(db: Db, target: ChecklistScope) {
   await db.delete(checklist).where(eq(checklist.id, id));
 }
 
+export type ChecklistEventRef = { eventId: string; seriesId: string | null; eventType: string };
+
 /** Event's own Checklist, else its Series', else its Event Type's Default — with each
  * line's effective count (capped at the Equipment Unit's current Quantity). */
-export async function resolveEventChecklist(
+export async function resolveEventChecklist(db: Db, event: ChecklistEventRef): Promise<ResolvedEventChecklist> {
+  return (await resolveEventChecklists(db, [event])).get(event.eventId)!;
+}
+
+/** `resolveEventChecklist` for many Events at once, keyed by Event id — in two queries however many there are. */
+export async function resolveEventChecklists(
   db: Db,
-  event: { eventId: string; seriesId: string | null; eventType: string },
-): Promise<ResolvedEventChecklist> {
-  const resolved = resolveChecklist({
-    event: await getChecklist(db, { scope: "event", scopeId: event.eventId }),
-    series: event.seriesId
-      ? await getChecklist(db, { scope: "series", scopeId: event.seriesId })
-      : undefined,
-    default: await getChecklist(db, { scope: "event_type", scopeId: event.eventType }),
-  });
-  const units = await listEquipmentUnitsByIds(
-    db,
-    resolved.items.map((i) => i.equipmentUnitId),
-  );
+  events: ChecklistEventRef[],
+): Promise<Map<string, ResolvedEventChecklist>> {
+  const result = new Map<string, ResolvedEventChecklist>();
+  if (events.length === 0) return result;
+  const eventIds = [...new Set(events.map((e) => e.eventId))];
+  const seriesIds = [...new Set(events.flatMap((e) => (e.seriesId ? [e.seriesId] : [])))];
+  const eventTypes = [...new Set(events.map((e) => e.eventType))];
+  const rows: { scope: ChecklistScope["scope"]; scopeId: string; equipmentUnitId: string | null; count: number | null }[] = await db
+    .select({
+      scope: checklist.scope,
+      scopeId: checklist.scopeId,
+      equipmentUnitId: checklistItem.equipmentUnitId,
+      count: checklistItem.count,
+    })
+    .from(checklist)
+    .leftJoin(checklistItem, eq(checklistItem.checklistId, checklist.id))
+    .where(
+      or(
+        and(eq(checklist.scope, "event"), inArray(checklist.scopeId, eventIds)),
+        seriesIds.length > 0 ? and(eq(checklist.scope, "series"), inArray(checklist.scopeId, seriesIds)) : undefined,
+        and(eq(checklist.scope, "event_type"), inArray(checklist.scopeId, eventTypes)),
+      ),
+    );
+
+  // A level with a row but no items still has its own (empty) Checklist.
+  const lines = new Map<string, ChecklistLine[]>();
+  for (const r of rows) {
+    const key = `${r.scope}:${r.scopeId}`;
+    const list = lines.get(key) ?? [];
+    if (r.equipmentUnitId) list.push({ equipmentUnitId: r.equipmentUnitId, count: r.count });
+    lines.set(key, list);
+  }
+
+  const resolvedByEvent = events.map((e) => ({
+    eventId: e.eventId,
+    resolved: resolveChecklist({
+      event: lines.get(`event:${e.eventId}`),
+      series: e.seriesId ? lines.get(`series:${e.seriesId}`) : undefined,
+      default: lines.get(`event_type:${e.eventType}`),
+    }),
+  }));
+  const units = await listEquipmentUnitsByIds(db, [
+    ...new Set(resolvedByEvent.flatMap(({ resolved }) => resolved.items.map((i) => i.equipmentUnitId))),
+  ]);
   const quantityById = new Map(units.map((u) => [u.id, u.quantity]));
-  return {
-    source: resolved.source,
-    items: resolved.items.map((i) => ({
-      equipmentUnitId: i.equipmentUnitId,
-      count: effectiveCount(i.count, quantityById.get(i.equipmentUnitId) ?? 1),
-    })),
-  };
+  for (const { eventId, resolved } of resolvedByEvent) {
+    result.set(eventId, {
+      source: resolved.source,
+      items: resolved.items.map((i) => ({
+        equipmentUnitId: i.equipmentUnitId,
+        count: effectiveCount(i.count, quantityById.get(i.equipmentUnitId) ?? 1),
+      })),
+    });
+  }
+  return result;
 }

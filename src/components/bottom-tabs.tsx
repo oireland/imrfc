@@ -48,6 +48,8 @@ export function BottomTabs({ showAdmin, pendingCount = 0 }: BottomTabsProps) {
             <Link
               key={href}
               href={href}
+              // The tab bar is always on screen, so fetch each tab's whole page up front and tapping one shows it at once.
+              prefetch={true}
               aria-current={active ? "page" : undefined}
               className={cn(
                 "relative flex flex-1 flex-col items-center gap-1 px-1 py-1 text-[11px] font-medium",

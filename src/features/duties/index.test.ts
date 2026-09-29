@@ -19,6 +19,7 @@ import {
   listDutyRecordForUser,
   listDutyUserIdsByEvent,
   listHeadsUps,
+  listPlanWarnings,
   listUpcomingDutiesForUser,
   setDestination,
   markUnconfirmed,
@@ -830,6 +831,99 @@ describe("Query efficiency", () => {
     }
     return db;
   }
+
+  /** A training `hours` from now (negative: in the past) with the default Checklist's Balls on it. */
+  async function addTraining(db: Awaited<ReturnType<typeof setup>>["db"], hours: number) {
+    const made = await createEvent(db, {
+      title: "Training",
+      eventType: "training",
+      start: new Date(Date.now() + hours * 3600_000),
+      end: new Date(Date.now() + (hours + 2) * 3600_000),
+      venue: "Harlington",
+    });
+    if (!made.ok) throw new Error(made.error);
+    return made.event;
+  }
+
+  it("loads the equipment plan in the same number of queries however many upcoming Events there are", async () => {
+    const { db, equipment } = await setup();
+    await addToChecklist(db, { scope: "event_type", scopeId: "training" }, equipment.id);
+    await addTraining(db, 24);
+
+    const few = countSelects(db);
+    await listPlanWarnings(db);
+    const selectsWithOneEvent = few();
+
+    for (let i = 2; i < 12; i++) await addTraining(db, i * 24);
+    const many = countSelects(db);
+    await listPlanWarnings(db);
+    expect(many()).toBe(selectsWithOneEvent);
+  });
+
+  it("gives clashes and heads-ups from one plan load", async () => {
+    const { db, equipment } = await setup();
+    await addToChecklist(db, { scope: "event_type", scopeId: "training" }, equipment.id);
+    await addTraining(db, 24);
+
+    const clashesOnly = countSelects(db);
+    const clashes = await listClashes(db);
+    const selectsForOnePlan = clashesOnly();
+
+    const both = countSelects(db);
+    const warnings = await listPlanWarnings(db);
+    // One plan, plus the people named in heads-ups.
+    expect(both()).toBe(selectsForOnePlan + 1);
+    expect(warnings).toEqual({ clashes, headsUps: await listHeadsUps(db) });
+  });
+
+  it("resolves a user's upcoming duties in the same number of queries however many upcoming Events there are", async () => {
+    const { db, equipment } = await setup();
+    await addToChecklist(db, { scope: "event_type", scopeId: "training" }, equipment.id);
+    const first = await addTraining(db, 24);
+    const [to] = (await ensureDuties(db, first.id, [equipment.id])).filter((d) => d.direction === "to");
+    await claimDuty(db, to.id, "sam");
+
+    const few = countSelects(db);
+    await listUpcomingDutiesForUser(db, "sam");
+    const selectsWithOneEvent = few();
+
+    for (let i = 2; i < 12; i++) await addTraining(db, i * 24);
+    const many = countSelects(db);
+    await listUpcomingDutiesForUser(db, "sam");
+    expect(many()).toBe(selectsWithOneEvent);
+  });
+
+  it("checks for Unconfirmed equipment in one query when there's nothing to mark, however many Events have ended", async () => {
+    const { db, equipment } = await setup();
+    await addToChecklist(db, { scope: "event_type", scopeId: "training" }, equipment.id);
+    for (let i = 1; i < 12; i++) {
+      const ev = await addTraining(db, -i * 24);
+      const [to, from] = await ensureDuties(db, ev.id, [equipment.id]).then((d) => [
+        d.find((x) => x.direction === "to")!,
+        d.find((x) => x.direction === "from")!,
+      ]);
+      await claimDuty(db, to.id, "tom");
+      await confirmDuty(db, to.id, { id: "tom", role: "member" });
+      await confirmDuty(db, from.id, { id: "tom", role: "member" });
+    }
+
+    const selects = countSelects(db);
+    await markUnconfirmed(db);
+    expect(selects()).toBe(1);
+  });
+
+  it("doesn't write when an Event's Duties already exist", async () => {
+    const { db, equipment } = await setup();
+    const original = db.insert.bind(db);
+    let inserts = 0;
+    (db as { insert: unknown }).insert = (...args: Parameters<typeof db.insert>) => {
+      inserts++;
+      return original(...args);
+    };
+
+    expect(await ensureDuties(db, "e1", [equipment.id])).toHaveLength(2);
+    expect(inserts).toBe(0);
+  });
 
   it("checks each upcoming Duty for a Blocked User without one query per Duty", async () => {
     // Nobody here is "tom", so `removeUser` is never called — this isolates the filter step's cost.

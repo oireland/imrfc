@@ -4,7 +4,7 @@ import { ChevronRight } from "lucide-react";
 import { db } from "@/db/client";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { canManageUsers, isCommitteeOrAbove, listPendingUsers } from "@/features/users";
+import { canManageUsers, countPendingUsers, isCommitteeOrAbove } from "@/features/users";
 import { getCurrentUser } from "@/lib/session";
 
 const LINKS = [
@@ -19,7 +19,7 @@ export default async function AdminPage() {
   const user = await getCurrentUser();
   if (!user || !isCommitteeOrAbove(user.role)) redirect("/");
 
-  const pendingCount = canManageUsers(user.role) ? (await listPendingUsers(db)).length : 0;
+  const pendingCount = canManageUsers(user.role) ? await countPendingUsers(db) : 0;
 
   return (
     <div className="flex flex-col gap-4">

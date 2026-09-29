@@ -7,6 +7,7 @@ import {
   approveUser,
   blockUser,
   listApprovedUsers,
+  countPendingUsers,
   listPendingUsers,
   setName,
   setPreferredPosition,
@@ -42,6 +43,16 @@ describe("listPendingUsers", () => {
     const pending = await listPendingUsers(db);
 
     expect(pending.map((u: { name: string }) => u.name)).toEqual(["Pending Pat"]);
+  });
+
+  it("counts Pending Users", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    await seedUser(db, { accessState: "pending" });
+    await seedUser(db, { accessState: "pending" });
+    await seedUser(db, { accessState: "approved" });
+
+    expect(await countPendingUsers(db)).toBe(2);
   });
 });
 

@@ -18,7 +18,7 @@ import {
   type WhereaboutsGroup,
 } from "@/features/equipment";
 import { markUnconfirmed } from "@/features/duties";
-import { getEvent } from "@/features/events";
+import { listEventTitles } from "@/features/events";
 import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
 import { listStores, type Store } from "@/features/stores";
 import { requireApprovedUser } from "@/lib/session";
@@ -37,9 +37,7 @@ export default async function EquipmentViewPage() {
   const activeUnits = allUnits.filter((u: EquipmentUnit) => u.status === "active");
   const inactiveUnits = allUnits.filter((u: EquipmentUnit) => u.status !== "active");
   const portions = await listPortionsFor(db, activeUnits.map((u: EquipmentUnit) => u.id));
-  const lastSeenIds = [...new Set(portions.flatMap((p) => (p.lastSeenEventId ? [p.lastSeenEventId] : [])))];
-  const lastSeenEvents = await Promise.all(lastSeenIds.map((id) => getEvent(db, id)));
-  const lastSeen = new Map(lastSeenIds.map((id, i) => [id, lastSeenEvents[i]?.title ?? "an event"]));
+  const lastSeen = await listEventTitles(db, portions.flatMap((p) => (p.lastSeenEventId ? [p.lastSeenEventId] : [])));
   const storesById = new Map(stores.map((s: Store) => [s.id, s]));
   const storeName = (id: string) => storesById.get(id)?.name ?? "Store";
   const unitsById = new Map(activeUnits.map((u: EquipmentUnit) => [u.id, u]));
@@ -85,7 +83,7 @@ export default async function EquipmentViewPage() {
     const name = split ? `${unit.name} ×${portion.count}` : unit.name;
     const detail =
       portion.whereaboutsType === "unconfirmed" && portion.lastSeenEventId
-        ? `Last seen at ${lastSeen.get(portion.lastSeenEventId)}`
+        ? `Last seen at ${lastSeen.get(portion.lastSeenEventId) ?? "an event"}`
         : unit.conditionNote || null;
     return (
       <li className="relative flex items-center gap-3 px-4 py-3 has-[a:hover]:bg-muted/60">

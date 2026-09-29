@@ -31,11 +31,12 @@ export default async function Home() {
   const user = await requireApprovedUser();
 
   await markUnconfirmed(db);
+  const upcomingDuties = listUpcomingDutiesForUser(db, user.id);
   const [asks, duties, held, comingUp, allEquipment, people] = await Promise.all([
     listWaitingOnReply(db, user.id),
-    listUpcomingDutiesForUser(db, user.id),
+    upcomingDuties,
     listEquipmentHeldBy(db, user.id),
-    loadComingUp(user.id),
+    loadComingUp(user.id, upcomingDuties),
     listEquipmentUnits(db, { includeRetired: true }),
     listApprovedUsers(db),
   ]);
