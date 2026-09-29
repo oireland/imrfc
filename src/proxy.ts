@@ -19,6 +19,8 @@ export function proxy(request: NextRequest) {
   return NextResponse.next();
 }
 
+// The manifest, service worker and icons must skip the sign-in redirect: browsers fetch them
+// without cookies, so a redirect makes Chrome see an invalid manifest and refuse to offer install.
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icons/).*)"],
 };
