@@ -1,6 +1,5 @@
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { db } from "@/db/client";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { CopyFeedUrl } from "@/components/copy-feed-url";
@@ -8,10 +7,9 @@ import { SignOutButton } from "@/components/sign-out-button";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { SubmitButton } from "@/components/submit-button";
 import { NotificationToggle } from "@/components/notification-toggle";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { RUGBY_POSITIONS, displayName, setName, type RugbyPosition } from "@/features/users";
+import { ProfileNameField } from "@/components/profile-name-field";
+import { PositionsPicker } from "@/components/positions-picker";
+import { displayName, setName, type RugbyPosition } from "@/features/users";
 import { setPlayerPositions, setPlaying } from "@/features/players";
 import { getFeedToken, resetFeedToken } from "@/features/calendar-feed";
 import { isSubscribed, subscribe, unsubscribe } from "@/features/push";
@@ -32,20 +30,17 @@ export default async function ProfilePage() {
     revalidatePath("/profile");
   }
 
-  async function saveName(formData: FormData) {
+  async function saveName(name: string) {
     "use server";
     const current = await requireApprovedUser();
-    const result = await setName(db, current.id, String(formData.get("name")));
-    if (!result.ok) redirect(`/profile?error=${encodeURIComponent(result.error)}`);
-    revalidatePath("/", "layout");
-    redirect("/profile?flash=name-saved");
+    const result = await setName(db, current.id, name);
+    if (result.ok) revalidatePath("/", "layout");
+    return result;
   }
 
-  async function savePositions(formData: FormData) {
+  async function savePositions(preferred: RugbyPosition, other: RugbyPosition[]) {
     "use server";
     const current = await requireApprovedUser();
-    const preferred = String(formData.get("preferred")) as RugbyPosition;
-    const other = formData.getAll("other") as RugbyPosition[];
     await setPlayerPositions(db, current.id, preferred, other);
     revalidatePath("/profile");
   }
@@ -78,16 +73,7 @@ export default async function ProfilePage() {
 
       <Card>
         <CardContent>
-          <form action={saveName} className="flex flex-col gap-1.5">
-            <Label htmlFor="profile-name">Your name</Label>
-            {!user.name.trim() && (
-              <p className="text-xs text-muted-foreground">Add your name so teammates know who has the equipment.</p>
-            )}
-            <div className="flex gap-2">
-              <Input id="profile-name" name="name" defaultValue={user.name} required autoComplete="name" className="flex-1" />
-              <SubmitButton variant="secondary">Save</SubmitButton>
-            </div>
-          </form>
+          <ProfileNameField initialName={user.name} save={saveName} />
         </CardContent>
       </Card>
 
@@ -96,63 +82,15 @@ export default async function ProfilePage() {
           <h3 className="font-heading text-[22px] leading-tight">Playing</h3>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <form action={savePositions} className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="profile-preferred-position">Preferred Position</Label>
-              <NativeSelect id="profile-preferred-position" name="preferred" defaultValue={user.preferredPosition ?? ""} required>
-                <NativeSelectOption value="" disabled>
-                  Choose a position
-                </NativeSelectOption>
-                {RUGBY_POSITIONS.map((position) => (
-                  <NativeSelectOption key={position} value={position}>
-                    {position}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            </div>
-            <fieldset className="flex flex-col gap-1.5">
-              <legend className="mb-0.5 text-sm font-medium">Other Positions</legend>
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                {RUGBY_POSITIONS.map((position) => (
-                  <label key={position} className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" name="other" value={position} defaultChecked={user.otherPositions.includes(position)} />
-                    {position}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-            <SubmitButton variant="secondary" className="self-start">
-              Save positions
-            </SubmitButton>
-          </form>
+          <PositionsPicker
+            initialPreferred={user.preferredPosition as RugbyPosition | null}
+            initialOther={user.otherPositions as RugbyPosition[]}
+            save={savePositions}
+          />
 
           <form action={togglePlaying}>
             <input type="hidden" name="playing" value={(!user.playing).toString()} />
             <SubmitButton variant="outline">{user.playing ? "Switch Playing off" : "Switch Playing on"}</SubmitButton>
-          </form>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <h3 className="font-heading text-[22px] leading-tight">Your calendar</h3>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">
-            Subscribe to this link in your calendar app to see every event, with your own duties written
-            in. Keep it to yourself: anyone with the link can see your calendar.
-          </p>
-          <CopyFeedUrl url={feedUrl} />
-          <form id="reset-feed-url" action={reset}>
-            <ConfirmSubmit
-              formId="reset-feed-url"
-              triggerLabel="Reset link"
-              title="Reset your calendar link?"
-              description="The old link stops working straight away, so you'll need to subscribe again with the new one."
-              confirmLabel="Yes, reset"
-              triggerVariant="outline"
-              triggerSize="sm"
-            />
           </form>
         </CardContent>
       </Card>
@@ -176,6 +114,51 @@ export default async function ProfilePage() {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <h3 className="font-heading text-[22px] leading-tight">Your calendar</h3>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            Subscribe to this link in your calendar app to see every event, with your own duties written
+            in. Keep it to yourself: anyone with the link can see your calendar.
+          </p>
+          <CopyFeedUrl url={feedUrl} />
+          <p className="text-sm text-muted-foreground">
+            Not sure how? Here&rsquo;s how in{" "}
+            <a
+              href="https://support.google.com/calendar/answer/37100"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-foreground underline underline-offset-3"
+            >
+              Google Calendar
+            </a>{" "}
+            (use &ldquo;From URL&rdquo; on a computer) and{" "}
+            <a
+              href="https://support.apple.com/102301"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-foreground underline underline-offset-3"
+            >
+              Apple Calendar
+            </a>
+            .
+          </p>
+          <form id="reset-feed-url" action={reset}>
+            <ConfirmSubmit
+              formId="reset-feed-url"
+              triggerLabel="Reset link"
+              title="Reset your calendar link?"
+              description="The old link stops working straight away, so you'll need to subscribe again with the new one."
+              confirmLabel="Yes, reset"
+              triggerVariant="outline"
+              triggerSize="sm"
+            />
+          </form>
+        </CardContent>
+      </Card>
 
       <SignOutButton />
     </div>

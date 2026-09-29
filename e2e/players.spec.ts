@@ -30,10 +30,17 @@ test("Committee sets a Player's Positions and switches Playing off, and they mov
   await page.getByRole("link", { name: new RegExp(name) }).click();
   await expect(page.getByRole("heading", { name })).toBeVisible();
 
+  // Positions save as soon as they change, and the Preferred one can't also be an Other Position.
+  await expect(page.getByRole("button", { name: "Save positions" })).toHaveCount(0);
   await page.getByLabel("Preferred Position").selectOption("Lock");
+  await expect(page.getByText("Positions saved")).toBeVisible();
+  await page.getByRole("button", { name: /Other Positions/ }).click();
+  await expect(page.getByLabel("Lock")).toBeDisabled();
   await page.getByLabel("Number 8").check();
-  await page.getByRole("button", { name: "Save positions" }).click();
+  await expect(page.getByText("Positions saved").first()).toBeVisible();
+  await page.reload();
   await expect(page.getByLabel("Preferred Position")).toHaveValue("Lock");
+  await page.getByRole("button", { name: /Other Positions/ }).click();
   await expect(page.getByLabel("Number 8")).toBeChecked();
 
   await page.getByRole("button", { name: "Switch Playing off" }).click();
