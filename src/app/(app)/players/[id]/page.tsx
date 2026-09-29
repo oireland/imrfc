@@ -4,14 +4,13 @@ import { db } from "@/db/client";
 import { BackLink } from "@/components/back-link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { PositionsPicker } from "@/components/positions-picker";
 import { SubmitButton } from "@/components/submit-button";
 import { getSeasonRecord, type RecordLine, type ReplyCounts } from "@/features/availability";
 import { listEquipmentUnits } from "@/features/equipment";
 import { getPlayer, setPlayerPositions, setPlaying } from "@/features/players";
 import { formatWhen } from "@/lib/format-time";
-import { RUGBY_POSITIONS, isCommitteeOrAbove, type RugbyPosition } from "@/features/users";
+import { isCommitteeOrAbove, type RugbyPosition } from "@/features/users";
 import { getCurrentUser } from "@/lib/session";
 
 export default async function PlayerPage({ params }: PageProps<"/players/[id]">) {
@@ -28,12 +27,10 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
 
   const equipmentName = new Map(equipmentUnits.map((k) => [k.id, k.name]));
 
-  async function savePositions(formData: FormData) {
+  async function savePositions(preferred: RugbyPosition, other: RugbyPosition[]) {
     "use server";
     const current = await getCurrentUser();
     if (!current || !isCommitteeOrAbove(current.role)) redirect("/");
-    const preferred = String(formData.get("preferred")) as RugbyPosition;
-    const other = formData.getAll("other") as RugbyPosition[];
     await setPlayerPositions(db, id, preferred, other);
     revalidatePath(`/players/${id}`);
     revalidatePath("/players");
@@ -66,35 +63,11 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
           <h3 className="font-heading text-[22px] leading-tight">Positions</h3>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <form action={savePositions} className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="preferred-position">Preferred Position</Label>
-              <NativeSelect id="preferred-position" name="preferred" defaultValue={player.preferredPosition ?? ""} required>
-                <NativeSelectOption value="" disabled>
-                  Choose a position
-                </NativeSelectOption>
-                {RUGBY_POSITIONS.map((position) => (
-                  <NativeSelectOption key={position} value={position}>
-                    {position}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            </div>
-            <fieldset className="flex flex-col gap-1.5">
-              <legend className="mb-0.5 text-sm font-medium">Other Positions</legend>
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                {RUGBY_POSITIONS.map((position) => (
-                  <label key={position} className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" name="other" value={position} defaultChecked={player.otherPositions.includes(position)} />
-                    {position}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-            <SubmitButton variant="secondary" className="self-start">
-              Save positions
-            </SubmitButton>
-          </form>
+          <PositionsPicker
+            initialPreferred={player.preferredPosition as RugbyPosition | null}
+            initialOther={player.otherPositions as RugbyPosition[]}
+            save={savePositions}
+          />
 
           <form action={togglePlaying}>
             <input type="hidden" name="playing" value={(!player.playing).toString()} />

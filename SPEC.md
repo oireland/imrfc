@@ -44,6 +44,8 @@ Imperial Medicals RFC keeps forgetting equipment and keeps asking the same quest
 | Reply with own Availability (Players only) | ✓ | ✓ | ✓ |
 | Reply for another Player, see Reasons, Announce, Nudge, copy chase message | | ✓ | ✓ |
 | Approve, block, unblock Users; change Roles | | | ✓ |
+| Delete own account | ✓ | ✓ | ✓ |
+| Delete anyone else's account, except another Admin's | | | ✓ |
 
 ### Blocking
 
@@ -52,6 +54,14 @@ When a User is Blocked:
 - They are taken off their Duties on future Events; a Duty left with nobody on it is flagged to Committee.
 - Equipment Units they Hold stay with them, flagged "with blocked user".
 - Their history (Moves, past Duties) is kept.
+
+### Deleting an account
+
+Any User can delete their own account from Profile; an Admin can delete anyone's from Admin → Users, except another Admin's. It can't be undone:
+- Their name, email, Positions and sign-in methods are wiped and their sessions end. The User stays in the database as **Deleted user** so the club's history (Moves, past Duties, Availability replies) still reads; they drop out of Users, Players and Availability lists.
+- The email is freed: signing in with it again starts a new Pending account.
+- They are taken off their Duties on future Events; their Feed Token and Push subscriptions are removed.
+- Equipment Units they Hold stay with "Deleted user", flagged on the Equipment view, until someone moves them.
 
 ## Stores and Venues
 

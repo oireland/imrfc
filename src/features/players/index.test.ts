@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
-import { user } from "@/features/users";
+import { eraseUser, user } from "@/features/users";
 import { getPlayer, listPlayers, setPlaying, setPlayerPositions } from "./index";
 
 async function setup() {
@@ -20,6 +20,14 @@ describe("listPlayers", () => {
     const listing = await listPlayers(db);
     expect(listing.playing.map((p) => p.name)).toEqual(["Hooker Hal", "Fly-half Fran"]);
     expect(listing.notPlaying).toEqual([]);
+  });
+
+  it("leaves out deleted accounts", async () => {
+    const db = await setup();
+    await eraseUser(db, "hal");
+    const listing = await listPlayers(db);
+    expect([...listing.playing, ...listing.notPlaying].map((p) => p.name)).toEqual(["Fly-half Fran"]);
+    expect(await getPlayer(db, "hal")).toBeUndefined();
   });
 });
 

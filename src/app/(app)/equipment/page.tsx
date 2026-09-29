@@ -68,11 +68,13 @@ export default async function EquipmentViewPage() {
       return { icon: CircleHelp, title: "Not confirmed", kind: "Nobody confirmed where these went" };
     }
     const holder = personById.get(group.holderId);
+    // A Blocked or deleted Holder can't hand it on, so Committee needs to see it.
+    const flag = holder?.accessState === "blocked" ? "Blocked user" : holder?.accessState === "deleted" ? "Deleted account" : undefined;
     return {
       icon: User,
       title: group.holderId === user.id ? "With you" : `With ${holder ? displayName(holder) : "someone"}`,
-      kind: holder?.accessState === "blocked" ? "Blocked user" : undefined,
-      blocked: holder?.accessState === "blocked",
+      kind: flag,
+      blocked: flag !== undefined,
     };
   }
 

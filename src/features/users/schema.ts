@@ -11,7 +11,7 @@ export const user = pgTable("user", {
   role: text("role", { enum: ["member", "committee", "admin"] })
     .notNull()
     .default("member"),
-  accessState: text("access_state", { enum: ["pending", "approved", "blocked"] })
+  accessState: text("access_state", { enum: ["pending", "approved", "blocked", "deleted"] })
     .notNull()
     .default("pending"),
   // Colour theme chosen from the crest menu; "system" follows the device.

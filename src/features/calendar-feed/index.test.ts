@@ -7,7 +7,7 @@ import { createEquipmentUnit, raiseQuantity } from "@/features/equipment";
 import { cancelEvent, createEvent } from "@/features/events";
 import { claimDuty, ensureDuties } from "@/features/duties";
 import { blockUser, user } from "@/features/users";
-import { getFeedToken, renderFeed, resetFeedToken } from "./index";
+import { deleteFeedToken, getFeedToken, renderFeed, resetFeedToken } from "./index";
 
 const future = (days: number, hours = 18) => new Date(Date.now() + days * 86_400_000 + hours * 3_600_000);
 
@@ -47,6 +47,13 @@ describe("Feed Token", () => {
     expect(fresh).not.toBe(old);
     expect((await renderFeed(db, old)).status).toBe(404);
     expect((await renderFeed(db, fresh)).status).toBe(200);
+  });
+
+  it("stops working once deleted", async () => {
+    const { db } = await setup();
+    const token = await getFeedToken(db, "tom");
+    await deleteFeedToken(db, "tom");
+    expect((await renderFeed(db, token)).status).toBe(404);
   });
 });
 

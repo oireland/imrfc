@@ -2,12 +2,13 @@ import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
-import { session, user } from "./schema";
+import { account, session, user } from "./schema";
 import {
   approveUser,
   blockUser,
   listApprovedUsers,
   countPendingUsers,
+  eraseUser,
   listPendingUsers,
   setName,
   setPreferredPosition,
@@ -180,5 +181,61 @@ describe("setThemePreference", () => {
 
     const [row] = await db.select().from(user).where(eq(user.id, u.id));
     expect(row.theme).toBe("dark");
+  });
+});
+
+describe("eraseUser", () => {
+  it("wipes the User's personal details but keeps the row so their history still reads", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const tom = await seedUser(db, { name: "Tom Hale", email: "tom@example.com", accessState: "approved" });
+    await db.update(user).set({ preferredPosition: "Hooker", otherPositions: ["Loosehead Prop"], image: "https://x/tom.png" }).where(eq(user.id, tom.id));
+
+    await eraseUser(db, tom.id);
+
+    const [row] = await db.select().from(user).where(eq(user.id, tom.id));
+    expect(row).toMatchObject({
+      name: "Deleted user",
+      image: null,
+      accessState: "deleted",
+      preferredPosition: null,
+      otherPositions: [],
+      playing: false,
+    });
+    expect(row.email).not.toContain("tom");
+  });
+
+  it("frees the email, so signing in again starts a new account", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const tom = await seedUser(db, { email: "tom@example.com", accessState: "approved" });
+
+    await eraseUser(db, tom.id);
+
+    await expect(seedUser(db, { email: "tom@example.com" })).resolves.toBeDefined();
+  });
+
+  it("signs them out everywhere and unlinks their sign-in methods", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const tom = await seedUser(db, { accessState: "approved" });
+    await db.insert(session).values({ id: "s1", userId: tom.id, token: "t1", expiresAt: new Date(Date.now() + 3_600_000) });
+    await db.insert(account).values({ id: "a1", userId: tom.id, accountId: "google-tom", providerId: "google" });
+
+    await eraseUser(db, tom.id);
+
+    expect(await db.select().from(session).where(eq(session.userId, tom.id))).toEqual([]);
+    expect(await db.select().from(account).where(eq(account.userId, tom.id))).toEqual([]);
+  });
+
+  it("leaves them out of the Users lists", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const tom = await seedUser(db, { accessState: "pending" });
+
+    await eraseUser(db, tom.id);
+
+    expect(await listPendingUsers(db)).toEqual([]);
+    expect(await countPendingUsers(db)).toBe(0);
   });
 });

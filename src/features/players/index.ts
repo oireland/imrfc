@@ -18,9 +18,14 @@ export type Player = {
   playing: boolean;
 };
 
+// Deleted accounts stay in the Users table so history can name them, but aren't Players.
+async function listPlayerUsers(db: Db) {
+  return (await listApprovedUsers(db)).filter((u) => u.accessState !== "deleted");
+}
+
 /** Every approved User as a Player, Position-ordered and split into Playing / Not playing. */
 export async function listPlayers(db: Db, search = ""): Promise<PlayerListing> {
-  const users = await listApprovedUsers(db);
+  const users = await listPlayerUsers(db);
   const rows: PlayerRow[] = users.map((u) => ({
     id: u.id,
     name: displayName(u),
@@ -32,7 +37,7 @@ export async function listPlayers(db: Db, search = ""): Promise<PlayerListing> {
 
 /** One Player, with their Positions and duty record, for the Player page. */
 export async function getPlayer(db: Db, id: string): Promise<(Player & { dutyRecord: Awaited<ReturnType<typeof listDutyRecordForUser>> }) | undefined> {
-  const users = await listApprovedUsers(db);
+  const users = await listPlayerUsers(db);
   const found = users.find((u) => u.id === id);
   if (!found) return undefined;
   const dutyRecord = await listDutyRecordForUser(db, id);

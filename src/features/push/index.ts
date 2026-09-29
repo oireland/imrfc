@@ -26,6 +26,11 @@ export async function unsubscribe(db: Db, input: { userId: string; endpoint: str
     .where(and(eq(pushSubscription.userId, input.userId), eq(pushSubscription.endpoint, input.endpoint)));
 }
 
+/** Removes every one of the User's devices, e.g. when their account is deleted. */
+export async function unsubscribeEverywhere(db: Db, userId: string) {
+  await db.delete(pushSubscription).where(eq(pushSubscription.userId, userId));
+}
+
 /** Whether this User has any device subscribed — the Profile toggle's initial state. */
 export async function isSubscribed(db: Db, userId: string): Promise<boolean> {
   const rows = await db.select({ id: pushSubscription.id }).from(pushSubscription).where(eq(pushSubscription.userId, userId)).limit(1);

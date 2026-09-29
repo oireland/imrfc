@@ -1,12 +1,12 @@
 import { count, eq, ne } from "drizzle-orm";
 import type { Role } from "./access";
 import type { RugbyPosition } from "./positions";
-import { session, user } from "./schema";
+import { account, session, user } from "./schema";
 
 export { resolveNewUser } from "./access";
 export type { AccessState, Role } from "./access";
 export { displayName } from "./display-name";
-export { canAccessApp, canManageUsers, isCommitteeOrAbove } from "./permissions";
+export { canAccessApp, canDeleteAccount, canManageUsers, isCommitteeOrAbove } from "./permissions";
 export { RUGBY_POSITIONS } from "./positions";
 export type { RugbyPosition } from "./positions";
 // Other features' schema.ts files reference this table for foreign keys.
@@ -38,6 +38,30 @@ export async function approveUser(db: Db, userId: string) {
 export async function blockUser(db: Db, userId: string) {
   await db.update(user).set({ accessState: "blocked" }).where(eq(user.id, userId));
   await db.delete(session).where(eq(session.userId, userId));
+}
+
+/**
+ * Wipes a User's personal details and sign-in methods. The row stays, as "Deleted user",
+ * so Moves, past Duties and replies that mention them still read; the email is freed,
+ * so signing in with it again starts a brand-new Pending account.
+ */
+export async function eraseUser(db: Db, userId: string) {
+  await db.delete(session).where(eq(session.userId, userId));
+  await db.delete(account).where(eq(account.userId, userId));
+  await db
+    .update(user)
+    .set({
+      name: "Deleted user",
+      email: `deleted-${userId}@deleted.invalid`,
+      emailVerified: false,
+      image: null,
+      accessState: "deleted",
+      preferredPosition: null,
+      otherPositions: [],
+      playing: false,
+      updatedAt: new Date(),
+    })
+    .where(eq(user.id, userId));
 }
 
 export async function unblockUser(db: Db, userId: string) {

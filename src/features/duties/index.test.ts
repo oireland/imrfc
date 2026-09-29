@@ -23,7 +23,7 @@ import {
   listUpcomingDutiesForUser,
   setDestination,
   markUnconfirmed,
-  releaseDutiesOfBlockedUser,
+  releaseUpcomingDuties,
   voidDutiesForEvent,
   type Duty,
 } from "./index";
@@ -552,7 +552,7 @@ describe("Duties", () => {
       await claimDuty(db, d.id, "sam");
     }
 
-    await releaseDutiesOfBlockedUser(db, "tom");
+    await releaseUpcomingDuties(db, "tom");
 
     const after = await ensureDuties(db, soon.event.id, [equipment.id]);
     expect(after.map((d) => d.userIds)).toEqual([["sam"], ["sam"]]);
@@ -929,12 +929,12 @@ describe("Query efficiency", () => {
     // Nobody here is "tom", so `removeUser` is never called — this isolates the filter step's cost.
     const oneDuty = await makeUpcomingClaimedDutiesDb(1, "sam");
     const fewSelects = countSelects(oneDuty);
-    await releaseDutiesOfBlockedUser(oneDuty, "tom");
+    await releaseUpcomingDuties(oneDuty, "tom");
     const selectsWithOneDuty = fewSelects();
 
     const nineDuties = await makeUpcomingClaimedDutiesDb(9, "sam");
     const manySelects = countSelects(nineDuties);
-    await releaseDutiesOfBlockedUser(nineDuties, "tom");
+    await releaseUpcomingDuties(nineDuties, "tom");
     expect(manySelects()).toBe(selectsWithOneDuty);
   });
 });
