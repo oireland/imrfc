@@ -1,5 +1,5 @@
 export type Role = "member" | "committee" | "admin";
-export type AccessState = "pending" | "approved" | "blocked";
+export type AccessState = "pending" | "approved" | "blocked" | "deleted";
 
 export function resolveNewUser(
   email: string,

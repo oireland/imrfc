@@ -418,8 +418,8 @@ export async function markUnconfirmed(db: Db) {
   }
 }
 
-/** A Blocked User is removed from their Duties on upcoming, unconfirmed Events. */
-export async function releaseDutiesOfBlockedUser(db: Db, userId: string) {
+/** Takes a Blocked or deleted User off their Duties on upcoming, unconfirmed Events. */
+export async function releaseUpcomingDuties(db: Db, userId: string) {
   const upcoming = (await listEvents(db, { when: "upcoming" })).map((e) => e.id);
   if (upcoming.length === 0) return;
   const rows: (typeof duty.$inferSelect)[] = await db

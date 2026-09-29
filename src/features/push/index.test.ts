@@ -9,7 +9,7 @@ import { saveReply } from "@/features/availability";
 import { user } from "@/features/users";
 import type { PushMessage, PushSender, PushSubscriptionKeys } from "@/lib/push";
 import { PushSubscriptionGoneError } from "@/lib/push";
-import { isSubscribed, notifyMorningOf, sendToUser, subscribe, unsubscribe } from "./index";
+import { isSubscribed, notifyMorningOf, sendToUser, subscribe, unsubscribe, unsubscribeEverywhere } from "./index";
 
 function fakePushSender() {
   const sent: { subscription: PushSubscriptionKeys; message: PushMessage }[] = [];
@@ -60,6 +60,18 @@ describe("subscribe / unsubscribe / isSubscribed", () => {
     await unsubscribe(db, { userId: "tom", endpoint: "https://push/1" });
 
     expect(await isSubscribed(db, "tom")).toBe(false);
+  });
+
+  it("unsubscribeEverywhere removes every one of the User's devices and nobody else's", async () => {
+    const db = await setup();
+    await subscribe(db, { userId: "tom", subscription: { endpoint: "https://push/1", p256dh: "k", auth: "a" } });
+    await subscribe(db, { userId: "tom", subscription: { endpoint: "https://push/2", p256dh: "k", auth: "a" } });
+    await subscribe(db, { userId: "sam", subscription: { endpoint: "https://push/3", p256dh: "k", auth: "a" } });
+
+    await unsubscribeEverywhere(db, "tom");
+
+    expect(await isSubscribed(db, "tom")).toBe(false);
+    expect(await isSubscribed(db, "sam")).toBe(true);
   });
 });
 

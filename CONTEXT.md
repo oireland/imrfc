@@ -23,7 +23,7 @@ _Avoid_: Captain, organiser, equipment manager (as system concepts)
 The Role that controls access: approves and blocks Users and changes Roles.
 
 **Access State**:
-Whether a User may use the app: Pending (signed up, awaiting approval), Approved, or Blocked.
+Whether a User may use the app: Pending (signed up, awaiting approval), Approved, Blocked, or Deleted (account deleted for good: personal details wiped, kept only so history reads as "Deleted user").
 _Avoid_: Status (reserved for Equipment Units), active/inactive
 
 ## Players

@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { db } from "@/db/client";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { CopyFeedUrl } from "@/components/copy-feed-url";
@@ -13,6 +14,7 @@ import { displayName, setName, type RugbyPosition } from "@/features/users";
 import { setPlayerPositions, setPlaying } from "@/features/players";
 import { getFeedToken, resetFeedToken } from "@/features/calendar-feed";
 import { isSubscribed, subscribe, unsubscribe } from "@/features/push";
+import { deleteAccount } from "@/features/account-deletion";
 import { requireApprovedUser } from "@/lib/session";
 
 export default async function ProfilePage() {
@@ -62,6 +64,14 @@ export default async function ProfilePage() {
     "use server";
     const current = await requireApprovedUser();
     await unsubscribe(db, { userId: current.id, endpoint });
+  }
+
+  async function deleteMyAccount() {
+    "use server";
+    const current = await requireApprovedUser();
+    const result = await deleteAccount(db, { actor: current, userId: current.id });
+    if (!result.ok) redirect(`/profile?error=${encodeURIComponent(result.error)}`);
+    redirect("/sign-in?deleted=1");
   }
 
   return (
@@ -161,6 +171,30 @@ export default async function ProfilePage() {
       </Card>
 
       <SignOutButton />
+
+      <Card>
+        <CardHeader>
+          <h3 className="font-heading text-[22px] leading-tight">Delete your account</h3>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            This can&rsquo;t be undone. Your name, email and sign-in are wiped and you&rsquo;re taken off any
+            upcoming duties. Equipment moves and past duties stay in the club&rsquo;s records as &ldquo;Deleted
+            user&rdquo;.
+          </p>
+          <form id="delete-account" action={deleteMyAccount}>
+            <ConfirmSubmit
+              formId="delete-account"
+              triggerLabel="Delete account"
+              title="Delete your account for good?"
+              description="You'll be signed out straight away and can't get this account back. Hand back any equipment you've got first, or it'll show as with a deleted user."
+              confirmLabel="Yes, delete it"
+              triggerVariant="outline"
+              triggerSize="sm"
+            />
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

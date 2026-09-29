@@ -32,6 +32,11 @@ export async function resetFeedToken(db: Db, userId: string): Promise<string> {
   return token;
 }
 
+/** Removes the User's Feed Token, e.g. when their account is deleted; the URL stops working. */
+export async function deleteFeedToken(db: Db, userId: string) {
+  await db.delete(feedToken).where(eq(feedToken.userId, userId));
+}
+
 /** The ICS for a Feed Token: all Events, with the token owner's own Duties in each description. */
 export async function renderFeed(db: Db, token: string, now: Date = new Date()): Promise<FeedResult> {
   const [owner] = await db

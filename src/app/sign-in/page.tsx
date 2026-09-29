@@ -23,13 +23,16 @@ function firstParam(value: string | string[] | undefined) {
 }
 
 export default async function SignInPage({ searchParams }: PageProps<"/sign-in">) {
-  const next = safeNextPath(firstParam((await searchParams).next));
+  const params = await searchParams;
+  const next = safeNextPath(firstParam(params.next));
+  const deleted = firstParam(params.deleted) === "1";
   return (
     <div className="flex min-h-[70vh] flex-col items-center justify-center gap-6">
       <Crest />
       <Card className="w-full max-w-sm">
         <CardHeader>
           <h2 className="text-center font-heading text-4xl leading-none">Sign in</h2>
+          {deleted && <p className="text-center text-sm text-muted-foreground">Your account has been deleted.</p>}
         </CardHeader>
         <CardContent>
           <SignInForm next={next} />
