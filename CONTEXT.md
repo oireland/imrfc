@@ -230,3 +230,13 @@ A User's private subscribable calendar (ICS) of all Events, with that User's own
 
 **Feed Token**:
 The secret in a Calendar Feed's URL. The User can reset it; it stops working when they are Blocked.
+
+## Notifications
+
+**Push notification**:
+A message the app sends straight to a User's phone or browser (via the Notifications toggle on Profile), for a morning-of reminder or alongside Announce/Nudge.
+_Avoid_: Alert, ping
+
+**Subscription**:
+One browser or device's registration to receive Push notifications for a User. A User with notifications on more than one device has more than one Subscription.
+_Avoid_: Device (a Subscription belongs to a device, but isn't the device itself)

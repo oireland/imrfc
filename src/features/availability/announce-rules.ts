@@ -61,6 +61,15 @@ export function askEmail({
   return { subject, text, html };
 }
 
+/** The push notification Announce or Nudge sends each Player with No reply, alongside the email. */
+export function askPush({ kind, events }: { kind: "announce" | "nudge"; events: AskedEvent[] }): { title: string; body: string } {
+  const what = heading(events);
+  return {
+    title: kind === "announce" ? "Can you make it?" : "Still need your answer",
+    body: kind === "announce" ? `Can you make it to ${what}?` : `You haven't told us yet whether you can make it to ${what}.`,
+  };
+}
+
 /** WhatsApp text listing who still hasn't replied. */
 export function chaseMessage({ events, names, url }: { events: AskedEvent[]; names: string[]; url: string }): string {
   return [`🏉 ${heading(events)}`, `Still need a reply from: ${names.join(", ")}`, `Can you make it? ${url}`].join("\n");

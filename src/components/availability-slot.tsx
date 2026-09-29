@@ -1,10 +1,12 @@
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
-import { announce, chaseMessage, getAvailability, nudge, saveReply, type ReplyStatus } from "@/features/availability";
+import { announce, askPush, chaseMessage, getAvailability, nudge, saveReply, type ReplyStatus } from "@/features/availability";
 import { londonToUtc } from "@/features/events";
+import { sendToUser } from "@/features/push";
 import { isCommitteeOrAbove } from "@/features/users";
 import { getMailSender } from "@/lib/mail";
+import { getPushSender } from "@/lib/push";
 import { requireApprovedUser, type CurrentUser } from "@/lib/session";
 import { AvailabilityCard } from "./availability-card";
 
@@ -39,6 +41,10 @@ export async function AvailabilitySlot({ eventId, viewer }: { eventId: string; v
       url,
       mail: getMailSender(),
     });
+    if (result.ok) {
+      const message = { ...askPush({ kind: "announce", events: availability.events }), url: `/events/${eventId}` };
+      await Promise.all(result.reachedUserIds.map((userId) => sendToUser(db, userId, message, getPushSender())));
+    }
     revalidatePath(`/events/${eventId}`);
     return result;
   }
@@ -46,6 +52,10 @@ export async function AvailabilitySlot({ eventId, viewer }: { eventId: string; v
   async function nudgeAction(playerIds: string[]) {
     "use server";
     const result = await nudge(db, { eventId, viewer: await currentViewer(), playerIds, url, mail: getMailSender() });
+    if (result.ok) {
+      const message = { ...askPush({ kind: "nudge", events: availability.events }), url: `/events/${eventId}` };
+      await Promise.all(result.reachedUserIds.map((userId) => sendToUser(db, userId, message, getPushSender())));
+    }
     revalidatePath(`/events/${eventId}`);
     return result;
   }

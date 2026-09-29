@@ -459,6 +459,19 @@ export async function listUpcomingDutiesForUser(db: Db, userId: string) {
   );
 }
 
+/** Every User on any (non-voided) Duty of each of `eventIds`, grouped by Event. */
+export async function listDutyUserIdsByEvent(db: Db, eventIds: string[]): Promise<Map<string, Set<string>>> {
+  if (eventIds.length === 0) return new Map();
+  const rows: { eventId: string; userId: string }[] = await db
+    .select({ eventId: duty.eventId, userId: dutyUser.userId })
+    .from(duty)
+    .innerJoin(dutyUser, eq(dutyUser.dutyId, duty.id))
+    .where(and(inArray(duty.eventId, eventIds), isNull(duty.voidedAt)));
+  const byEvent = new Map<string, Set<string>>();
+  for (const row of rows) byEvent.set(row.eventId, (byEvent.get(row.eventId) ?? new Set()).add(row.userId));
+  return byEvent;
+}
+
 export type PastDutyRecord = {
   dutyId: string;
   direction: "to" | "from";

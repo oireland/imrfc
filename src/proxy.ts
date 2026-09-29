@@ -1,7 +1,8 @@
 import { getSessionCookie } from "better-auth/cookies";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/sign-in", "/api/auth", "/api/feed", "/api/dev/sign-in"];
+// /api/cron routes check their own CRON_SECRET bearer token — Vercel Cron's request never carries a session cookie.
+const PUBLIC_PATHS = ["/sign-in", "/api/auth", "/api/feed", "/api/dev/sign-in", "/api/cron"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
