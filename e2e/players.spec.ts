@@ -36,8 +36,10 @@ test("Committee sets a Player's Positions and switches Playing off, and they mov
   await expect(page.getByText("Positions saved")).toBeVisible();
   await page.getByRole("button", { name: /Other Positions/ }).click();
   await expect(page.getByLabel("Lock")).toBeDisabled();
+  // The first save's toast may still be showing, so wait for this save itself.
+  const saved = page.waitForResponse((r) => r.request().method() === "POST");
   await page.getByLabel("Number 8").check();
-  await expect(page.getByText("Positions saved").first()).toBeVisible();
+  await saved;
   await page.reload();
   await expect(page.getByLabel("Preferred Position")).toHaveValue("Lock");
   await page.getByRole("button", { name: /Other Positions/ }).click();
