@@ -58,13 +58,11 @@ async function sheetData(db: Db, eventId: string) {
   return { event, teamId: teamId as string | undefined, overrides: (overrides ?? {}) as Partial<Record<FieldKey, string | null>>, defaults: (defaults ?? {}) as Partial<Record<FieldKey, string | null>> };
 }
 
-/** A Match's Team Sheet for Committee, with its fields settled and the board's people on it; null for anyone else or a non-Match. */
-export async function getTeamSheet(db: Db, eventId: string, viewer: Viewer, now: Date = new Date()): Promise<TeamSheet | null> {
-  if (!viewer.committee) return null;
-  const [data, board] = await Promise.all([sheetData(db, eventId), getBoard(db, eventId, viewer, now)]);
-  if (!data || !board) return null;
+/** A Match's Team Sheet fields, settled from the Event, the Team's Sheet Defaults and this Match's overrides; null for a non-Match. */
+export async function settleFields(db: Db, eventId: string) {
+  const data = await sheetData(db, eventId);
+  if (!data) return null;
   const { event, overrides, defaults } = data;
-  const pitch = board.pitches.find((p) => p.eventId === eventId)!;
 
   const meetBase = event.matchDetails
     ? event.matchDetails.travelMeetTime
@@ -89,6 +87,16 @@ export async function getTeamSheet(db: Db, eventId: string, viewer: Viewer, now:
       return [key, { value: overridden ? override : bases[key], base: bases[key], overridden }];
     }),
   ) as Record<FieldKey, SheetField>;
+  return { event, fields, hasTeam: Boolean(data.teamId) };
+}
+
+/** A Match's Team Sheet for Committee, with its fields settled and the board's people on it; null for anyone else or a non-Match. */
+export async function getTeamSheet(db: Db, eventId: string, viewer: Viewer, now: Date = new Date()): Promise<TeamSheet | null> {
+  if (!viewer.committee) return null;
+  const [settled, board] = await Promise.all([settleFields(db, eventId), getBoard(db, eventId, viewer, now)]);
+  if (!settled || !board) return null;
+  const { event, fields } = settled;
+  const pitch = board.pitches.find((p) => p.eventId === eventId)!;
 
   const rows = await db
     .select({ shirt: selectionShirt.shirt, roles: selectionShirt.roles })
@@ -116,7 +124,7 @@ export async function getTeamSheet(db: Db, eventId: string, viewer: Viewer, now:
     label: pitch.label,
     date,
     readOnly: pitch.readOnly,
-    hasTeam: Boolean(data.teamId),
+    hasTeam: settled.hasTeam,
     fields,
     people,
     layout: buildSheet({ date, fields: values, shirts: people }),

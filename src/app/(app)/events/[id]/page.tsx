@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { BackLink } from "@/components/back-link";
 import { AvailabilitySlot } from "@/components/availability-slot";
+import { TeamCard } from "@/components/team-card";
 import { ShareButton } from "@/components/share-button";
 import { formatWhen } from "@/lib/format-time";
 import { mapsSearchUrl } from "@/lib/maps";
@@ -53,6 +54,7 @@ import {
   londonParts,
   type QuickEventInput,
 } from "@/features/events";
+import { getTeamCard } from "@/features/selection";
 import { listStores, type Store } from "@/features/stores";
 import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
 import { requireApprovedUser } from "@/lib/session";
@@ -78,7 +80,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
 
   const committee = isCommitteeOrAbove(user.role);
   // Everything that doesn't depend on the Event itself starts at once.
-  const [eventDetails, equipmentUnits, people, stores, warnings, venues, allTeams] = await Promise.all([
+  const [eventDetails, equipmentUnits, people, stores, warnings, venues, allTeams, teamCard] = await Promise.all([
     getEvent(db, id),
     listEquipmentUnits(db),
     listApprovedUsers(db),
@@ -86,6 +88,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     listPlanWarnings(db),
     committee ? listVenues(db) : [],
     committee ? listTeams(db) : [],
+    getTeamCard(db, id, { id: user.id, committee }),
   ]);
   if (!eventDetails) notFound();
   const seriesId = eventDetails.seriesId;
@@ -420,6 +423,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
         </CardContent>
       </Card>
 
+      {teamCard && <TeamCard card={teamCard} />}
       <AvailabilitySlot eventId={id} viewer={user} />
       <ClashList clashes={clashes} />
       <EventDuties

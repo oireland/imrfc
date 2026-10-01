@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cn } from "cn";
 import { ArrowLeftRight, Plus, X } from "lucide-react";
-import type { Board, BoardCandidate, Pitch, ShirtView } from "@/features/selection";
+import type { Board, BoardCandidate, Naming, Pitch, ShirtView } from "@/features/selection";
 // The Shirt rules are plain TypeScript, so the picker can sort without a round trip.
 import { sortForShirt } from "@/features/selection/shirts";
 import { BottomSheet } from "@/components/bottom-sheet";
+import { NameTheTeam, type NamingActions } from "@/components/name-the-team";
 
 type Result = { ok: true; movedFrom?: string } | { ok: false; error: string };
 type Ref = { eventId: string; shirt: number };
@@ -29,7 +30,21 @@ const key = (r: Ref) => `${r.eventId}:${r.shirt}`;
  * The shared Selection board: a pitch per Match that day. Tap a Shirt to pick, Swap to
  * trade two Shirts, drag on wider screens. Saves per Shirt and refreshes every few seconds.
  */
-export function SelectionBoard({ board, openEventId, meName, actions }: { board: Board; openEventId: string; meName: string; actions: Actions }) {
+export function SelectionBoard({
+  board,
+  namings,
+  openEventId,
+  meName,
+  actions,
+  namingActions,
+}: {
+  board: Board;
+  namings: Record<string, Naming | null>;
+  openEventId: string;
+  meName: string;
+  actions: Actions;
+  namingActions: NamingActions;
+}) {
   const router = useRouter();
   const [active, setActive] = useState(openEventId);
   const [picking, setPicking] = useState<Ref | null>(null);
@@ -127,6 +142,7 @@ export function SelectionBoard({ board, openEventId, meName, actions }: { board:
           >
             <h2 className="font-heading text-[24px] leading-none">{pitch.label}</h2>
             {pitch.readOnly && <p className="text-xs text-muted-foreground">This match has started or is cancelled, so the team can&apos;t change.</p>}
+            {namings[pitch.eventId] && <NameTheTeam eventId={pitch.eventId} label={pitch.label} naming={namings[pitch.eventId]!} actions={namingActions} />}
             <ul className="flex flex-col gap-1.5">
               {pitch.shirts.map((s, i) => (
                 <li key={s.shirt}>

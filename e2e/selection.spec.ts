@@ -84,3 +84,38 @@ test("Committee fill in the Team Sheet, give roles, and download the PDF", async
   expect(pdf.headers()["content-type"]).toBe("application/pdf");
   expect((await pdf.body()).subarray(0, 4).toString()).toBe("%PDF");
 });
+
+test("Committee name the team: it's on Event detail and Home for the Player, with a PDF", async ({ page }) => {
+  const { eventId } = await seedMatch();
+  await signIn(page);
+
+  await page.goto(`/events/${eventId}/selection`);
+  await page.getByRole("button", { name: /^Shirt 10, Fly-half, empty/ }).click();
+  await page.getByRole("dialog").getByRole("button", { name: /E2E Admin/ }).click();
+  await expect(page.getByRole("button", { name: /^Shirt 10, Fly-half, E2E Admin/ })).toBeVisible();
+
+  await page.getByRole("button", { name: "Name the team", exact: true }).click();
+  const sheet = page.getByRole("dialog");
+  await expect(sheet.getByText(/things missing\?/)).toBeVisible();
+  await sheet.getByRole("button", { name: "Name the team", exact: true }).click();
+  await expect(page.getByText(/^Named .* by E2E Admin/)).toBeVisible();
+
+  // A later edit is held until Committee send it.
+  await page.getByRole("button", { name: /^Shirt 11, Wing, empty/ }).click();
+  await page.getByRole("dialog").getByLabel("Guest's name").fill("Dev Ringer");
+  await page.getByRole("dialog").getByRole("button", { name: "Add guest" }).click();
+  await expect(page.getByText("1 change not sent yet")).toBeVisible();
+  await page.getByRole("button", { name: "Send changes" }).click();
+  await expect(page.getByText("1 change not sent yet")).toBeHidden();
+
+  await page.goto(`/events/${eventId}`);
+  const team = page.getByRole("region", { name: "The team" });
+  await expect(team).toContainText("You're at 10.");
+  await expect(team).toContainText("Dev Ringer");
+
+  const pdf = await page.request.get(`/events/${eventId}/team/pdf`);
+  expect(pdf.headers()["content-type"]).toBe("application/pdf");
+
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "You're playing" })).toBeVisible();
+});

@@ -9,6 +9,7 @@ import { selectionPitch, selectionShirt } from "./schema";
 export { DEFAULT_SHIRTS, fitFor, positionOfShirt, sortForShirt, STARTING_SHIRTS } from "./shirts";
 export type { Candidate, Fit } from "./shirts";
 export * from "./team-sheet";
+export * from "./naming";
 export { ROLES, ROLE_NAMES, SINGLE_ROLES, buildSheet, missingFromSheet, rolesText } from "./sheet";
 export type { Role, SheetFields, SheetLayout } from "./sheet";
 

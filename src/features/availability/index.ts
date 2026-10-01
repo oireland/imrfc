@@ -26,7 +26,7 @@ import {
   type WaitingAsk,
 } from "./rules";
 
-export { takesReplies } from "./rules";
+export { askStatus, takesReplies } from "./rules";
 export { askPush, chaseMessage } from "./announce-rules";
 export type { AskedEvent } from "./announce-rules";
 export type { AskStatus, AvailabilityRow, AvailabilitySummary, MyReply, RecordLine, ReplyCounts, ReplyStatus, SeasonRecord, WaitingAsk } from "./rules";
