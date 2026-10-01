@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
-import { ChecklistEditor } from "@/components/checklist-editor";
 import { ClashList } from "@/components/clash-list";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { CopySummary } from "@/components/copy-summary";
 import { EditEventButton } from "@/components/edit-event-button";
+import type { KitEditing } from "@/components/kit-editing";
 import { EventDuties, type DutyEquipment, type DutySlot, type HolderOption, type SourceOption } from "@/components/event-duties";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,16 +14,27 @@ import { AvailabilitySlot } from "@/components/availability-slot";
 import { ShareButton } from "@/components/share-button";
 import { formatWhen } from "@/lib/format-time";
 import { mapsSearchUrl } from "@/lib/maps";
-import { resolveEventChecklist } from "@/features/checklists";
+import {
+  addToChecklist,
+  clearChecklist,
+  getChecklist,
+  getInheritedChecklist,
+  removeFromChecklist,
+  resolveEventChecklist,
+  setChecklistItemCount,
+  type ChecklistScope,
+} from "@/features/checklists";
 import { describeWhereabouts, listEquipmentUnits, listPortionsFor, type EquipmentUnit, type Portion } from "@/features/equipment";
 import {
   actOnDuty,
+  dropDutiesFor,
   dutyActions,
   voidDutiesForEvent,
   ensureDuties,
   formatDutySummary,
   gatherConfirmSources,
   joinNames,
+  listPeopleOnEquipment,
   listPlanWarnings,
   needsSourceChoice,
   type Duty,
@@ -44,6 +55,21 @@ import {
 import { listStores, type Store } from "@/features/stores";
 import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
 import { requireApprovedUser } from "@/lib/session";
+
+/** Why the signed-in User can't change this Event's list, or null if they can: Committee only, and not once it's Cancelled. */
+async function refuseListChange(eventId: string): Promise<{ ok: false; error: string } | null> {
+  const current = await requireApprovedUser();
+  if (!isCommitteeOrAbove(current.role)) return { ok: false, error: "Only Committee can change the list." };
+  if ((await getEvent(db, eventId))?.cancelled) return { ok: false, error: "This event is cancelled." };
+  return null;
+}
+
+/** Equipment on the Event's own list that the list it would fall back to doesn't have. */
+async function unitsOnlyOnOwnList(target: ChecklistScope): Promise<string[]> {
+  const [own, inherited] = await Promise.all([getChecklist(db, target), getInheritedChecklist(db, target)]);
+  const kept = new Set(inherited.map((l) => l.equipmentUnitId));
+  return (own ?? []).map((l) => l.equipmentUnitId).filter((unitId) => !kept.has(unitId));
+}
 
 export default async function EventDetailPage({ params }: PageProps<"/events/[id]">) {
   const { id } = await params;
@@ -101,6 +127,48 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     return result;
   }
 
+  // Changing the list starts from whatever list the Event inherits, so nothing already on it is lost.
+  const listTarget: ChecklistScope = {
+    scope: "event",
+    scopeId: id,
+    inherits: { seriesId: eventDetails.seriesId, eventType: eventDetails.eventType },
+  };
+  async function addKit(equipmentUnitId: string, count: number | null) {
+    "use server";
+    const denied = await refuseListChange(id);
+    if (denied) return denied;
+    const result = await addToChecklist(db, listTarget, equipmentUnitId, count);
+    revalidatePath(`/events/${id}`);
+    return result;
+  }
+  async function removeKit(equipmentUnitId: string) {
+    "use server";
+    const denied = await refuseListChange(id);
+    if (denied) return denied;
+    await removeFromChecklist(db, listTarget, equipmentUnitId);
+    await dropDutiesFor(db, id, [equipmentUnitId]);
+    revalidatePath(`/events/${id}`);
+    return { ok: true as const };
+  }
+  async function setKitCount(equipmentUnitId: string, count: number | null) {
+    "use server";
+    const denied = await refuseListChange(id);
+    if (denied) return denied;
+    const result = await setChecklistItemCount(db, listTarget, equipmentUnitId, count);
+    revalidatePath(`/events/${id}`);
+    return result;
+  }
+  async function resetKit() {
+    "use server";
+    const denied = await refuseListChange(id);
+    if (denied) return denied;
+    const dropped = await unitsOnlyOnOwnList(listTarget);
+    await clearChecklist(db, listTarget);
+    await dropDutiesFor(db, id, dropped);
+    revalidatePath(`/events/${id}`);
+    return { ok: true as const };
+  }
+
   const resolved = await resolveEventChecklist(db, {
     eventId: id,
     seriesId: eventDetails.seriesId,
@@ -109,7 +177,13 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
   const equipmentNames = new Map(equipmentUnits.map((u) => [u.id, u.name]));
   const equipmentUnitIds = resolved.items.map((i) => i.equipmentUnitId);
   const countByUnit = new Map(resolved.items.map((i) => [i.equipmentUnitId, i.count]));
-  const [duties, portions] = await Promise.all([ensureDuties(db, id, equipmentUnitIds), listPortionsFor(db, equipmentUnitIds)]);
+  const canEditList = committee && !eventDetails.cancelled;
+  const [duties, portions, peopleOnEquipment, onlyOnOwnList] = await Promise.all([
+    ensureDuties(db, id, equipmentUnitIds),
+    listPortionsFor(db, equipmentUnitIds),
+    canEditList ? listPeopleOnEquipment(db, id, equipmentUnitIds) : new Map<string, Set<string>>(),
+    canEditList && resolved.source === "event" ? unitsOnlyOnOwnList(listTarget) : [],
+  ]);
   const clashes = warnings.clashes.filter((c) => c.eventIds.includes(id));
   const headsUps = warnings.headsUps.filter((h) => h.eventIds.includes(id));
   const approved = people.filter((p) => p.accessState === "approved");
@@ -130,6 +204,9 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
       eventName: (eventId) => eventNames.get(eventId) ?? "an event",
     });
   const namesOf = (userIds: string[]) => joinNames(userIds.map((uid) => (uid === user.id ? "You" : (nameOf(uid) ?? "Someone"))));
+  /** Names for a confirmation sentence, so the viewer is "you". */
+  const affectedNames = (userIds: Iterable<string> | undefined) =>
+    [...(userIds ?? [])].map((uid) => (uid === user.id ? "you" : (personName.get(uid) ?? "someone")));
   const dutyEquipment: DutyEquipment[] = equipmentUnitIds.map((kid) => {
     const unit = equipmentById.get(kid);
     const homeId = unit?.homeId ?? null;
@@ -200,6 +277,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
         ...stores.filter((s: Store) => s.id !== homeId).map((s: Store) => ({ value: `store:${s.id}`, label: s.name })),
         { value: "holder", label: "Stays with whoever takes it back" },
       ],
+      affected: affectedNames(peopleOnEquipment.get(kid)),
       to: slot(toDuty),
       from: slot(fromDuty),
       headsUps: headsUps.filter((h) => h.equipmentUnitId === kid).map((h) => h.message),
@@ -217,6 +295,26 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
       from: dutyFor(kid, "from").userIds.length > 0 ? joinNames(dutyFor(kid, "from").userIds.map((uid) => personName.get(uid) ?? "Someone")) : null,
     })),
   });
+  const kit: KitEditing | undefined = canEditList
+    ? {
+        options: equipmentUnits
+          .filter((u: EquipmentUnit) => u.status === "active" && !equipmentUnitIds.includes(u.id))
+          .map((u: EquipmentUnit) => ({ id: u.id, name: u.name, subtitle: storeName(u.homeId), quantity: u.quantity })),
+        add: addKit,
+        remove: removeKit,
+        setCount: setKitCount,
+        reset:
+          resolved.source === "event"
+            ? {
+                label: eventDetails.seriesId ? "the series list" : "the default list",
+                affected: affectedNames(
+                  new Set(onlyOnOwnList.flatMap((unitId) => [...(peopleOnEquipment.get(unitId) ?? [])])),
+                ),
+                run: resetKit,
+              }
+            : undefined,
+      }
+    : undefined;
   const checklistSource = {
     event: "This event's own list",
     series: "From its series",
@@ -325,23 +423,9 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
         viewerId={user.id}
         people={approved.map((p) => ({ id: p.id, name: displayName(p) }))}
         act={act}
+        kit={kit}
+        listSource={checklistSource}
       />
-
-      {committee && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Equipment needed</CardTitle>
-            {checklistSource && <p className="text-sm text-muted-foreground">{checklistSource}</p>}
-          </CardHeader>
-          <CardContent>
-            <ChecklistEditor
-              target={{ scope: "event", scopeId: id }}
-              path={`/events/${id}`}
-              inheritedFrom={eventDetails.seriesId ? "the series list" : "the default list"}
-            />
-          </CardContent>
-        </Card>
-      )}
 
       <CopySummary text={summary} />
     </div>
