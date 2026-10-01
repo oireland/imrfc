@@ -97,6 +97,43 @@ _Avoid_: Publish, invite
 Committee emailing a reminder to Players with No reply — all of them or chosen ones.
 _Avoid_: Chase, ping, reminder (as the action's name)
 
+## Selection
+
+**Selection**:
+Who is in which Shirt for one Match, picked by Committee on the Selection board.
+_Avoid_: Lineup, squad, picks, team (that is a club side)
+
+**Selection board**:
+The screen where Committee pick the Selections for a match day: a pitch for each Match that day, shared by every selector.
+_Avoid_: Picker, team builder
+
+**Shirt**:
+A numbered place in a Selection: 1–15 start, 16 and up are the bench (8 by default, more can be added). Each Shirt maps to Positions (4 and 5 are Lock, 6 and 7 the Flankers…).
+_Avoid_: Slot, spot, number
+
+**Out of position**:
+A Player picked in a Shirt that is not their Preferred Position, one of their Other Positions or the paired position. Flagged, never blocked.
+
+**Guest**:
+A name typed onto a Shirt for someone who isn't a User. Belongs to that one Selection; has no reply, no Positions and is never notified.
+_Avoid_: Ringer, external player
+
+**Team Sheet**:
+The club's pre-match document made from a Selection: the Match's details, then each filled Shirt with its name and Match Day Roles. Downloaded as a PDF.
+_Avoid_: Teamsheet, lineup
+
+**Sheet Default**:
+A Team Sheet field remembered per Team (Travel Attire, Warm Up Attire, Post Match Activity, the message), used unless overridden for one Match.
+_Avoid_: Template
+
+**Match Day Role**:
+A job on a Team Sheet given to someone in the Selection: C (captain) and VC (vice captain), at most one each; LM (linesman), HT (hydration technician), NT (nutrition technician), SGC (shower gel captain) and KD (kit duty), any number.
+_Avoid_: Role on its own (that is a permission level), duty (that is carrying equipment)
+
+**Name the team**:
+Committee sending a Match's Selection to everyone in it (email and Push notification), after which it shows on Event detail and Home. Later changes are held until **Send changes**, which tells only the people affected.
+_Avoid_: Publish, announce (that is asking for Availability), release
+
 ## Places
 
 **Venue**:
