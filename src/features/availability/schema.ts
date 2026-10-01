@@ -55,3 +55,25 @@ export const availabilityNudge = pgTable(
   },
   (t) => [index("availability_nudge_event_id_idx").on(t.eventId)],
 );
+
+// Each Announce or Nudge's emails, sent in the background after Committee press Send:
+// who it's for, who it reached and who it missed once done, and when Committee dismissed
+// a failed one from the card.
+export const availabilityAsk = pgTable(
+  "availability_ask",
+  {
+    id: text("id").primaryKey(),
+    eventId: text("event_id").notNull(),
+    kind: text("kind", { enum: ["announce", "nudge"] }).notNull(),
+    askedById: text("asked_by_id")
+      .notNull()
+      .references(() => user.id),
+    playerIds: text("player_ids").array().notNull(),
+    reachedIds: text("reached_ids").array().notNull().default([]),
+    missedIds: text("missed_ids").array().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
+  },
+  (t) => [index("availability_ask_event_id_idx").on(t.eventId)],
+);

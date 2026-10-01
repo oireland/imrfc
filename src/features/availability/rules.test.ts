@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mayReply, myReplies, replyGroup, seasonRecord, summarizeAvailability, validateReply, waitingOnReply, type Reply } from "./rules";
+import { askStatus, mayReply, myReplies, replyGroup, seasonRecord, summarizeAvailability, validateReply, waitingOnReply, type Reply } from "./rules";
 
 describe("validateReply", () => {
   it("needs a Reason for Not available", () => {
@@ -328,5 +328,24 @@ describe("myReplies", () => {
       now,
     });
     expect(replies).toEqual({ tue: { status: null, open: false } });
+  });
+});
+
+describe("askStatus", () => {
+  const createdAt = new Date("2026-10-01T12:00:00Z");
+  const later = (minutes: number) => new Date(createdAt.getTime() + minutes * 60_000);
+
+  it("is sending until the emails have all been tried", () => {
+    expect(askStatus({ createdAt, finishedAt: null, missed: 0 }, later(1))).toBe("sending");
+  });
+
+  it("is sent when everyone was reached, and failed when anyone wasn't", () => {
+    expect(askStatus({ createdAt, finishedAt: later(1), missed: 0 }, later(2))).toBe("sent");
+    expect(askStatus({ createdAt, finishedAt: later(1), missed: 2 }, later(2))).toBe("failed");
+  });
+
+  it("is failed if it's still sending 15 minutes on, since the send must have been cut off", () => {
+    expect(askStatus({ createdAt, finishedAt: null, missed: 0 }, later(14))).toBe("sending");
+    expect(askStatus({ createdAt, finishedAt: null, missed: 0 }, later(15))).toBe("failed");
   });
 });

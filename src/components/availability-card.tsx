@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Check, Copy, Loader2, Megaphone, Send, X } from "lucide-react";
 import { cn } from "cn";
-import type { Availability, AvailabilityRow, ReplyStatus } from "@/features/availability";
+import type { AskNotice, Availability, AvailabilityRow, ReplyStatus } from "@/features/availability";
 import { formatAgo, formatDay, formatWhen } from "@/lib/format-time";
 import { BottomSheet, SheetSaveButton } from "./bottom-sheet";
 import { Button } from "./ui/button";
@@ -14,7 +15,7 @@ import { Textarea } from "./ui/textarea";
 
 type Answer = { status: ReplyStatus; note: string; reason: string };
 type Result = { ok: true } | { ok: false; error: string };
-type SendResult = { ok: true; sent: number } | { ok: false; error: string };
+type SendResult = { ok: true; askId: string; sending: number } | { ok: false; error: string };
 type Tab = "in" | "out" | "none";
 
 /**
@@ -32,6 +33,7 @@ export function AvailabilityCard({
   reply,
   announce,
   nudge,
+  dismiss,
 }: {
   availability: Availability;
   viewerId: string;
@@ -43,8 +45,10 @@ export function AvailabilityCard({
   reply: (playerId: string, answer: Answer) => Promise<Result>;
   announce: (replyBy: { date: string; time: string } | null) => Promise<SendResult>;
   nudge: (playerIds: string[]) => Promise<SendResult>;
+  dismiss: (askId: string) => Promise<Result>;
 }) {
-  const { summary, myReply, open, canReplyForSelf, canReplyForOthers, announcement, canAnnounce, canNudge } = availability;
+  const { summary, myReply, open, canReplyForSelf, canReplyForOthers, announcement, canAnnounce, canNudge, asks } = availability;
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>("in");
   const [sheet, setSheet] = useState<{ playerId: string; name: string; initial: Answer } | null>(null);
   const [asking, setAsking] = useState<"announce" | "nudge" | null>(null);
@@ -65,15 +69,24 @@ export function AvailabilityCard({
     });
   }
 
-  function send(action: () => Promise<SendResult>, success: (sent: number) => string) {
+  /** Starts an Announce or Nudge, closes the sheet, and leaves the emails sending in the background. */
+  function send(action: () => Promise<SendResult>, kind: AskNotice["kind"]) {
     startTransition(async () => {
       const result = await action();
       if (!result.ok) {
         toast.error(result.error);
         return;
       }
-      toast.success(success(result.sent));
       setAsking(null);
+      toast.loading(kind === "announce" ? `Emailing ${people(result.sending)}…` : `Nudging ${people(result.sending)}…`, { id: result.askId });
+      void watchAsk(result.askId, router.refresh);
+    });
+  }
+
+  function dismissAsk(askId: string) {
+    startTransition(async () => {
+      const result = await dismiss(askId);
+      if (!result.ok) toast.error(result.error);
     });
   }
 
@@ -122,6 +135,10 @@ export function AvailabilityCard({
       </div>
 
       <div className="flex flex-col gap-4 rounded-3xl bg-card px-4 py-4 shadow-card">
+        {asks.map((ask) => (
+          <AskLine key={ask.id} ask={ask} pending={pending} onDismiss={() => dismissAsk(ask.id)} />
+        ))}
+
         {announcement && (
           <p className="text-xs text-muted-foreground">
             Announced {formatDay(announcement.at)} by {announcement.by}
@@ -217,7 +234,7 @@ export function AvailabilityCard({
           count={summary.noReply.length}
           pending={pending}
           onClose={() => setAsking(null)}
-          onSend={(replyBy) => send(() => announce(replyBy), (sent) => `Announced. Emailed ${people(sent)}.`)}
+          onSend={(replyBy) => send(() => announce(replyBy), "announce")}
         />
       )}
 
@@ -227,7 +244,7 @@ export function AvailabilityCard({
           now={now}
           pending={pending}
           onClose={() => setAsking(null)}
-          onSend={(ids) => send(() => nudge(ids), (sent) => `Nudged ${people(sent)}.`)}
+          onSend={(ids) => send(() => nudge(ids), "nudge")}
         />
       )}
 
@@ -338,6 +355,68 @@ function YourReply({
 }
 
 const people = (n: number) => (n === 1 ? "1 person" : `${n} people`);
+
+/** "Jo", "Jo and Sam", "Jo, Sam and Ray". */
+const listNames = (names: string[]) => (names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
+
+function failedMessage(ask: AskNotice) {
+  const what = ask.kind === "announce" ? "announcement" : "nudge";
+  const others = ask.sent > 0 ? ` Everyone else got it.` : "";
+  return `${ask.by}'s ${what} didn't reach ${listNames(ask.missed)}.${others}`;
+}
+
+/**
+ * Checks on an Announce or Nudge every couple of seconds until its emails are done, then
+ * swaps its "Emailing…" toast for how it went and refreshes the page. Keeps going if the
+ * card unmounts, so the toast still shows after moving to another page.
+ */
+async function watchAsk(askId: string, refresh: () => void) {
+  for (;;) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    let ask: AskNotice;
+    try {
+      const response = await fetch(`/api/asks/${askId}`, { cache: "no-store" });
+      if (!response.ok) continue;
+      ask = await response.json();
+    } catch {
+      continue;
+    }
+    if (ask.status === "sending") continue;
+    if (ask.status === "sent") {
+      toast.success(ask.kind === "announce" ? `Announced. Emailed ${people(ask.sent)}.` : `Nudged ${people(ask.sent)}.`, { id: askId });
+    } else {
+      toast.error(failedMessage(ask), { id: askId });
+    }
+    refresh();
+    return;
+  }
+}
+
+/** An Announce or Nudge still sending, or one that didn't reach everyone, until it's dismissed. */
+function AskLine({ ask, pending, onDismiss }: { ask: AskNotice; pending: boolean; onDismiss: () => void }) {
+  if (ask.status === "sending") {
+    return (
+      <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+        {ask.kind === "announce" ? `Emailing the announcement to ${people(ask.total)}…` : `Emailing a nudge to ${people(ask.total)}…`}
+      </p>
+    );
+  }
+  return (
+    <div role="alert" className="flex items-start gap-2 rounded-xl bg-destructive/10 p-3 text-sm text-destructive-text">
+      <p className="flex-1">{failedMessage(ask)}</p>
+      <button
+        type="button"
+        onClick={onDismiss}
+        disabled={pending}
+        aria-label="Dismiss"
+        className="-m-1 rounded-lg p-1 hover:bg-destructive/10 disabled:opacity-60"
+      >
+        <X className="size-4" aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
 
 function PersonRow({ row, tab, now, you, onTap }: { row: AvailabilityRow; tab: Tab; now: Date; you: boolean; onTap?: () => void }) {
   const details = [

@@ -1,12 +1,13 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { seasonStart } from "@/features/duties";
 import { getEvent, listEventsBetween, londonParts, londonToUtc, type Event } from "@/features/events";
 import { listPlayers } from "@/features/players";
 import { displayName, listApprovedUsers } from "@/features/users";
 import type { MailSender } from "@/lib/mail";
 import { askEmail, type AskedEvent } from "./announce-rules";
-import { availabilityAnnouncement, availabilityNudge, availabilityReply } from "./schema";
+import { availabilityAnnouncement, availabilityAsk, availabilityNudge, availabilityReply } from "./schema";
 import {
+  askStatus,
   mayReply,
   myReplies,
   replyGroup,
@@ -15,6 +16,7 @@ import {
   takesReplies,
   validateReply,
   waitingOnReply,
+  type AskStatus,
   type AvailabilitySummary,
   type MyReply,
   type Nudge,
@@ -27,7 +29,7 @@ import {
 export { takesReplies } from "./rules";
 export { askPush, chaseMessage } from "./announce-rules";
 export type { AskedEvent } from "./announce-rules";
-export type { AvailabilityRow, AvailabilitySummary, MyReply, RecordLine, ReplyCounts, ReplyStatus, SeasonRecord, WaitingAsk } from "./rules";
+export type { AskStatus, AvailabilityRow, AvailabilitySummary, MyReply, RecordLine, ReplyCounts, ReplyStatus, SeasonRecord, WaitingAsk } from "./rules";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
@@ -47,7 +49,14 @@ export type Availability = {
   announcement: { at: Date; by: string; replyBy: Date | null } | null;
   canAnnounce: boolean;
   canNudge: boolean;
+  /** For Committee: Announces and Nudges still sending, or that failed and haven't been dismissed. */
+  asks: AskNotice[];
 };
+
+type AskKind = "announce" | "nudge";
+
+/** How an Announce or Nudge's emails went. `missed` names who they didn't reach. */
+export type AskNotice = { id: string; kind: AskKind; by: string; status: AskStatus; total: number; sent: number; missed: string[] };
 
 /**
  * The Events one reply to `event` covers (every Match that London day), when replies
@@ -97,6 +106,15 @@ async function announcementFor(db: Db, eventIds: string[]) {
   return rows.sort((a: { createdAt: Date }, b: { createdAt: Date }) => a.createdAt.getTime() - b.createdAt.getTime())[0] as
     | typeof availabilityAnnouncement.$inferSelect
     | undefined;
+}
+
+/** Announces and Nudges not dismissed, oldest first. */
+async function asksFor(db: Db, eventIds: string[]): Promise<(typeof availabilityAsk.$inferSelect)[]> {
+  const rows = await db
+    .select()
+    .from(availabilityAsk)
+    .where(and(inArray(availabilityAsk.eventId, eventIds), isNull(availabilityAsk.dismissedAt)));
+  return rows.sort((a: { createdAt: Date }, b: { createdAt: Date }) => a.createdAt.getTime() - b.createdAt.getTime());
 }
 
 async function nudgesFor(db: Db, eventIds: string[]): Promise<Nudge[]> {
@@ -153,16 +171,18 @@ export async function getAvailability(db: Db, eventId: string, viewer: Viewer, n
       announcement: null,
       canAnnounce: false,
       canNudge: false,
+      asks: [],
     };
   }
 
   const { eventIds, closesAt, events } = await groupFor(db, event);
-  const [replies, players, people, announcement, nudges] = await Promise.all([
+  const [replies, players, people, announcement, nudges, asks] = await Promise.all([
     repliesFor(db, eventIds),
     playersById(db),
     listApprovedUsers(db),
     announcementFor(db, eventIds),
     nudgesFor(db, eventIds),
+    viewer.committee ? asksFor(db, eventIds) : [],
   ]);
   const names = new Map<string, string>(people.map((u: Parameters<typeof displayName>[0] & { id: string }) => [u.id, displayName(u)]));
   const summary = summarizeAvailability({
@@ -192,39 +212,36 @@ export async function getAvailability(db: Db, eventId: string, viewer: Viewer, n
       : null,
     canAnnounce: open && viewer.committee && !announcement,
     canNudge: open && viewer.committee && summary.noReply.length > 0,
+    asks: asks.map((row) => askNotice(row, names, now)).filter((ask) => ask.status !== "sent"),
   };
 }
 
-type AskInput = { eventId: string; viewer: Viewer; url: string; mail: MailSender };
-// `reachedUserIds` is who the email got to, for the caller to also push to (see the `push` feature).
-type AskResult = { ok: true; sent: number; reachedUserIds: string[] } | { ok: false; error: string };
+type AskResult = { ok: true; askId: string; sending: number } | { ok: false; error: string };
 
-/** Emails each of `playerIds` the Announce or Nudge email; returns who it reached. */
-async function sendAsk(
-  db: Db,
-  kind: "announce" | "nudge",
-  playerIds: string[],
-  { events, url, replyBy, mail }: { events: AskedEvent[]; url: string; replyBy: Date | null; mail: MailSender },
-): Promise<string[]> {
+/** Who is being emailed: Approved Users among `playerIds`. */
+async function reachable(db: Db, playerIds: string[]): Promise<string[]> {
   const people = await listApprovedUsers(db);
-  const reached: string[] = [];
-  for (const u of people.filter((p: { id: string; accessState: string }) => playerIds.includes(p.id) && p.accessState === "approved")) {
-    const email = askEmail({ kind, events, url, replyBy, name: displayName(u).split(" ")[0] });
-    try {
-      await mail.send({ to: u.email, ...email });
-      reached.push(u.id);
-    } catch (error) {
-      console.error(`[availability] couldn't email ${u.email}`, error);
-    }
-  }
-  return reached;
+  return people.filter((p: { id: string; accessState: string }) => playerIds.includes(p.id) && p.accessState === "approved").map((p: { id: string }) => p.id);
+}
+
+/** Records an Announce or Nudge whose emails are still to send (see `deliverAsk`). */
+async function recordAsk(db: Db, kind: AskKind, input: { eventId: string; viewer: Viewer }, playerIds: string[], now: Date): Promise<AskResult> {
+  const id = crypto.randomUUID();
+  const recipients = await reachable(db, playerIds);
+  await db.insert(availabilityAsk).values({ id, eventId: input.eventId, kind, askedById: input.viewer.id, playerIds: recipients, createdAt: now });
+  return { ok: true, askId: id, sending: recipients.length };
 }
 
 /**
- * Announce (Committee, once per Event — once per day for Matches): emails every Player
- * with No reply, with an optional Reply By after which replies are marked late.
+ * Announce (Committee, once per Event — once per day for Matches): asks every Player with
+ * No reply, with an optional Reply By after which replies are marked late. The emails go
+ * out afterwards, with `deliverAsk`.
  */
-export async function announce(db: Db, input: AskInput & { replyBy: Date | null }, now: Date = new Date()): Promise<AskResult> {
+export async function announce(
+  db: Db,
+  input: { eventId: string; viewer: Viewer; replyBy: Date | null },
+  now: Date = new Date(),
+): Promise<AskResult> {
   const availability = await getAvailability(db, input.eventId, input.viewer, now);
   if (availability.announcement) return { ok: false, error: "This has already been announced." };
   if (!availability.canAnnounce) return { ok: false, error: "You can't announce this one." };
@@ -237,34 +254,112 @@ export async function announce(db: Db, input: AskInput & { replyBy: Date | null 
     replyBy: input.replyBy,
     createdAt: now,
   });
-  const reached = await sendAsk(db, "announce", availability.summary.noReply.map((r) => r.userId), {
-    events: availability.events,
-    url: input.url,
-    replyBy: input.replyBy,
-    mail: input.mail,
-  });
-  return { ok: true, sent: reached.length, reachedUserIds: reached };
+  return recordAsk(db, "announce", input, availability.summary.noReply.map((r) => r.userId), now);
 }
 
-/** Nudge (Committee): emails a reminder to everyone with No reply, or just `playerIds` among them. */
-export async function nudge(db: Db, input: AskInput & { playerIds: string[] | null }, now: Date = new Date()): Promise<AskResult> {
+/**
+ * Nudge (Committee): reminds everyone with No reply, or just `playerIds` among them. The
+ * emails go out afterwards, with `deliverAsk`.
+ */
+export async function nudge(
+  db: Db,
+  input: { eventId: string; viewer: Viewer; playerIds: string[] | null },
+  now: Date = new Date(),
+): Promise<AskResult> {
   const availability = await getAvailability(db, input.eventId, input.viewer, now);
   if (!availability.canNudge) return { ok: false, error: "You can't nudge anyone for this one." };
 
   const noReply = availability.summary.noReply.map((r) => r.userId);
   const chosen = input.playerIds ? noReply.filter((id) => input.playerIds!.includes(id)) : noReply;
-  const reached = await sendAsk(db, "nudge", chosen, {
-    events: availability.events,
-    url: input.url,
-    replyBy: availability.announcement?.replyBy ?? null,
-    mail: input.mail,
-  });
-  if (reached.length > 0) {
-    await db.insert(availabilityNudge).values(
-      reached.map((userId) => ({ id: crypto.randomUUID(), eventId: input.eventId, userId, nudgedById: input.viewer.id, createdAt: now })),
-    );
+  return recordAsk(db, "nudge", input, chosen, now);
+}
+
+async function askRow(db: Db, askId: string) {
+  const [row] = await db.select().from(availabilityAsk).where(eq(availabilityAsk.id, askId));
+  return row as typeof availabilityAsk.$inferSelect | undefined;
+}
+
+/**
+ * Sends an Announce or Nudge's emails, one Player at a time, and records who they reached
+ * and who they missed. Meant to run after the response, so Committee aren't kept waiting.
+ * Returns who was reached, for the caller to also push to (see the `push` feature).
+ */
+export async function deliverAsk(
+  db: Db,
+  askId: string,
+  { url, mail }: { url: string; mail: MailSender },
+  now: Date = new Date(),
+): Promise<{ reachedUserIds: string[] }> {
+  const ask = await askRow(db, askId);
+  if (!ask || ask.finishedAt) return { reachedUserIds: [] };
+
+  const reached: string[] = [];
+  try {
+    const availability = await getAvailability(db, ask.eventId, { id: ask.askedById, committee: true }, now);
+    const people = await listApprovedUsers(db);
+    for (const u of people.filter((p: { id: string }) => ask.playerIds.includes(p.id))) {
+      const email = askEmail({
+        kind: ask.kind,
+        events: availability.events,
+        url,
+        replyBy: availability.announcement?.replyBy ?? null,
+        name: displayName(u).split(" ")[0],
+      });
+      try {
+        await mail.send({ to: u.email, ...email });
+        reached.push(u.id);
+      } catch (error) {
+        console.error(`[availability] couldn't email ${u.email}`, error);
+      }
+    }
+    if (ask.kind === "nudge" && reached.length > 0) {
+      await db.insert(availabilityNudge).values(
+        reached.map((userId) => ({ id: crypto.randomUUID(), eventId: ask.eventId, userId, nudgedById: ask.askedById, createdAt: now })),
+      );
+    }
+  } catch (error) {
+    console.error(`[availability] the ${ask.kind} for ${ask.eventId} stopped part way`, error);
   }
-  return { ok: true, sent: reached.length, reachedUserIds: reached };
+
+  await db
+    .update(availabilityAsk)
+    .set({ reachedIds: reached, missedIds: ask.playerIds.filter((id) => !reached.includes(id)), finishedAt: now })
+    .where(eq(availabilityAsk.id, askId));
+  return { reachedUserIds: reached };
+}
+
+function askNotice(row: typeof availabilityAsk.$inferSelect, names: Map<string, string>, now: Date): AskNotice {
+  const status = askStatus({ createdAt: row.createdAt, finishedAt: row.finishedAt, missed: row.missedIds.length }, now);
+  // A send that was cut off never recorded who it missed: count everyone not reached.
+  const missed = status === "failed" && !row.finishedAt ? row.playerIds.filter((id) => !row.reachedIds.includes(id)) : row.missedIds;
+  return {
+    id: row.id,
+    kind: row.kind,
+    by: names.get(row.askedById) ?? "Someone",
+    status,
+    total: row.playerIds.length,
+    sent: row.reachedIds.length,
+    missed: missed.map((id) => names.get(id) ?? "Someone"),
+  };
+}
+
+async function namesById(db: Db): Promise<Map<string, string>> {
+  const people = await listApprovedUsers(db);
+  return new Map(people.map((u: Parameters<typeof displayName>[0] & { id: string }) => [u.id, displayName(u)]));
+}
+
+/** How an Announce or Nudge's emails are going, for Committee; null for anyone else. */
+export async function getAsk(db: Db, askId: string, viewer: Viewer, now: Date = new Date()): Promise<AskNotice | null> {
+  if (!viewer.committee) return null;
+  const row = await askRow(db, askId);
+  return row ? askNotice(row, await namesById(db), now) : null;
+}
+
+/** Takes a failed Announce or Nudge off the card (Committee). */
+export async function dismissAsk(db: Db, askId: string, viewer: Viewer, now: Date = new Date()): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!viewer.committee) return { ok: false, error: "Only committee can do that." };
+  await db.update(availabilityAsk).set({ dismissedAt: now }).where(eq(availabilityAsk.id, askId));
+  return { ok: true };
 }
 
 async function playerRepliesFor(db: Db, playerId: string, eventIds: string[]): Promise<(Reply & { eventId: string })[]> {

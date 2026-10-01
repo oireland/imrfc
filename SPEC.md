@@ -196,6 +196,7 @@ Lets Players say whether they can make a Training or Match, and lets Committee s
 
 - **Announce** (Committee), once per Event: emails every Player with No reply, with an optional **Reply By** date and time. The card then shows "Announced 12 Sep by Tom" and the Reply By; anyone replying after it is marked "late" (nothing is enforced). Announcing a Match covers every Match that day in one email.
 - **Nudge** (Committee): emails everyone with No reply, or the ones ticked. Asks to confirm ("Nudge 9 people?"), no limit; each Player shows "nudged 2h ago".
+- Both send in the background: Send closes the sheet straight away, then a toast says how it went. If anyone wasn't reached, Committee see "Tom's nudge didn't reach Jo and Sam" on the card until one of them dismisses it.
 - Emails link to the Event page; no one-click answering, no opt-out (switching Playing off stops them). Subject e.g. "Can you make it? Sat 4 Oct — 1st XV v Barts".
 - **Copy chase message**: WhatsApp text listing who hasn't replied, e.g.
 

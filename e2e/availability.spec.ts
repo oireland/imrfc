@@ -100,6 +100,8 @@ test("Committee announce Training with a reply-by, nudge someone, and copy the c
   const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
   await sheet.getByLabel("Reply by (optional)").fill(tomorrow);
   await sheet.getByRole("button", { name: /^Email \d+ (person|people)$/ }).click();
+  // The sheet closes straight away; the emails go out in the background, then a toast says how it went.
+  await expect(sheet).toBeHidden();
   await expect(page.getByText(/^Announced\. Emailed/)).toBeVisible();
   await expect(card).toContainText(/Announced \w{3} \d+ \w{3} by E2E Admin · reply by/);
   await expect(card.getByRole("button", { name: "Announce" })).toBeHidden();
@@ -110,6 +112,7 @@ test("Committee announce Training with a reply-by, nudge someone, and copy the c
   await sheet.getByRole("button", { name: "Untick all" }).click();
   await sheet.getByRole("checkbox", { name: playerName }).check();
   await sheet.getByRole("button", { name: "Nudge 1 person" }).click();
+  await expect(sheet).toBeHidden();
   await expect(page.getByText("Nudged 1 person.")).toBeVisible();
   await mailTo(playerEmail, new RegExp(`^Still need your answer: .* — ${title}$`));
   await card.getByRole("tab", { name: /No reply/ }).click();
@@ -120,4 +123,29 @@ test("Committee announce Training with a reply-by, nudge someone, and copy the c
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   expect(copied).toContain(`— ${title}\nStill need a reply from:`);
   expect(copied).toContain(playerName);
+});
+
+test("an Announce that didn't reach everyone stays on the card until Committee dismiss it", async ({ page }) => {
+  const title = `Training ${crypto.randomUUID().slice(0, 8)}`;
+  const { eventId, playerName } = await seedTraining(title);
+
+  await signIn(page);
+  const sql = postgres(TEST_DATABASE_URL);
+  const [admin] = await sql`select id from "user" where name = 'E2E Admin'`;
+  const [player] = await sql`select id from "user" where name = ${playerName}`;
+  await sql`insert into availability_announcement (id, event_id, announced_by_id) values (${crypto.randomUUID()}, ${eventId}, ${admin.id})`;
+  await sql`insert into availability_ask (id, event_id, kind, asked_by_id, player_ids, reached_ids, missed_ids, finished_at)
+    values (${crypto.randomUUID()}, ${eventId}, 'announce', ${admin.id}, ${[admin.id, player.id]}, ${[admin.id]}, ${[player.id]}, now())`;
+  await sql.end();
+
+  await page.goto(`/events/${eventId}`);
+  const card = page.getByRole("region", { name: "Who's coming" });
+  const notice = card.getByRole("alert");
+  await expect(notice).toHaveText(`E2E Admin's announcement didn't reach ${playerName}. Everyone else got it.`);
+
+  await notice.getByRole("button", { name: "Dismiss" }).click();
+  await expect(notice).toBeHidden();
+  await page.reload();
+  await expect(card).toContainText("Announced");
+  await expect(card.getByRole("alert")).toBeHidden();
 });

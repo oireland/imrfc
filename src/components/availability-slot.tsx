@@ -1,7 +1,19 @@
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { db } from "@/db/client";
-import { announce, askPush, chaseMessage, getAvailability, nudge, saveReply, type ReplyStatus } from "@/features/availability";
+import {
+  announce,
+  askPush,
+  chaseMessage,
+  deliverAsk,
+  dismissAsk,
+  getAvailability,
+  nudge,
+  saveReply,
+  type AskedEvent,
+  type ReplyStatus,
+} from "@/features/availability";
 import { londonToUtc } from "@/features/events";
 import { sendToUser } from "@/features/push";
 import { isCommitteeOrAbove } from "@/features/users";
@@ -13,6 +25,18 @@ import { AvailabilityCard } from "./availability-card";
 async function currentViewer() {
   const current = await requireApprovedUser();
   return { id: current.id, committee: isCommitteeOrAbove(current.role) };
+}
+
+/**
+ * Sends an Announce or Nudge's emails, and pushes to whoever they reached, once the
+ * response has gone, so Committee aren't kept waiting.
+ */
+function deliverLater(askId: string, kind: "announce" | "nudge", { eventId, url, events }: { eventId: string; url: string; events: AskedEvent[] }) {
+  after(async () => {
+    const { reachedUserIds } = await deliverAsk(db, askId, { url, mail: getMailSender() });
+    const message = { ...askPush({ kind, events }), url: `/events/${eventId}` };
+    await Promise.all(reachedUserIds.map((userId) => sendToUser(db, userId, message, getPushSender())));
+  });
 }
 
 /** Event detail's Availability slot, contributed by the `availability` feature. Renders nothing for Socials. */
@@ -38,24 +62,23 @@ export async function AvailabilitySlot({ eventId, viewer }: { eventId: string; v
       eventId,
       viewer: await currentViewer(),
       replyBy: replyBy ? londonToUtc(replyBy.date, replyBy.time) : null,
-      url,
-      mail: getMailSender(),
     });
-    if (result.ok) {
-      const message = { ...askPush({ kind: "announce", events: availability.events }), url: `/events/${eventId}` };
-      await Promise.all(result.reachedUserIds.map((userId) => sendToUser(db, userId, message, getPushSender())));
-    }
+    if (result.ok) deliverLater(result.askId, "announce", { eventId, url, events: availability.events });
     revalidatePath(`/events/${eventId}`);
     return result;
   }
 
   async function nudgeAction(playerIds: string[]) {
     "use server";
-    const result = await nudge(db, { eventId, viewer: await currentViewer(), playerIds, url, mail: getMailSender() });
-    if (result.ok) {
-      const message = { ...askPush({ kind: "nudge", events: availability.events }), url: `/events/${eventId}` };
-      await Promise.all(result.reachedUserIds.map((userId) => sendToUser(db, userId, message, getPushSender())));
-    }
+    const result = await nudge(db, { eventId, viewer: await currentViewer(), playerIds });
+    if (result.ok) deliverLater(result.askId, "nudge", { eventId, url, events: availability.events });
+    revalidatePath(`/events/${eventId}`);
+    return result;
+  }
+
+  async function dismissAction(askId: string) {
+    "use server";
+    const result = await dismissAsk(db, askId, await currentViewer());
     revalidatePath(`/events/${eventId}`);
     return result;
   }
@@ -76,6 +99,7 @@ export async function AvailabilitySlot({ eventId, viewer }: { eventId: string; v
       reply={reply}
       announce={announceAction}
       nudge={nudgeAction}
+      dismiss={dismissAction}
     />
   );
 }
