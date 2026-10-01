@@ -9,6 +9,7 @@ import type { KitEditing } from "@/components/kit-editing";
 import { EventDuties, type DutyEquipment, type DutySlot, type HolderOption, type SourceOption } from "@/components/event-duties";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import Link from "next/link";
 import { BackLink } from "@/components/back-link";
 import { AvailabilitySlot } from "@/components/availability-slot";
 import { ShareButton } from "@/components/share-button";
@@ -398,6 +399,11 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
             <ShareButton title={eventDetails.title} />
+            {committee && eventDetails.eventType === "match" && (
+              <Link href={`/events/${id}/selection`} className="rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">
+                Pick the team
+              </Link>
+            )}
 
             {!eventDetails.cancelled && committee && (
               <form id={`cancel-event-${id}`} action={cancel}>

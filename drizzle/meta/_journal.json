@@ -169,6 +169,13 @@
       "when": 1790874462496,
       "tag": "0023_availability-asks",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790882038057,
+      "tag": "0024_noisy_chimera",
+      "breakpoints": true
     }
   ]
 }
