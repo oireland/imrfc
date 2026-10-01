@@ -53,3 +53,34 @@ test("Committee pick a team on the board: the best fits come first, and a Guest 
   await page.reload();
   await expect(page.getByRole("button", { name: new RegExp(`^Shirt 4, Lock, ${lock}`) })).toBeVisible();
 });
+
+test("Committee fill in the Team Sheet, give roles, and download the PDF", async ({ page }) => {
+  const { eventId, lock } = await seedMatch();
+  await signIn(page);
+
+  await page.goto(`/events/${eventId}/selection`);
+  await page.getByRole("button", { name: /^Shirt 4, Lock, empty/ }).click();
+  await page.getByRole("dialog").getByRole("button", { name: new RegExp(lock) }).click();
+  await expect(page.getByRole("button", { name: new RegExp(`^Shirt 4, Lock, ${lock}`) })).toBeVisible();
+
+  await page.getByRole("link", { name: "Team sheet" }).click();
+  await expect(page.getByRole("heading", { name: "Team sheet" })).toBeVisible();
+  const preview = page.getByRole("article", { name: "Team sheet preview" });
+  await expect(preview).toContainText("Harlington");
+  await expect(preview).toContainText(lock);
+
+  await page.getByLabel("Schedule").fill("Changing rooms 1.15pm");
+  await expect(preview).toContainText("Changing rooms 1.15pm");
+
+  await page.getByRole("button", { name: `captain for ${lock}`, exact: true }).click();
+  await expect(preview.getByRole("cell", { name: "C", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByText("Team sheet saved")).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel("Schedule")).toHaveValue("Changing rooms 1.15pm");
+
+  const pdf = await page.request.get(`/events/${eventId}/team-sheet/pdf`);
+  expect(pdf.headers()["content-type"]).toBe("application/pdf");
+  expect((await pdf.body()).subarray(0, 4).toString()).toBe("%PDF");
+});

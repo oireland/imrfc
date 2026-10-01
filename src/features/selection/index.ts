@@ -8,6 +8,9 @@ import { selectionPitch, selectionShirt } from "./schema";
 
 export { DEFAULT_SHIRTS, fitFor, positionOfShirt, sortForShirt, STARTING_SHIRTS } from "./shirts";
 export type { Candidate, Fit } from "./shirts";
+export * from "./team-sheet";
+export { ROLES, ROLE_NAMES, SINGLE_ROLES, buildSheet, missingFromSheet, rolesText } from "./sheet";
+export type { Role, SheetFields, SheetLayout } from "./sheet";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
@@ -143,8 +146,8 @@ async function refuse(db: Db, ref: ShirtRef, viewer: Viewer, now: Date): Promise
   return null;
 }
 
-async function fill(db: Db, ref: ShirtRef, who: { userId: string | null; guestName: string | null }, viewer: Viewer, now: Date) {
-  const values = { ...who, updatedById: viewer.id, updatedAt: now };
+async function fill(db: Db, ref: ShirtRef, who: { userId: string | null; guestName: string | null; roles?: string[] }, viewer: Viewer, now: Date) {
+  const values = { roles: [], ...who, updatedById: viewer.id, updatedAt: now };
   await db
     .insert(selectionShirt)
     .values({ eventId: ref.eventId, shirt: ref.shirt, ...values })
@@ -218,7 +221,7 @@ export async function swapShirts(db: Db, input: { from: ShirtRef; to: ShirtRef; 
     if (denied) return denied;
   }
   const [a, b] = await Promise.all([occupantRow(db, input.from), occupantRow(db, input.to)]);
-  const asWho = (row?: typeof selectionShirt.$inferSelect) => (row ? { userId: row.userId, guestName: row.guestName } : null);
+  const asWho = (row?: typeof selectionShirt.$inferSelect) => (row ? { userId: row.userId, guestName: row.guestName, roles: row.roles } : null);
   const [whoA, whoB] = [asWho(a), asWho(b)];
   await db.transaction(async (tx: Db) => {
     if (whoB) await fill(tx, input.from, whoB, input.viewer, now);

@@ -176,6 +176,13 @@
       "when": 1790882038057,
       "tag": "0024_noisy_chimera",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1790882724176,
+      "tag": "0025_complete_loners",
+      "breakpoints": true
     }
   ]
 }
