@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { ArrowDownLeft, ArrowUpRight, Check, ChevronLeft, ChevronRight, CircleAlert, Loader2, Star, X } from "lucide-react";
 import { cn } from "cn";
+import { AddEquipmentButton, EditToggle, KitRow, ResetLink, useKitEditing, type KitEditing } from "@/components/kit-editing";
 import type { DutyAction, DutyRequest, HolderPart, SourcePart } from "@/features/duties";
 
 /** A candidate Place the confirm sheet's "where from" step can move counts between. */
@@ -45,6 +46,8 @@ export type DutyEquipment = {
   goesBackTo: string;
   /** Where the From Duty could end instead, for Committee to choose from. */
   places: Place[];
+  /** Display names of everyone with a Duty on it, asked about before it comes off the list. */
+  affected: string[];
   to: DutySlot;
   from: DutySlot;
   headsUps: string[];
@@ -110,6 +113,8 @@ export function EventDuties({
   viewerId,
   people,
   act,
+  kit,
+  listSource,
 }: {
   equipment: DutyEquipment[];
   eventTitle: string;
@@ -118,7 +123,12 @@ export function EventDuties({
   viewerId: string;
   people: { id: string; name: string }[];
   act: (dutyId: string, request: DutyRequest) => Promise<Result>;
+  /** Committee only, and not for a Cancelled Event: what it takes to edit the list. */
+  kit?: KitEditing;
+  /** Where the list comes from, e.g. "From its series"; shown to Committee beside the editing controls. */
+  listSource?: string;
 }) {
+  const editing = useKitEditing(kit);
   // Ids, not the objects: the sheet must show fresh data after each action refreshes the page.
   const [open, setOpen] = useState<{ equipmentUnitId: string; direction: DutySlot["direction"] } | null>(null);
   const openItem = open && equipment.find((k) => k.equipmentUnitId === open.equipmentUnitId);
@@ -131,40 +141,66 @@ export function EventDuties({
         <h2 id="duties" className="font-heading text-[28px] leading-none">
           Who&apos;s bringing what
         </h2>
-        {equipment.length > 0 && (
-          <span className="text-sm text-muted-foreground">
-            {done} of {equipment.length * 2} done
-          </span>
-        )}
+        <span className="flex items-center gap-3">
+          {equipment.length > 0 && (
+            <span className="text-sm text-muted-foreground">
+              {done} of {equipment.length * 2} done
+            </span>
+          )}
+          {kit && <EditToggle state={editing} />}
+        </span>
       </div>
 
+      {kit && listSource && <p className="-mt-1 px-1 text-sm text-muted-foreground">{listSource}</p>}
+
       {equipment.length === 0 ? (
-        <p className="rounded-3xl bg-card px-5 py-6 text-sm text-muted-foreground shadow-card">No equipment needed for this one.</p>
+        <p className="rounded-3xl bg-card px-5 py-6 text-sm text-muted-foreground shadow-card">
+          {kit ? "Nothing on the list yet." : "No equipment needed for this one."}
+        </p>
       ) : (
         <ul className="flex flex-col divide-y divide-border rounded-3xl bg-card shadow-card">
           {equipment.map((item) => (
             <li key={item.equipmentUnitId} className="flex flex-col gap-3 px-4 py-4">
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="font-heading text-[22px] leading-none">
-                  {item.equipmentName}
-                  {item.quantity > 1 && ` ×${item.count}`}
-                </span>
-                <span className="truncate text-xs text-muted-foreground">{item.now}</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {[item.to, item.from].map((slot) => (
-                  <Slot key={slot.id} slot={slot} equipmentName={item.equipmentName} soon={soon} onOpen={() => setOpen({ equipmentUnitId: item.equipmentUnitId, direction: slot.direction })} />
-                ))}
-              </div>
-              {item.headsUps.map((text) => (
-                <p key={text} className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                  <CircleAlert className="mt-px size-3.5 shrink-0" aria-hidden="true" />
-                  {text}
-                </p>
-              ))}
+              <KitRow
+                state={editing}
+                item={{
+                  equipmentUnitId: item.equipmentUnitId,
+                  name: item.equipmentName,
+                  quantity: item.quantity,
+                  count: item.count,
+                  affected: item.affected,
+                }}
+              >
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="font-heading text-[22px] leading-none">
+                      {item.equipmentName}
+                      {item.quantity > 1 && ` ×${item.count}`}
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground">{item.now}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[item.to, item.from].map((slot) => (
+                      <Slot key={slot.id} slot={slot} equipmentName={item.equipmentName} soon={soon} onOpen={() => setOpen({ equipmentUnitId: item.equipmentUnitId, direction: slot.direction })} />
+                    ))}
+                  </div>
+                  {item.headsUps.map((text) => (
+                    <p key={text} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                      <CircleAlert className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+                      {text}
+                    </p>
+                  ))}
+              </KitRow>
             </li>
           ))}
         </ul>
+      )}
+
+      {kit && (
+        <>
+          <ResetLink state={editing} kit={kit} />
+          <AddEquipmentButton state={editing} />
+          {editing.sheets}
+        </>
       )}
 
       {openItem && openSlot && (

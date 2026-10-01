@@ -102,6 +102,7 @@ Any User can delete their own account from Profile; an Admin can delete anyone's
 ## Checklists and Duties
 
 - **Checklist resolution**: Event Checklist → Series Checklist → Event Type Default Checklist. Committee can edit any level.
+- **Editing a Checklist**: the first change to a level that has none (add, remove, or a new count) starts from a copy of the list it was using, so nothing already on it is lost. On an Event, Committee edit it from Who's bringing what: an Edit toggle shows Edit (count) and Remove on each line, and Add equipment at the foot opens a sheet. Taking an Equipment Unit off an Event's Checklist drops its Duties; if anyone is on them it asks first. Default and Series lists use the same controls with no Duties.
 - Each Checklist line asks for a count of its Equipment Unit: **all of them** by default (kept as "all", so it follows Quantity changes), or a lower number, capped at the Quantity.
 - For each Equipment Unit on an Event's Checklist there is one **To Duty** and one **From Duty**, each with **zero or more Users**.
 - **Claim** (any User) puts you on a Duty — joining anyone already on it. **Assign** (Committee) is a multi-select of Users. Claiming or being assigned the To Duty also puts you on the From Duty by default. Each User can take themselves off or hand their place on to someone else.

@@ -70,7 +70,8 @@ test("a shared Event link previews only its title and date, and signing in lands
   await expect(page).toHaveURL(/\/sign-in\?next=/);
   // The seeded Player signs in, so this doesn't share a Mailpit inbox with other specs.
   await finishSignIn(page, baseURL, `${eventId}@x.org`);
-  await expect(page).toHaveURL(new RegExp(`/events/${eventId}$`));
+  // The dev server may still be compiling the sign-in routes when other specs run alongside.
+  await expect(page).toHaveURL(new RegExp(`/events/${eventId}$`), { timeout: 30_000 });
   await expect(page.getByText(title).first()).toBeVisible();
 });
 

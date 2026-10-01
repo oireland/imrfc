@@ -19,6 +19,8 @@ import {
   listDutyRecordForUser,
   listDutyUserIdsByEvent,
   listHeadsUps,
+  listPeopleOnEquipment,
+  dropDutiesFor,
   listPlanWarnings,
   listUpcomingDutiesForUser,
   setDestination,
@@ -1020,5 +1022,22 @@ describe("listDutyUserIdsByEvent", () => {
     const byEvent = await listDutyUserIdsByEvent(db, ["e1"]);
 
     expect(byEvent.get("e1") ?? new Set()).toEqual(new Set());
+  });
+});
+
+describe("Taking Equipment off an Event's list", () => {
+  it("names the People on an Equipment Unit's Duties, and drops those Duties", async () => {
+    const { db, equipment, to, from } = await setup();
+    await assignDuty(db, to.id, ["tom", "sam"]);
+    await assignDuty(db, from.id, ["sam", "priya"]);
+
+    const people = await listPeopleOnEquipment(db, "e1", [equipment.id]);
+    expect([...people.get(equipment.id)!].sort()).toEqual(["priya", "sam", "tom"]);
+
+    await dropDutiesFor(db, "e1", [equipment.id]);
+
+    expect((await listPeopleOnEquipment(db, "e1", [equipment.id])).size).toBe(0);
+    const [again] = await ensureDuties(db, "e1", [equipment.id]);
+    expect(again.userIds).toEqual([]);
   });
 });

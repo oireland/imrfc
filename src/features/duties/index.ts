@@ -351,6 +351,36 @@ export async function actOnDuty(
   }
 }
 
+/** Who is on an Event's Duties for each of these Equipment Units. Units nobody is on are left out. */
+export async function listPeopleOnEquipment(
+  db: Db,
+  eventId: string,
+  equipmentUnitIds: string[],
+): Promise<Map<string, Set<string>>> {
+  const people = new Map<string, Set<string>>();
+  if (equipmentUnitIds.length === 0) return people;
+  const rows: { equipmentUnitId: string; userId: string }[] = await db
+    .select({ equipmentUnitId: duty.equipmentUnitId, userId: dutyUser.userId })
+    .from(duty)
+    .innerJoin(dutyUser, eq(dutyUser.dutyId, duty.id))
+    .where(and(eq(duty.eventId, eventId), inArray(duty.equipmentUnitId, equipmentUnitIds)));
+  for (const r of rows) people.set(r.equipmentUnitId, (people.get(r.equipmentUnitId) ?? new Set()).add(r.userId));
+  return people;
+}
+
+/** Deletes an Event's Duties for these Equipment Units, People and all: they came off its Checklist. */
+export async function dropDutiesFor(db: Db, eventId: string, equipmentUnitIds: string[]) {
+  if (equipmentUnitIds.length === 0) return;
+  const rows: { id: string }[] = await db
+    .select({ id: duty.id })
+    .from(duty)
+    .where(and(eq(duty.eventId, eventId), inArray(duty.equipmentUnitId, equipmentUnitIds)));
+  const ids = rows.map((r) => r.id);
+  if (ids.length === 0) return;
+  await db.delete(dutyUser).where(inArray(dutyUser.dutyId, ids));
+  await db.delete(duty).where(inArray(duty.id, ids));
+}
+
 export async function voidDutiesForEvent(db: Db, eventId: string) {
   await db.update(duty).set({ voidedAt: new Date() }).where(eq(duty.eventId, eventId));
 }

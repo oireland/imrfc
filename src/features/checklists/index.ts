@@ -10,7 +10,14 @@ export { checklist, checklistItem } from "./schema";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
 
-export type ChecklistScope = { scope: "event_type" | "series" | "event"; scopeId: string };
+/** A level's Checklist. `inherits` says what the level falls back to while it has none, so its first
+ * change can start from that list instead of from nothing. An Event falls back to its Series' list
+ * (if it has a Series), then its Event Type's Default; a Series falls back to the Default. */
+export type ChecklistScope = {
+  scope: "event_type" | "series" | "event";
+  scopeId: string;
+  inherits?: { seriesId: string | null; eventType: string };
+};
 
 /** A Checklist line resolved for an Event: its count is now effective, always a number. */
 export type ResolvedChecklistItem = { equipmentUnitId: string; count: number };
@@ -38,6 +45,30 @@ export async function getChecklist(db: Db, target: ChecklistScope): Promise<Chec
   return rows;
 }
 
+/** The lines this level falls back to while it has no Checklist of its own (none if it inherits nothing). */
+export async function getInheritedChecklist(db: Db, target: ChecklistScope): Promise<ChecklistLine[]> {
+  if (!target.inherits) return [];
+  const { seriesId, eventType } = target.inherits;
+  return (
+    (target.scope === "event" && seriesId ? await getChecklist(db, { scope: "series", scopeId: seriesId }) : undefined) ??
+    (await getChecklist(db, { scope: "event_type", scopeId: eventType })) ??
+    []
+  );
+}
+
+/** This level's own Checklist id, creating it first (as a copy of what it inherits) if it has none. */
+async function ensureOwnChecklist(db: Db, target: ChecklistScope): Promise<string> {
+  const existing = await findChecklistId(db, target);
+  if (existing) return existing;
+  const id = crypto.randomUUID() as string;
+  await db.insert(checklist).values({ id, scope: target.scope, scopeId: target.scopeId });
+  const inherited = await getInheritedChecklist(db, target);
+  if (inherited.length > 0) {
+    await db.insert(checklistItem).values(inherited.map((line) => ({ id: crypto.randomUUID(), checklistId: id, ...line })));
+  }
+  return id;
+}
+
 export async function addToChecklist(
   db: Db,
   target: ChecklistScope,
@@ -48,11 +79,7 @@ export async function addToChecklist(
   if (!unit || unit.status !== "active") {
     return { ok: false, error: "Missing or retired equipment can't go on the list." };
   }
-  let id = await findChecklistId(db, target);
-  if (!id) {
-    id = crypto.randomUUID() as string;
-    await db.insert(checklist).values({ id, ...target });
-  }
+  const id = await ensureOwnChecklist(db, target);
   await db
     .insert(checklistItem)
     .values({ id: crypto.randomUUID(), checklistId: id, equipmentUnitId, count })
@@ -67,8 +94,7 @@ export async function setChecklistItemCount(
   equipmentUnitId: string,
   count: number | null,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const id = await findChecklistId(db, target);
-  if (!id) return { ok: false, error: "That list doesn't exist yet." };
+  const id = await ensureOwnChecklist(db, target);
   await db
     .update(checklistItem)
     .set({ count })
@@ -77,8 +103,7 @@ export async function setChecklistItemCount(
 }
 
 export async function removeFromChecklist(db: Db, target: ChecklistScope, equipmentUnitId: string) {
-  const id = await findChecklistId(db, target);
-  if (!id) return;
+  const id = await ensureOwnChecklist(db, target);
   await db
     .delete(checklistItem)
     .where(and(eq(checklistItem.checklistId, id), eq(checklistItem.equipmentUnitId, equipmentUnitId)));

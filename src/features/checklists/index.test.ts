@@ -167,4 +167,53 @@ describe("Checklists", () => {
       items: [{ equipmentUnitId: balls.id, count: 8 }],
     });
   });
+
+  it("keeps the inherited list when an Event first gets its own", async () => {
+    const { db, balls } = await setup();
+    await addToChecklist(db, { scope: "event_type", scopeId: "training" }, balls.id, 2);
+    const extra = await createEquipmentUnit(db, { name: "Bibs", homeId: "s1" });
+    if (!extra.ok) throw new Error(extra.error);
+
+    await addToChecklist(
+      db,
+      { scope: "event", scopeId: "e1", inherits: { seriesId: null, eventType: "training" } },
+      extra.equipmentUnit.id,
+    );
+
+    expect(await getChecklist(db, { scope: "event", scopeId: "e1" })).toEqual([
+      { equipmentUnitId: balls.id, count: 2 },
+      { equipmentUnitId: extra.equipmentUnit.id, count: null },
+    ]);
+  });
+
+  it("removes one line from an inherited list without losing the rest", async () => {
+    const { db, balls, cones } = await setup();
+    const defaults = { scope: "event_type", scopeId: "training" } as const;
+    await addToChecklist(db, defaults, balls.id);
+    await addToChecklist(db, defaults, cones.id);
+
+    await removeFromChecklist(
+      db,
+      { scope: "event", scopeId: "e1", inherits: { seriesId: null, eventType: "training" } },
+      balls.id,
+    );
+
+    expect(await getChecklist(db, { scope: "event", scopeId: "e1" })).toEqual([{ equipmentUnitId: cones.id, count: null }]);
+    expect(await getChecklist(db, defaults)).toHaveLength(2);
+  });
+
+  it("changes a count on an inherited list, starting from the Series' list when it has one", async () => {
+    const { db, balls, cones } = await setup();
+    await addToChecklist(db, { scope: "event_type", scopeId: "training" }, cones.id);
+    await addToChecklist(db, { scope: "series", scopeId: "sr1" }, balls.id);
+
+    await setChecklistItemCount(
+      db,
+      { scope: "event", scopeId: "e1", inherits: { seriesId: "sr1", eventType: "training" } },
+      balls.id,
+      1,
+    );
+
+    expect(await getChecklist(db, { scope: "event", scopeId: "e1" })).toEqual([{ equipmentUnitId: balls.id, count: 1 }]);
+  });
 });

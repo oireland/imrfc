@@ -25,18 +25,26 @@ test("Clashes fire by total count, not just by overlap, once an Equipment Unit i
 
   await signIn(page);
 
+  // Next's dev route announcer is also an alert, so look for the Clashes card itself.
+  const clashes = page.getByRole("alert").filter({ hasText: "Clashes" });
+
   // 4 and 4 of 8 is fine: no Clash on either overlapping Event.
   await page.goto(`/events/${eventA}`);
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByText(equipmentName).first()).toBeVisible();
+  await expect(clashes).toHaveCount(0);
   await page.goto(`/events/${eventB}`);
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByText(equipmentName).first()).toBeVisible();
+  await expect(clashes).toHaveCount(0);
 
   // Raise one Event's count to 6: between them they now need more than the Quantity.
-  await page.getByRole("combobox", { name: "How many" }).selectOption("6");
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: `Edit ${equipmentName}` }).click();
+  await page.getByLabel(`How many ${equipmentName}?`).selectOption("6");
+  await expect(page.getByText(`${equipmentName} ×6`).first()).toBeVisible();
 
   await page.goto(`/events/${eventA}`);
-  await expect(page.getByRole("alert")).toBeVisible();
-  await expect(page.getByRole("alert")).toContainText(
+  await expect(clashes).toBeVisible();
+  await expect(clashes).toContainText(
     `${titleA} and ${titleB} need 10 ${equipmentName} between them, but the club only has 8.`,
   );
 
