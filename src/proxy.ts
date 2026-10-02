@@ -12,7 +12,15 @@ export function proxy(request: NextRequest) {
   if (!sessionCookie) {
     // Come back here after signing in (e.g. an Event shared in the group chat).
     const signIn = new URL("/sign-in", request.url);
-    if (pathname !== "/") signIn.searchParams.set("next", pathname + request.nextUrl.search);
+    // A failed sign-in (Better Auth redirects to the callback with ?error=…) must reach the sign-in page, not vanish.
+    const rest = new URLSearchParams(request.nextUrl.searchParams);
+    for (const key of ["error", "error_description"]) {
+      const value = rest.get(key);
+      if (value) signIn.searchParams.set(key, value);
+      rest.delete(key);
+    }
+    const restQuery = rest.size ? `?${rest}` : "";
+    if (pathname !== "/" || restQuery) signIn.searchParams.set("next", pathname + restQuery);
     return NextResponse.redirect(signIn);
   }
 
