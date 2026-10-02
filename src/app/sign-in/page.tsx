@@ -3,6 +3,7 @@ import { Crest } from "@/components/crest";
 import { db } from "@/db/client";
 import { getEvent } from "@/features/events";
 import { formatWhen } from "@/lib/format-time";
+import { signInErrorMessage } from "@/lib/sign-in-error";
 import { eventIdInPath, safeNextPath } from "@/lib/next-path";
 import type { Metadata } from "next";
 import { SignInForm } from "./sign-in-form";
@@ -25,6 +26,7 @@ function firstParam(value: string | string[] | undefined) {
 export default async function SignInPage({ searchParams }: PageProps<"/sign-in">) {
   const params = await searchParams;
   const next = safeNextPath(firstParam(params.next));
+  const problem = signInErrorMessage(firstParam(params.error));
   const deleted = firstParam(params.deleted) === "1";
   return (
     <div className="flex min-h-[70vh] flex-col items-center justify-center gap-6">
@@ -33,6 +35,7 @@ export default async function SignInPage({ searchParams }: PageProps<"/sign-in">
         <CardHeader>
           <h2 className="text-center font-heading text-4xl leading-none">Sign in</h2>
           {deleted && <p className="text-center text-sm text-muted-foreground">Your account has been deleted.</p>}
+          {problem && <p role="alert" className="text-center text-sm text-destructive">{problem}</p>}
         </CardHeader>
         <CardContent>
           <SignInForm next={next} />

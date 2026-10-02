@@ -18,7 +18,11 @@ test("A new User is asked for their name and position, can put it off, and it co
   await page.getByRole("button", { name: "Email me a sign-in link" }).click();
   await expect(page.getByText("Check your email")).toBeVisible();
   const link = new URL(await magicLink(email, asked));
-  await page.goto(new URL(link.pathname + link.search, baseURL).toString());
+  const linkOnThisServer = new URL(link.pathname + link.search, baseURL).toString();
+  // A mail scanner (Outlook Safe Links) fetches the link before the person does; that must not spend it.
+  expect((await fetch(linkOnThisServer)).status).toBe(200);
+  await page.goto(linkOnThisServer);
+  await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/waiting-for-approval$/);
 
   await sql`update "user" set access_state = 'approved' where email = ${email}`;

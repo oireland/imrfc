@@ -11,6 +11,7 @@ async function finishSignIn(page: Page, baseURL: string | undefined, email: stri
   await expect(page.getByText("Check your email")).toBeVisible();
   const link = new URL(await magicLink(email, asked));
   await page.goto(new URL(link.pathname + link.search, baseURL).toString());
+  await page.getByRole("button", { name: "Sign in" }).click();
 }
 
 async function seedTraining(title: string) {
