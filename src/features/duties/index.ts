@@ -385,6 +385,15 @@ export async function voidDutiesForEvent(db: Db, eventId: string) {
   await db.update(duty).set({ voidedAt: new Date() }).where(eq(duty.eventId, eventId));
 }
 
+/** Removes every Duty of a deleted Event, and who was on them. */
+export async function deleteDutiesForEvent(db: Db, eventId: string) {
+  const rows: { id: string }[] = await db.select({ id: duty.id }).from(duty).where(eq(duty.eventId, eventId));
+  const ids = rows.map((r) => r.id);
+  if (ids.length === 0) return;
+  await db.delete(dutyUser).where(inArray(dutyUser.dutyId, ids));
+  await db.delete(duty).where(inArray(duty.id, ids));
+}
+
 /**
  * Once an Event has ended, an Equipment Unit still held by the To Duty's People whose From
  * Duty wasn't Confirmed becomes Unconfirmed — up to the Checklist line's count, taken

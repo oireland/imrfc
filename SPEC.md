@@ -44,6 +44,7 @@ Imperial Medicals RFC keeps forgetting equipment and keeps asking the same quest
 | Reply with own Availability (Players only) | ✓ | ✓ | ✓ |
 | Reply for another Player, see Reasons, Announce, Nudge, copy chase message | | ✓ | ✓ |
 | Approve, block, unblock Users; change Roles | | | ✓ |
+| Delete an Event for good (with its Duties, replies and team picks) | | | ✓ |
 | Delete own account | ✓ | ✓ | ✓ |
 | Delete anyone else's account, except another Admin's | | | ✓ |
 
@@ -88,7 +89,7 @@ Any User can delete their own account from Profile; an Admin can delete anyone's
 - **Social**: its own title, plus the common fields; for the whole club (no Team).
 - Type-specific details are held so that new Event Types can add fields without changing existing ones.
 - Teams are seeded (1st XV, 2nd XV); Users do not belong to Teams. Only a Match has a Team. Everyone sees every Event.
-- Events list: Upcoming (default) and Past tabs. Past Events are never deleted.
+- Events list: Upcoming (default) and Past tabs. Past Events are cancelled or, by an Admin only, deleted for good.
 - **Import from CSV** (Committee): upload a CSV to create many Events at once. The header row is required (column names, any order, optional columns may be left out); dates are `YYYY-MM-DD` or `DD/MM/YYYY`, times 24-hour London; the venue is free text and a Match's team is matched by name. A Training or Match is titled from its details, so a `title` column is only read for Socials. For a Match, `team` and `opponent` are required, the kick-off (`start_time`) and the meet times can be `TBC` or blank, and `end_time` is ignored. All or nothing — any bad row means nothing is created and every problem is listed by row. The page offers a downloadable template and a popup describing every column. Up to 500 Events per file.
 - **Cancelled** Events stay visible with a clear cancelled marker; their Duties are voided.
 

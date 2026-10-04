@@ -431,3 +431,11 @@ export async function getSeasonRecord(db: Db, playerId: string, now: Date = new 
   const announcedEventIds = new Set<string>(announcements.map((a: { eventId: string }) => a.eventId));
   return seasonRecord({ events, replies, announcedEventIds, since, now });
 }
+
+/** Removes every reply, announcement, nudge and ask for a deleted Event. */
+export async function deleteAvailabilityForEvent(db: Db, eventId: string) {
+  await db.delete(availabilityReply).where(eq(availabilityReply.eventId, eventId));
+  await db.delete(availabilityAnnouncement).where(eq(availabilityAnnouncement.eventId, eventId));
+  await db.delete(availabilityNudge).where(eq(availabilityNudge.eventId, eventId));
+  await db.delete(availabilityAsk).where(eq(availabilityAsk.eventId, eventId));
+}

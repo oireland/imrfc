@@ -5,6 +5,7 @@ import {
   cancelEvent,
   createEvent,
   createEvents,
+  deleteEvent,
   editEvent,
   getEvent,
   listVenues,
@@ -331,6 +332,26 @@ describe("cancelEvent", () => {
 
     const found = await getEvent(db, created.event.id);
     expect(found?.cancelled).toBe(true);
+  });
+});
+
+describe("deleteEvent", () => {
+  it("removes an Event and its Match details for good", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const [team] = await listTeams(db);
+    const created = await createEvent(db, {
+      eventType: "match",
+      start: new Date("2999-01-01T14:00:00Z"),
+      end: new Date("2999-01-01T16:00:00Z"),
+      venue: "Harlington",
+      matchDetails: { teamId: team.id, opponent: "Quins", homeAway: "home", competition: "bucs" },
+    });
+    if (!created.ok) throw new Error("expected Event to be created");
+
+    await deleteEvent(db, created.event.id);
+
+    expect(await getEvent(db, created.event.id)).toBeUndefined();
   });
 });
 

@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { ClashList } from "@/components/clash-list";
@@ -30,6 +30,7 @@ import {
 import { describeWhereabouts, listEquipmentUnits, listPortionsFor, type EquipmentUnit, type Portion } from "@/features/equipment";
 import {
   actOnDuty,
+  deleteDutiesForEvent,
   dropDutiesFor,
   dutyActions,
   voidDutiesForEvent,
@@ -46,6 +47,7 @@ import {
 import {
   buildQuickEvent,
   cancelEvent,
+  deleteEvent,
   editEvent,
   editOccurrence,
   getEvent,
@@ -55,9 +57,10 @@ import {
   londonParts,
   type QuickEventInput,
 } from "@/features/events";
-import { getTeamCard } from "@/features/selection";
+import { deleteAvailabilityForEvent } from "@/features/availability";
+import { deleteSelectionForEvent, getTeamCard } from "@/features/selection";
 import { listStores, type Store } from "@/features/stores";
-import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
+import { canDeleteEvent, displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
 import { requireApprovedUser } from "@/lib/session";
 
 /** Why the signed-in User can't change this Event's list, or null if they can: Committee only, and not once it's Cancelled. */
@@ -101,6 +104,19 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     await cancelEvent(db, id);
     await voidDutiesForEvent(db, id);
     revalidatePath(`/events/${id}`);
+  }
+
+  async function remove() {
+    "use server";
+    const current = await requireApprovedUser();
+    if (!canDeleteEvent(current.role)) return;
+    await deleteDutiesForEvent(db, id);
+    await deleteSelectionForEvent(db, id);
+    await deleteAvailabilityForEvent(db, id);
+    await clearChecklist(db, { scope: "event", scopeId: id });
+    await deleteEvent(db, id);
+    revalidatePath("/events");
+    redirect("/events");
   }
 
   async function edit(input: QuickEventInput & { scope: "this" | "future" }): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -415,18 +431,33 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
               )}
             </div>
 
-            {!eventDetails.cancelled && committee && (
-              <form id={`cancel-event-${id}`} action={cancel}>
-                <ConfirmSubmit
-                  formId={`cancel-event-${id}`}
-                  triggerLabel="Cancel event"
-                  triggerSize="lg"
-                  title="Cancel this event?"
-                  description="Nobody will need to bring equipment to it. It stays in the calendar, marked as cancelled."
-                  confirmLabel="Cancel event"
-                />
-              </form>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              {!eventDetails.cancelled && committee && (
+                <form id={`cancel-event-${id}`} action={cancel}>
+                  <ConfirmSubmit
+                    formId={`cancel-event-${id}`}
+                    triggerLabel="Cancel"
+                    triggerSize="lg"
+                    title="Cancel this event?"
+                    description="Nobody will need to bring equipment to it. It stays in the calendar, marked as cancelled."
+                    confirmLabel="Cancel event"
+                  />
+                </form>
+              )}
+              {canDeleteEvent(user.role) && (
+                <form id={`delete-event-${id}`} action={remove}>
+                  <ConfirmSubmit
+                    formId={`delete-event-${id}`}
+                    triggerLabel="Delete"
+                    triggerSize="lg"
+                    className="bg-destructive/40 hover:bg-destructive/50 dark:bg-destructive/40 dark:hover:bg-destructive/50"
+                    title="Delete this event?"
+                    description="This removes it for good, along with its duties, replies and team picks. It can't be undone. If it just isn't happening, cancel it instead."
+                    confirmLabel="Delete event"
+                  />
+                </form>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>

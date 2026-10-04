@@ -5,7 +5,7 @@ import { createEvent, listTeams, type NewEvent } from "@/features/events";
 import { user } from "@/features/users";
 import type { MailSender } from "@/lib/mail";
 import { listEventsBetween } from "@/features/events";
-import { announce, deliverAsk, dismissAsk, retryAsk, getAsk, getAvailability, getSeasonRecord, listAvailableUserIds, listMyReplies, listWaitingOnReply, nudge, saveReply } from "./index";
+import { announce, deleteAvailabilityForEvent, deliverAsk, dismissAsk, retryAsk, getAsk, getAvailability, getSeasonRecord, listAvailableUserIds, listMyReplies, listWaitingOnReply, nudge, saveReply } from "./index";
 import { availabilityReply } from "./schema";
 
 const now = new Date("2026-10-01T12:00:00Z");
@@ -80,6 +80,21 @@ describe("saveReply", () => {
     const eventId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
     const result = await saveReply(db, { eventId, playerId: "tom", viewer: sam, status: "available", note: "", reason: "" }, now);
     expect(result.ok).toBe(false);
+  });
+});
+
+describe("deleteAvailabilityForEvent", () => {
+  it("removes an Event's replies, leaving other Events' alone", async () => {
+    const db = await setup();
+    const gone = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
+    const kept = await makeEvent(db, { start: new Date("2026-10-04T18:00:00Z") });
+    for (const eventId of [gone, kept]) {
+      await saveReply(db, { eventId, playerId: "sam", viewer: sam, status: "available", note: "", reason: "" }, now);
+    }
+
+    await deleteAvailabilityForEvent(db, gone);
+
+    expect(await db.select().from(availabilityReply)).toMatchObject([{ eventId: kept }]);
   });
 });
 
