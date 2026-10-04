@@ -225,18 +225,18 @@ Lets Players say whether they can make a Training or Match, and lets Committee s
 
 ## Selection
 
-Lets Committee pick each Match's team on a shared board, turn it into the club's Team Sheet, and name the team to the Players. A new `selection` feature that reads each Player's Availability from `availability`'s entry point and Positions from `players`, references Events by id, and contributes a Team card to Event detail. Replaces the selection board and team sheets from the team-selection handover (one local copy per selector, PDF and Word); Word is dropped.
+Lets Committee pick each Match's team on a shared board, turn it into the club's Team Sheet, and notify the team to the Players. A new `selection` feature that reads each Player's Availability from `availability`'s entry point and Positions from `players`, references Events by id, and contributes a Team card to Event detail. Replaces the selection board and team sheets from the team-selection handover (one local copy per selector, PDF and Word); Word is dropped.
 
 ### Selection board
 
 - **One shared board per match day**, with a pitch for each Match that day (a lone Match gets one pitch). Only Committee can pick. Reached from a Match's Event detail ("Pick the team", `/events/[id]/selection`), opening on that Match's pitch.
-- Each pitch has **Shirts** 1–15 in position and a bench of 8 (16–23). Empty Shirts are allowed; **Add a shirt** at the foot of the bench adds 24, 25… for a bigger squad (e.g. a friendly), and an empty extra Shirt can be removed. Extras are per Match.
+- Each pitch is drawn as a rugby pitch with **Shirts** 1–15 in formation (back three at the top, front row at the bottom), and the **Subs** (16–23) as a list below it. Empty Shirts are allowed; **Add a shirt** at the foot of the bench adds 24, 25… for a bigger squad (e.g. a friendly), and an empty extra Shirt can be removed. Extras are per Match.
 - Every picked person is coloured by their Availability, theme colours only: solid for Available, destructive red and crossed out for Not available, dashed outline for No reply.
 - **Tap a Shirt** to open a list of everyone Playing, sorted for that Shirt: Preferred Position matches, then Other Positions that match, then the paired position as cover (Blindside ↔ Openside Flanker for 6/7, Inside ↔ Outside Centre for 12/13), then everyone else. Lock covers 4 and 5, Wing 11 and 14. Anyone can be picked; someone outside the first three groups is flagged **out of position** on the Shirt.
 - Picking someone Not available or with No reply is allowed, with a warning; a pick is never removed automatically when a reply changes.
 - **Guests**: Committee can type a name onto a Shirt for someone who isn't a User (a ringer, a fresher on day one). A Guest lives on that Selection only: no reply, no Positions, no history, never notified.
 - Picking a Player already on the other pitch that day **moves** them, leaving their old Shirt empty, with a toast ("Moved from 2nd XV 12").
-- **Phone**: one pitch at a time with a tab per Match; tap a Shirt and tap a name to pick; **Swap** on a filled Shirt, then tap the other Shirt. **Wider screens**: pitches side by side; tap works the same, and names can also be dragged between Shirts and pitches, dropping on a filled Shirt to swap.
+- **One pitch at a time at every width, with a tab per Match** (1st and 2nd XV on the same day). Tap a Shirt and tap a name to pick; a filled Shirt also offers Roles, **Swap** (then tap the other Shirt) and Empty. On wider screens names can also be dragged between Shirts, dropping on a filled Shirt to swap.
 - **Two selectors at once**: every Shirt saves on its own (the last change to a Shirt wins), and an open board refreshes every ~5 seconds. A Shirt changed by someone else flashes ("Tom moved this"). No realtime service.
 - Past and Cancelled Matches show the board read-only.
 
@@ -247,11 +247,11 @@ Lets Committee pick each Match's team on a shared board, turn it into the club's
 - A free-text **Schedule** line ("Changing Rooms 10.15am, Warmup 10.30am").
 - **Sheet Defaults**, kept per Team: Travel Attire, Warm Up Attire, Post Match Activity and the message ("Congratulations on your selection to represent IMRFC 1s…"). Each has a Default tick: use the default, override for this Match, or save the new value as the default. Typed once on first use; nothing is imported.
 - **Match Day Roles**, from a fixed list, given only to people on that sheet (Guests included): Leadership C (captain), VC (vice captain) — at most one each; Match Day LM (linesman), HT (hydration technician), NT (nutrition technician), SGC (shower gel captain), KD (kit duty) — any number. One person can hold several ("C, KD"). The sheet prints the legend. KD is set by hand, even though it usually matches whoever takes home the team's kit.
-- **What's missing**, listed above Name the team: empty starting Shirts, picked Players who are Not available or have No reply, no C. It warns, never blocks.
+- **What's missing**, listed above Notify the team: empty starting Shirts, picked Players who are Not available or have No reply, no C. It warns, never blocks.
 
-### Name the team
+### Notify the team
 
-- **Name the team** (Committee), per Match, so each side goes when it is ready. Confirms with what's missing ("Name the team with 2 things missing?"). The board then shows "Named Tue 30 Sep by Tom".
+- **Notify the team** (Committee), per Match, so each side goes when it is ready. Confirms with what's missing ("Notify the team with 2 things missing?"). The board then shows "Notified Tue 30 Sep by Tom".
 - Everyone on the sheet, bench included (not Guests), gets an email and a Push notification ("You're in the 1st XV for Sat 4 Oct"), sent in the background with the same "didn't reach" warning as Nudge.
 - **After naming**, edits are held as unsent changes ("2 changes not sent yet") until Committee tap **Send changes**, which tells only the people affected: added, moved Shirt, or dropped ("You're no longer in the 1st XV team for Sat 4 Oct").
 - If a picked Player replies Not available after the team is named, Committee get a Push notification ("Sam can't make Saturday — at 4 for the 1st XV"). Before naming it only shows on the board.
@@ -333,7 +333,7 @@ Every signed-in screen is checked with axe in light, dark (device) and Dark chos
 
 Code is organised **by feature**, not by layer. Each feature owns its domain rules in plain TypeScript, independent of Next.js, which makes them testable in isolation and lets new features attach without editing existing ones. See [ADR 0002](docs/adr/0002-feature-modules.md).
 
-Features: `users` (access, roles, blocking), `locations`, `equipment` (units, whereabouts, moves), `events` (events, series, teams), `duties` (checklists, duties, confirm, clashes, summary), `calendar-feed`, `players` (Playing, Positions), `availability` (replies, Announce, Nudge, chase message), `selection` (Selection board, Team Sheets, Name the team), `injuries` (Injuries, Fitness, Concussion timeline, Physio Summary).
+Features: `users` (access, roles, blocking), `locations`, `equipment` (units, whereabouts, moves), `events` (events, series, teams), `duties` (checklists, duties, confirm, clashes, summary), `calendar-feed`, `players` (Playing, Positions), `availability` (replies, Announce, Nudge, chase message), `selection` (Selection board, Team Sheets, Notify the team), `injuries` (Injuries, Fitness, Concussion timeline, Physio Summary).
 
 ## Out of scope for v1
 

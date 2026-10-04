@@ -130,9 +130,9 @@ _Avoid_: Template
 A job on a Team Sheet given to someone in the Selection: C (captain) and VC (vice captain), at most one each; LM (linesman), HT (hydration technician), NT (nutrition technician), SGC (shower gel captain) and KD (kit duty), any number.
 _Avoid_: Role on its own (that is a permission level), duty (that is carrying equipment)
 
-**Name the team**:
+**Notify the team**:
 Committee sending a Match's Selection to everyone in it (email and Push notification), after which it shows on Event detail and Home. Later changes are held until **Send changes**, which tells only the people affected.
-_Avoid_: Publish, announce (that is asking for Availability), release
+_Avoid_: Name the team (the old wording), publish, announce (that is asking for Availability), release
 
 ## Places
 
