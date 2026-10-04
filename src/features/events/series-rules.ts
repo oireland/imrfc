@@ -2,7 +2,7 @@
 export type SeriesEventType = "training" | "social";
 
 export type SeriesPattern = {
-  title: string;
+  title?: string; // Social only; a Training Series is titled from its venue
   eventType?: SeriesEventType; // defaults to "training"
   weekdays: number[]; // 0 = Sunday … 6 = Saturday
   startTime: string; // "HH:MM", Europe/London
@@ -11,7 +11,6 @@ export type SeriesPattern = {
   startDate: string; // "YYYY-MM-DD", Europe/London
   endDate: string;
   notes?: string;
-  teamIds?: string[];
 };
 
 const LONDON = new Intl.DateTimeFormat("en-GB", {
@@ -68,7 +67,7 @@ export function occurrenceDates(p: { weekdays: number[]; startDate: string; endD
 }
 
 export function validateSeries(p: SeriesPattern): { ok: true } | { ok: false; error: string } {
-  if (!p.title.trim()) return { ok: false, error: "Give the series a title." };
+  if ((p.eventType ?? "training") === "social" && !(p.title ?? "").trim()) return { ok: false, error: "Give the series a title." };
   if (p.weekdays.length === 0) return { ok: false, error: "Pick at least one day of the week." };
   if (!p.venue.trim()) return { ok: false, error: "Where is it? Add a venue." };
   if (p.endTime <= p.startTime) return { ok: false, error: "The end time must be after the start time." };

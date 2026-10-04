@@ -42,7 +42,6 @@ describe("createEvent", () => {
     const db = await createTestDb();
     await migrate(db);
     const input: NewEvent = {
-      title: "Wednesday Training",
       eventType: "training",
       start: new Date("2999-01-07T19:00:00Z"),
       end: new Date("2999-01-07T20:30:00Z"),
@@ -53,7 +52,7 @@ describe("createEvent", () => {
 
     expect(result.ok).toBe(true);
     const events = await listEvents(db, { when: "upcoming" });
-    expect(events).toMatchObject([{ title: "Wednesday Training", eventType: "training" }]);
+    expect(events).toMatchObject([{ title: "Training @ Harlington", eventType: "training" }]);
   });
 
   it("rejects an invalid Event and creates nothing", async () => {
@@ -61,7 +60,7 @@ describe("createEvent", () => {
     await migrate(db);
 
     const result = await createEvent(db, {
-      title: "",
+      title: " ",
       eventType: "social",
       start: new Date("2026-01-07T19:00:00Z"),
       end: new Date("2026-01-07T20:30:00Z"),
@@ -72,20 +71,19 @@ describe("createEvent", () => {
     expect(await listEvents(db, { when: "upcoming" })).toEqual([]);
   });
 
-  it("creates a Match with type-specific details and Teams", async () => {
+  it("creates a Match with type-specific details, its Team and a derived title", async () => {
     const db = await createTestDb();
     await migrate(db);
     const [firstXV] = await listTeams(db);
 
     const result = await createEvent(db, {
-      title: "vs UCL",
       eventType: "match",
       start: new Date("2999-01-10T14:00:00Z"),
       end: new Date("2999-01-10T16:00:00Z"),
       venue: "Harlington",
-      teamIds: [firstXV.id],
       matchDetails: {
-        opponent: "UCL",
+        teamId: firstXV.id,
+        opponent: "St Georges",
         homeAway: "home",
         competition: "bucs",
         meetTime: new Date("2999-01-10T13:00:00Z"),
@@ -96,25 +94,73 @@ describe("createEvent", () => {
     if (!result.ok) throw new Error("expected Event to be created");
     const found = await getEvent(db, result.event.id);
     expect(found).toMatchObject({
-      title: "vs UCL",
-      matchDetails: { opponent: "UCL", homeAway: "home", competition: "bucs" },
+      title: "1st XV vs St Georges",
+      startTbc: false,
+      matchDetails: { opponent: "St Georges", homeAway: "home", competition: "bucs", teamId: firstXV.id },
       teams: [{ name: "1st XV" }],
     });
+  });
+
+  it("keeps a Match's times that are still TBC as unset", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const [firstXV] = await listTeams(db);
+
+    const result = await createEvent(db, {
+      eventType: "match",
+      start: new Date("2999-01-10T00:00:00Z"),
+      end: new Date("2999-01-10T23:59:00Z"),
+      startTbc: true,
+      venue: "Brighton",
+      matchDetails: { teamId: firstXV.id, opponent: "Brighton", homeAway: "away", competition: "friendly" },
+    });
+
+    if (!result.ok) throw new Error(result.error);
+    const found = await getEvent(db, result.event.id);
+    expect(found).toMatchObject({ startTbc: true, matchDetails: { meetTime: null, travelMeetTime: null } });
+  });
+
+  it("rejects a Match for a Team that doesn't exist and creates nothing", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+
+    const result = await createEvent(db, {
+      eventType: "match",
+      start: new Date("2999-01-10T14:00:00Z"),
+      end: new Date("2999-01-10T16:00:00Z"),
+      venue: "Harlington",
+      matchDetails: { teamId: "3rd XV", opponent: "UCL", homeAway: "home", competition: "bucs" },
+    });
+
+    expect(result).toEqual({ ok: false, error: "That team doesn't exist." });
+    expect(await listEvents(db, { when: "upcoming" })).toEqual([]);
+  });
+
+  it("gives a Training and a Social no Teams", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const made = await createEvent(db, {
+      eventType: "training",
+      start: new Date("2999-01-07T19:00:00Z"),
+      end: new Date("2999-01-07T20:30:00Z"),
+      venue: "Harlington",
+    });
+    if (!made.ok) throw new Error(made.error);
+
+    expect((await getEvent(db, made.event.id))?.teams).toEqual([]);
   });
 });
 
 describe("editEvent", () => {
-  it("edits a standalone Social's title, time, venue, notes and Teams", async () => {
+  it("edits a standalone Social's title, time, venue and notes", async () => {
     const db = await createTestDb();
     await migrate(db);
-    const [firstXV, secondXV] = await listTeams(db);
     const created = await createEvent(db, {
       title: "Social",
       eventType: "social",
       start: new Date("2999-01-01T19:00:00Z"),
       end: new Date("2999-01-01T21:00:00Z"),
       venue: "Harlington",
-      teamIds: [firstXV.id],
     });
     if (!created.ok) throw new Error("expected Event to be created");
 
@@ -125,7 +171,6 @@ describe("editEvent", () => {
       end: new Date("2999-01-02T22:00:00Z"),
       venue: "The Union",
       notes: " Fancy dress ",
-      teamIds: [secondXV.id],
     });
 
     expect(result.ok).toBe(true);
@@ -136,35 +181,66 @@ describe("editEvent", () => {
       end: new Date("2999-01-02T22:00:00Z"),
       venue: "The Union",
       notes: " Fancy dress ",
-      teams: [{ name: "2nd XV" }],
     });
   });
 
-  it("edits a Match's Match details", async () => {
+  it("re-derives a Training's title when its venue changes", async () => {
     const db = await createTestDb();
     await migrate(db);
-    const created = await createEvent(db, {
-      title: "vs Brighton",
+    const training = (venue: string): NewEvent => ({
+      eventType: "training",
+      start: new Date("2999-01-07T19:00:00Z"),
+      end: new Date("2999-01-07T20:30:00Z"),
+      venue,
+    });
+    const created = await createEvent(db, training("Harlington"));
+    if (!created.ok) throw new Error(created.error);
+
+    await editEvent(db, created.event.id, training("Hyde Park"));
+
+    expect((await getEvent(db, created.event.id))?.title).toBe("Training @ Hyde Park");
+  });
+
+  it("re-derives a Match's title and Team when they change", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const [firstXV, secondXV] = await listTeams(db);
+    const match = (teamId: string, opponent: string): NewEvent => ({
       eventType: "match",
       start: new Date("2999-01-10T14:00:00Z"),
       end: new Date("2999-01-10T16:00:00Z"),
       venue: "Brighton",
-      matchDetails: {
-        opponent: "Brighton",
-        homeAway: "away",
-        competition: "friendly",
-        meetTime: new Date("2999-01-10T12:15:00Z"),
-      },
+      matchDetails: { teamId, opponent, homeAway: "away", competition: "friendly" },
+    });
+    const created = await createEvent(db, match(firstXV.id, "Brighton"));
+    if (!created.ok) throw new Error(created.error);
+
+    await editEvent(db, created.event.id, match(secondXV.id, "Sussex"));
+
+    expect(await getEvent(db, created.event.id)).toMatchObject({ title: "2nd XV vs Sussex", teams: [{ name: "2nd XV" }] });
+  });
+
+  it("edits a Match's Match details, including a TBC time becoming known", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const [firstXV] = await listTeams(db);
+    const created = await createEvent(db, {
+      eventType: "match",
+      start: new Date("2999-01-10T00:00:00Z"),
+      end: new Date("2999-01-10T23:59:00Z"),
+      startTbc: true,
+      venue: "Brighton",
+      matchDetails: { teamId: firstXV.id, opponent: "Brighton", homeAway: "away", competition: "friendly" },
     });
     if (!created.ok) throw new Error("expected Event to be created");
 
     const result = await editEvent(db, created.event.id, {
-      title: "vs Brighton",
       eventType: "match",
       start: new Date("2999-01-10T14:00:00Z"),
       end: new Date("2999-01-10T16:00:00Z"),
       venue: "Brighton",
       matchDetails: {
+        teamId: firstXV.id,
         opponent: "Brighton",
         homeAway: "away",
         competition: "bucs",
@@ -176,6 +252,7 @@ describe("editEvent", () => {
 
     expect(result.ok).toBe(true);
     const found = await getEvent(db, created.event.id);
+    expect(found?.startTbc).toBe(false);
     expect(found?.matchDetails).toMatchObject({
       competition: "bucs",
       meetTime: new Date("2999-01-10T12:00:00Z"),
@@ -288,7 +365,7 @@ describe("listEventsBetween", () => {
     const make = (title: string, start: string) =>
       createEvent(db, {
         title,
-        eventType: "training",
+        eventType: "social",
         start: new Date(start),
         end: new Date(new Date(start).getTime() + 7_200_000),
         venue: "Harlington",
@@ -305,26 +382,30 @@ describe("listEventsBetween", () => {
 });
 
 describe("createEvents", () => {
-  const training = (title: string, teamIds = ["1st XV"]): NewEvent => ({
-    title,
+  const training = (venue: string): NewEvent => ({
     eventType: "training",
     start: new Date("2999-01-07T19:00:00Z"),
     end: new Date("2999-01-07T20:30:00Z"),
+    venue,
+  });
+  const match = (teamId: string): NewEvent => ({
+    eventType: "match",
+    start: new Date("2999-01-10T14:00:00Z"),
+    end: new Date("2999-01-10T16:00:00Z"),
     venue: "Harlington",
-    teamIds,
+    matchDetails: { teamId, opponent: "UCL", homeAway: "home", competition: "bucs" },
   });
 
-  it("creates every Event, with its Teams", async () => {
+  it("creates every Event, with its derived title and Team", async () => {
     const db = await createTestDb();
     await migrate(db);
     await listTeams(db);
 
-    const result = await createEvents(db, [training("One"), training("Two")]);
+    const result = await createEvents(db, [training("One"), match("1st XV")]);
 
     expect(result).toEqual({ ok: true, count: 2 });
     const events = await listEvents(db, { when: "upcoming" });
-    expect(events.map((e) => e.title).sort()).toEqual(["One", "Two"]);
-    expect((await getEvent(db, events[0].id))?.teams.map((t) => t.name)).toEqual(["1st XV"]);
+    expect(events.map((e) => e.title).sort()).toEqual(["1st XV vs UCL", "Training @ One"]);
   });
 
   it("creates none of them if any one fails", async () => {
@@ -332,7 +413,7 @@ describe("createEvents", () => {
     await migrate(db);
     await listTeams(db);
 
-    const result = await createEvents(db, [training("One"), training("Two", ["3rd XV"])]);
+    const result = await createEvents(db, [training("One"), match("3rd XV")]);
 
     expect(result.ok).toBe(false);
     expect(await listEvents(db, { when: "upcoming" })).toEqual([]);
@@ -344,7 +425,6 @@ describe("listVenues", () => {
     const db = await createTestDb();
     await migrate(db);
     const at = (venue: string, day: number): NewEvent => ({
-      title: "Training",
       eventType: "training",
       start: new Date(Date.UTC(2999, 0, day, 19)),
       end: new Date(Date.UTC(2999, 0, day, 21)),
@@ -363,7 +443,7 @@ describe("listEventTitles", () => {
     const make = async (title: string) => {
       const made = await createEvent(db, {
         title,
-        eventType: "training",
+        eventType: "social",
         start: new Date(Date.UTC(2999, 0, 1, 19)),
         end: new Date(Date.UTC(2999, 0, 1, 21)),
         venue: "Harlington",
@@ -371,12 +451,12 @@ describe("listEventTitles", () => {
       if (!made.ok) throw new Error(made.error);
       return made.event;
     };
-    const a = await make("Training A");
-    const b = await make("Training B");
+    const a = await make("Social A");
+    const b = await make("Social B");
 
     const titles = await listEventTitles(db, [a.id, b.id, "gone"]);
 
-    expect(titles).toEqual(new Map([[a.id, "Training A"], [b.id, "Training B"]]));
+    expect(titles).toEqual(new Map([[a.id, "Social A"], [b.id, "Social B"]]));
     expect(await listEventTitles(db, [])).toEqual(new Map());
   });
 });

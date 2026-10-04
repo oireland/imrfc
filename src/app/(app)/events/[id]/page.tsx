@@ -15,7 +15,7 @@ import { AvailabilitySlot } from "@/components/availability-slot";
 import { TeamCard } from "@/components/team-card";
 import { ShareButton } from "@/components/share-button";
 import { buttonVariants } from "@/components/ui/button";
-import { formatWhen } from "@/lib/format-time";
+import { formatDay, formatWhen } from "@/lib/format-time";
 import { mapsSearchUrl } from "@/lib/maps";
 import {
   addToChecklist,
@@ -112,7 +112,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
       ? await editOccurrence(
           db,
           id,
-          { title: input.title, startTime: input.startTime, endTime: input.endTime, venue: input.venue, notes: input.notes },
+          { title: input.title, startTime: input.startTime, endTime: input.endTime ?? input.startTime, venue: input.venue, notes: input.notes },
           input.scope,
         )
       : await editEvent(db, id, buildQuickEvent(input));
@@ -327,25 +327,27 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     none: "",
   }[resolved.source];
 
+  const details = eventDetails.matchDetails;
   const editInitial = {
     date: londonParts(eventDetails.start).date,
-    startTime: londonParts(eventDetails.start).time,
+    // A Match's kick-off, empty while TBC.
+    startTime: eventDetails.startTbc ? "" : londonParts(eventDetails.start).time,
     endTime: londonParts(eventDetails.end).time,
-    title: eventDetails.title,
+    title: eventDetails.eventType === "social" ? eventDetails.title : "",
     venue: eventDetails.venue,
     notes: eventDetails.notes,
-    teamIds: eventDetails.teams.map((t) => t.id),
-    ...(eventDetails.matchDetails && {
-      opponent: eventDetails.matchDetails.opponent,
-      homeAway: eventDetails.matchDetails.homeAway,
-      competition: eventDetails.matchDetails.competition,
-      meetTime: londonParts(eventDetails.matchDetails.meetTime).time,
-      travelMeetTime: eventDetails.matchDetails.travelMeetTime ? londonParts(eventDetails.matchDetails.travelMeetTime).time : undefined,
-      travelMeetPoint: eventDetails.matchDetails.travelMeetPoint ?? undefined,
-      schedule: eventDetails.matchDetails.schedule ?? undefined,
-      travelAttire: eventDetails.matchDetails.travelAttire ?? undefined,
-      warmUpAttire: eventDetails.matchDetails.warmUpAttire ?? undefined,
-      postMatchActivity: eventDetails.matchDetails.postMatchActivity ?? undefined,
+    ...(details && {
+      teamId: details.teamId,
+      opponent: details.opponent,
+      homeAway: details.homeAway,
+      competition: details.competition,
+      meetTime: details.meetTime ? londonParts(details.meetTime).time : "",
+      travelMeetTime: details.travelMeetTime ? londonParts(details.travelMeetTime).time : "",
+      travelMeetPoint: details.travelMeetPoint ?? undefined,
+      schedule: details.schedule ?? undefined,
+      travelAttire: details.travelAttire ?? undefined,
+      warmUpAttire: details.warmUpAttire ?? undefined,
+      postMatchActivity: details.postMatchActivity ?? undefined,
     }),
   };
 
@@ -373,7 +375,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
         </CardHeader>
         <CardContent className="flex flex-col gap-1 text-sm">
           <p className="capitalize text-muted-foreground">{eventDetails.eventType}</p>
-          <p>{formatWhen(eventDetails.start)} – {formatWhen(eventDetails.end)}</p>
+          <p>{eventDetails.startTbc ? `${formatDay(eventDetails.start)}, time TBC` : `${formatWhen(eventDetails.start)} – ${formatWhen(eventDetails.end)}`}</p>
           {eventDetails.venue && (
             <p>
               Venue:{" "}
@@ -381,9 +383,6 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
                 {eventDetails.venue}
               </a>
             </p>
-          )}
-          {eventDetails.teams.length > 0 && (
-            <p>Teams: {eventDetails.teams.map((t) => t.name).join(", ")}</p>
           )}
           {eventDetails.notes && <p>Notes: {eventDetails.notes}</p>}
 
@@ -393,15 +392,12 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
               <p>Opponent: {eventDetails.matchDetails.opponent}</p>
               <p>{eventDetails.matchDetails.homeAway === "home" ? "Home" : "Away"}</p>
               <p className="uppercase">{eventDetails.matchDetails.competition}</p>
-              <p>Kick-off: {formatWhen(eventDetails.start)}</p>
-              <p>Meet time: {formatWhen(eventDetails.matchDetails.meetTime)}</p>
-              {eventDetails.matchDetails.travelMeetTime && (
-                <p>
-                  Travel meet: {formatWhen(eventDetails.matchDetails.travelMeetTime)}
-                  {eventDetails.matchDetails.travelMeetPoint &&
-                    ` at ${eventDetails.matchDetails.travelMeetPoint}`}
-                </p>
-              )}
+              <p>Kick-off: {eventDetails.startTbc ? "TBC" : formatWhen(eventDetails.start)}</p>
+              <p>Meet time at venue: {eventDetails.matchDetails.meetTime ? formatWhen(eventDetails.matchDetails.meetTime) : "TBC"}</p>
+              <p>
+                Transport meet time: {eventDetails.matchDetails.travelMeetTime ? formatWhen(eventDetails.matchDetails.travelMeetTime) : "TBC"}
+                {eventDetails.matchDetails.travelMeetPoint && ` at ${eventDetails.matchDetails.travelMeetPoint}`}
+              </p>
               {eventDetails.matchDetails.schedule && <p>Schedule: {eventDetails.matchDetails.schedule}</p>}
               {eventDetails.matchDetails.travelAttire && <p>Travel attire: {eventDetails.matchDetails.travelAttire}</p>}
               {eventDetails.matchDetails.warmUpAttire && <p>Warm up attire: {eventDetails.matchDetails.warmUpAttire}</p>}

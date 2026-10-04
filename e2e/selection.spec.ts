@@ -11,8 +11,9 @@ async function seedMatch() {
   const hooker = `Hal ${tag}`;
   await sql`insert into event (id, title, event_type, start, "end", venue)
     values (${eventId}, ${`Match ${tag}`}, 'match', now() + interval '5 days', now() + interval '5 days 2 hours', 'Harlington')`;
-  await sql`insert into match_details (event_id, opponent, home_away, competition, meet_time, schedule)
-    values (${eventId}, 'Barts', 'home', 'bucs', now() + interval '5 days', 'Changing rooms 1.15pm')`;
+  await sql`insert into team (id, name) values ('1st XV', '1st XV') on conflict do nothing`;
+  await sql`insert into match_details (event_id, team_id, opponent, home_away, competition, meet_time, schedule)
+    values (${eventId}, '1st XV', 'Barts', 'home', 'bucs', now() + interval '5 days', 'Changing rooms 1.15pm')`;
   await sql`insert into "user" (id, name, email, email_verified, access_state, preferred_position)
     values (${crypto.randomUUID()}, ${lock}, ${`${tag}-lock@x.org`}, true, 'approved', 'Lock'),
            (${crypto.randomUUID()}, ${hooker}, ${`${tag}-hooker@x.org`}, true, 'approved', 'Hooker')`;

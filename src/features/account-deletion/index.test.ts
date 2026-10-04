@@ -82,7 +82,6 @@ describe("deleteAccount", () => {
     await db.insert(store).values({ id: "shed", name: "Shed", address: "x" });
     const unit = await createEquipmentUnit(db, { name: "Ball bag A", homeId: "shed" });
     const event = await createEvent(db, {
-      title: "Training",
       eventType: "training",
       start: new Date(Date.now() + 3_600_000),
       end: new Date(Date.now() + 7_200_000),

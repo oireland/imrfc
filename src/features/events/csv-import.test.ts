@@ -8,7 +8,7 @@ const lookups = {
   ],
 };
 
-const HEADER = "title,type,date,start_time,end_time,venue";
+const HEADER = "type,date,start_time,end_time,venue";
 
 function read(...lines: string[]) {
   return readEventsCsv(lines.join("\n"), lookups);
@@ -28,27 +28,25 @@ describe("parseCsv", () => {
 });
 
 describe("readEventsCsv", () => {
-  it("turns a Training row into an Event in London time", () => {
-    const result = read(HEADER, "Wednesday Training,training,2026-10-21,19:00,21:00,Harlington");
+  it("turns a Training row into an Event in London time, with no title or Teams", () => {
+    const result = read(HEADER, "training,2026-10-21,19:00,21:00,Harlington");
 
     expect(result).toEqual({
       ok: true,
       events: [
         {
-          title: "Wednesday Training",
           eventType: "training",
           start: new Date("2026-10-21T18:00:00Z"),
           end: new Date("2026-10-21T20:00:00Z"),
           venue: "Harlington",
           notes: "",
-          teamIds: [],
         },
       ],
     });
   });
 
   it("accepts UK dates (DD/MM/YYYY), as spreadsheets often save them, and GMT after the clocks go back", () => {
-    const result = read(HEADER, "Training,training,28/10/2026,19:00,21:00,Harlington");
+    const result = read(HEADER, "training,28/10/2026,19:00,21:00,Harlington");
 
     expect(result.ok && result.events[0].start).toEqual(new Date("2026-10-28T19:00:00Z"));
   });
@@ -59,29 +57,45 @@ describe("readEventsCsv", () => {
     expect(result.ok && result.events).toMatchObject([{ title: "Curry", eventType: "social", venue: "The Anchor, SW7" }]);
   });
 
-  it("names an untitled row after its type, and ends the next day when the end time is earlier", () => {
-    const result = read(HEADER, ",social,2026-11-06,20:00,01:00,Harlington");
+  it("needs a title for a Social, and ends the next day when the end time is earlier", () => {
+    expect(read(`title,${HEADER}`, ",social,2026-11-06,20:00,01:00,Harlington")).toEqual({
+      ok: false,
+      errors: ["Row 2: a social needs a title."],
+    });
+    const result = read(`title,${HEADER}`, "Curry,social,2026-11-06,20:00,01:00,Harlington");
 
-    expect(result.ok && result.events[0]).toMatchObject({ title: "Social", end: new Date("2026-11-07T01:00:00Z") });
+    expect(result.ok && result.events[0]).toMatchObject({ title: "Curry", end: new Date("2026-11-07T01:00:00Z") });
   });
 
-  it("reads Teams (separated by semicolons) and notes", () => {
-    const result = read(`${HEADER},teams,notes`, 'Training,training,2026-10-21,19:00,21:00,Harlington,"1st XV; 2nd xv",Bring boots');
-
-    expect(result.ok && result.events[0]).toMatchObject({ teamIds: ["1st XV", "2nd XV"], notes: "Bring boots" });
-  });
-
-  it("reads Match details, defaulting to a home friendly meeting at kick-off", () => {
+  it("ignores a title on a Training or Match, since those are titled from their details", () => {
     const result = read(
-      `${HEADER},opponent,home_away,competition,meet_time,travel_meet_time,travel_meet_point`,
-      ",match,2026-10-24,14:30,16:30,Teddington,UCL Medics,away,BUCS,13:30,12:15,South Ken station",
-      "KCL,match,2026-10-31,14:30,16:30,Harlington,KCL,,,,,",
+      `title,team,opponent,${HEADER}`,
+      "Wednesday Training,,,training,2026-10-21,19:00,21:00,Harlington",
+      "Old title,1st XV,UCL,match,2026-10-24,14:30,16:30,Harlington",
+    );
+
+    expect(result.ok && result.events.map((e) => "title" in e)).toEqual([false, false]);
+  });
+
+  it("reads notes", () => {
+    const result = read(`${HEADER},notes`, "training,2026-10-21,19:00,21:00,Harlington,Bring boots");
+
+    expect(result.ok && result.events[0]).toMatchObject({ notes: "Bring boots" });
+  });
+
+  it("reads Match details, defaulting to a home friendly with Meet Time and Travel Meet Time TBC", () => {
+    const result = read(
+      `${HEADER},team,opponent,home_away,competition,meet_time,travel_meet_time,travel_meet_point`,
+      "match,2026-10-24,14:30,,Teddington,1st XV,UCL Medics,away,BUCS,13:30,12:15,South Ken station",
+      "match,2026-10-31,14:30,16:30,Harlington,2nd xv,KCL,,,,,",
     );
 
     expect(result.ok && result.events).toEqual([
       expect.objectContaining({
-        title: "vs UCL Medics",
+        start: new Date("2026-10-24T13:30:00Z"),
+        end: new Date("2026-10-24T15:30:00Z"),
         matchDetails: {
+          teamId: "1st XV",
           opponent: "UCL Medics",
           homeAway: "away",
           competition: "bucs",
@@ -91,31 +105,36 @@ describe("readEventsCsv", () => {
         },
       }),
       expect.objectContaining({
-        title: "KCL",
-        matchDetails: {
-          opponent: "KCL",
-          homeAway: "home",
-          competition: "friendly",
-          meetTime: new Date("2026-10-31T14:30:00Z"),
-        },
+        matchDetails: { teamId: "2nd XV", opponent: "KCL", homeAway: "home", competition: "friendly" },
       }),
     ]);
   });
 
+  it("reads TBC, or nothing, for a Match's kick-off, meet time and travel meet time", () => {
+    const result = read(
+      `${HEADER},team,opponent,meet_time,travel_meet_time`,
+      "match,2026-10-24,TBC,,Teddington,1st XV,UCL,tbc,TBC",
+      "match,2026-10-31,,,Teddington,1st XV,KCL,,",
+    );
+
+    expect(result.ok && result.events).toEqual([
+      expect.objectContaining({ startTbc: true, matchDetails: expect.not.objectContaining({ meetTime: expect.anything() }) }),
+      expect.objectContaining({ startTbc: true }),
+    ]);
+  });
+
   it("requires a header row naming every required column", () => {
-    const result = read("Training,training,2026-10-21,19:00,21:00,Harlington");
+    const result = read("training,2026-10-21,19:00,21:00,Harlington");
 
     expect(result).toEqual({
       ok: false,
-      errors: [
-        "The first row must be the header row. It's missing these columns: title, type, date, start_time, end_time, venue.",
-      ],
+      errors: ["The first row must be the header row. It's missing these columns: type, date, start_time, venue."],
     });
   });
 
   it("rejects columns it doesn't know, and the same column twice", () => {
     expect(read(`${HEADER},equipment`)).toEqual({ ok: false, errors: ['The header has a column we don\'t recognise: "equipment".'] });
-    expect(read(`${HEADER},Title`)).toEqual({ ok: false, errors: ['The header has "title" more than once.'] });
+    expect(read(`${HEADER},Type`)).toEqual({ ok: false, errors: ['The header has "type" more than once.'] });
   });
 
   it("says when there are no events under the header", () => {
@@ -126,9 +145,10 @@ describe("readEventsCsv", () => {
   it("lists every problem with its spreadsheet row number, and imports nothing", () => {
     const result = read(
       HEADER,
-      "Training,training,2026-10-21,19:00,21:00,Harlington",
-      "Training,rugby,2026-13-01,7pm,21:00,",
-      "Match,match,2026-10-24,14:30,16:30,Harlington",
+      "training,2026-10-21,19:00,21:00,Harlington",
+      "rugby,2026-13-01,7pm,21:00,",
+      "match,2026-10-24,14:30,16:30,Harlington",
+      "training,2026-10-24,19:00,,Harlington",
       "Too few,training",
     );
 
@@ -139,24 +159,27 @@ describe("readEventsCsv", () => {
         'Row 3: date must be YYYY-MM-DD or DD/MM/YYYY (not "2026-13-01").',
         'Row 3: start_time must be 24-hour HH:MM (not "7pm").',
         "Row 3: venue is missing.",
+        "Row 4: a match needs a team.",
         "Row 4: a match needs an opponent.",
-        "Row 5: has 2 values but the header has 6 columns.",
+        "Row 5: end_time is missing.",
+        "Row 6: has 2 values but the header has 5 columns.",
       ],
     });
   });
 
   it("rejects unknown Teams, bad match choices, and match details on other types", () => {
     const result = read(
-      `${HEADER},teams,opponent,home_away,competition`,
-      "Training,training,2026-10-21,19:00,21:00,Harlington,3rd XV,UCL,,",
-      "Match,match,2026-10-24,14:30,16:30,Harlington,,UCL,neutral,cup",
+      `${HEADER},team,opponent,home_away,competition`,
+      "training,2026-10-21,19:00,21:00,Harlington,3rd XV,UCL,,",
+      "match,2026-10-24,14:30,16:30,Harlington,3rd XV,UCL,neutral,cup",
     );
 
     expect(result).toEqual({
       ok: false,
       errors: [
-        'Row 2: there\'s no team called "3rd XV". Teams: 1st XV, 2nd XV.',
+        "Row 2: team is only for matches.",
         "Row 2: opponent is only for matches.",
+        'Row 3: there\'s no team called "3rd XV". Teams: 1st XV, 2nd XV.',
         'Row 3: home_away must be home or away (not "neutral").',
         'Row 3: competition must be bucs, lusl, friendly or other (not "cup").',
       ],
@@ -164,7 +187,7 @@ describe("readEventsCsv", () => {
   });
 
   it("caps an import at 500 events", () => {
-    const rows = Array.from({ length: 501 }, () => "Training,training,2026-10-21,19:00,21:00,Harlington");
+    const rows = Array.from({ length: 501 }, () => "training,2026-10-21,19:00,21:00,Harlington");
 
     expect(read(HEADER, ...rows)).toEqual({ ok: false, errors: ["That's 501 events — import at most 500 at a time."] });
   });

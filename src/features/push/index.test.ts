@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
-import { createEvent, type NewEvent } from "@/features/events";
+import { createEvent, listTeams, type NewEvent } from "@/features/events";
 import { claimDuty, ensureDuties } from "@/features/duties";
 import { createEquipmentUnit } from "@/features/equipment";
 import { store } from "@/features/stores";
@@ -30,6 +30,7 @@ async function setup() {
     { id: "tom", name: "Tom Hale", email: "tom@x.org", accessState: "approved" },
     { id: "sam", name: "Sam Patel", email: "sam@x.org", accessState: "approved" },
   ]);
+  await listTeams(db);
   return db;
 }
 
@@ -92,12 +93,18 @@ describe("sendToUser", () => {
   });
 });
 
-async function makeEvent(db: Awaited<ReturnType<typeof setup>>, overrides: Partial<NewEvent> & { start: Date }) {
-  const base = { title: "Training", eventType: "training", venue: "Harlington", end: new Date(overrides.start.getTime() + 3_600_000) };
-  const input = { ...base, ...overrides } as NewEvent;
-  if (input.eventType === "match") {
-    Object.assign(input, { matchDetails: { opponent: "Barts", homeAway: "home", competition: "bucs", meetTime: input.start } });
-  }
+async function makeEvent(
+  db: Awaited<ReturnType<typeof setup>>,
+  overrides: { start: Date; title?: string; eventType?: "training" | "match" | "social" },
+) {
+  const { start, title, eventType = "training" } = overrides;
+  const common = { start, end: new Date(start.getTime() + 3_600_000), venue: eventType === "training" ? (title ?? "Harlington") : "Harlington" };
+  const input: NewEvent =
+    eventType === "match"
+      ? { ...common, eventType, matchDetails: { teamId: "1st XV", opponent: title ?? "Barts", homeAway: "home", competition: "bucs", meetTime: start } }
+      : eventType === "social"
+        ? { ...common, eventType, title: title ?? "Social" }
+        : { ...common, eventType };
   const made = await createEvent(db, input);
   if (!made.ok) throw new Error(made.error);
   return made.event.id;
@@ -128,8 +135,8 @@ describe("notifyMorningOf", () => {
 
     expect(result).toEqual({ notified: 2 });
     const byEndpoint = new Map(sent.map((s) => [s.subscription.endpoint, s.message]));
-    expect(byEndpoint.get("https://push/tom")).toEqual({ title: "Today: Training", body: "You're on duty for it.", url: "/" });
-    expect(byEndpoint.get("https://push/sam")).toEqual({ title: "Today: Training", body: "You said you're in — see you there.", url: "/" });
+    expect(byEndpoint.get("https://push/tom")).toEqual({ title: "Today: Training @ Training", body: "You're on duty for it.", url: "/" });
+    expect(byEndpoint.get("https://push/sam")).toEqual({ title: "Today: Training @ Training", body: "You said you're in — see you there.", url: "/" });
   });
 
   it("does nothing when nobody has anything on today", async () => {

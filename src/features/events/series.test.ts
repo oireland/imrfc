@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
-import { cancelEvent, getEvent, listTeams } from "./index";
+import { cancelEvent } from "./index";
 import {
   createSeries,
   editOccurrence,
@@ -14,7 +14,6 @@ async function setup() {
   const db = await createTestDb();
   await migrate(db);
   const pattern: NewSeries = {
-    title: "Wednesday Training",
     weekdays: [3],
     startTime: "19:00",
     endTime: "20:30",
@@ -43,7 +42,7 @@ describe("createSeries", () => {
     ]);
     expect(occurrences[0]).toMatchObject({
       eventType: "training",
-      title: "Wednesday Training",
+      title: "Training @ Harlington",
       venue: "Harlington",
       end: new Date("2999-01-09T20:30:00Z"),
     });
@@ -67,17 +66,6 @@ describe("createSeries", () => {
     ]);
   });
 
-  it("gives each Occurrence the Series' Teams", async () => {
-    const { db, pattern } = await setup();
-    const [firstXV] = await listTeams(db);
-
-    const result = await createSeries(db, { ...pattern, teamIds: [firstXV.id] });
-
-    if (!result.ok) throw new Error(result.error);
-    const [first] = await listOccurrences(db, result.series.id);
-    expect((await getEvent(db, first.id))?.teams.map((t) => t.name)).toEqual(["1st XV"]);
-  });
-
   it("rejects an invalid Series and creates nothing", async () => {
     const { db, pattern } = await setup();
 
@@ -89,31 +77,50 @@ describe("createSeries", () => {
   it("creates every Occurrence as a Social Event when the Series is Social", async () => {
     const { db, pattern } = await setup();
 
-    const result = await createSeries(db, { ...pattern, eventType: "social" });
+    const result = await createSeries(db, { ...pattern, eventType: "social", title: "Quiz night" });
 
     if (!result.ok) throw new Error(result.error);
     const occurrences = await listOccurrences(db, result.series.id);
-    expect(occurrences.every((o) => o.eventType === "social")).toBe(true);
+    expect(occurrences.every((o) => o.eventType === "social" && o.title === "Quiz night")).toBe(true);
+  });
+
+  it("rejects a Social Series without a title", async () => {
+    const { db, pattern } = await setup();
+
+    const result = await createSeries(db, { ...pattern, eventType: "social", title: " " });
+
+    expect(result).toEqual({ ok: false, error: "Give the series a title." });
   });
 });
 
 describe("editOccurrence", () => {
-  it("'this one' changes only that Occurrence", async () => {
+  it("'this one' changes only that Occurrence, and its title follows the venue", async () => {
     const { db, pattern } = await setup();
     const created = await createSeries(db, pattern);
     if (!created.ok) throw new Error(created.error);
     const [, second] = await listOccurrences(db, created.series.id);
 
-    await editOccurrence(db, second.id, { venue: "Hyde Park", title: "Special" }, "this");
+    await editOccurrence(db, second.id, { venue: "Hyde Park" }, "this");
 
     const after = await listOccurrences(db, created.series.id);
     expect(titles(after)).toEqual([
-      "Wednesday Training",
-      "Special",
-      "Wednesday Training",
-      "Wednesday Training",
+      "Training @ Harlington",
+      "Training @ Hyde Park",
+      "Training @ Harlington",
+      "Training @ Harlington",
     ]);
     expect(after.map((o) => o.venue)).toEqual(["Harlington", "Hyde Park", "Harlington", "Harlington"]);
+  });
+
+  it("retitles a Social Occurrence by hand", async () => {
+    const { db, pattern } = await setup();
+    const created = await createSeries(db, { ...pattern, eventType: "social", title: "Quiz" });
+    if (!created.ok) throw new Error(created.error);
+    const [first] = await listOccurrences(db, created.series.id);
+
+    await editOccurrence(db, first.id, { title: "Special quiz" }, "this");
+
+    expect(titles(await listOccurrences(db, created.series.id))).toEqual(["Special quiz", "Quiz", "Quiz", "Quiz"]);
   });
 
   it("'this and future' leaves earlier Occurrences alone", async () => {
@@ -140,10 +147,10 @@ describe("editOccurrence", () => {
     const [first, second, third] = await listOccurrences(db, created.series.id);
     await editOccurrence(db, third.id, { venue: "Hyde Park" }, "this");
 
-    await editOccurrence(db, second.id, { title: "Renamed" }, "future");
+    await editOccurrence(db, second.id, { venue: "The Union" }, "future");
 
     const after = await listOccurrences(db, created.series.id);
-    expect(titles(after)).toEqual([first.title, "Renamed", "Wednesday Training", "Renamed"]);
+    expect(titles(after)).toEqual([first.title, "Training @ The Union", "Training @ Hyde Park", "Training @ The Union"]);
     expect(after[2].venue).toBe("Hyde Park");
   });
 
@@ -153,11 +160,11 @@ describe("editOccurrence", () => {
     if (!created.ok) throw new Error(created.error);
     const [first] = await listOccurrences(db, created.series.id);
 
-    await editOccurrence(db, first.id, { title: "Renamed" }, "future");
+    await editOccurrence(db, first.id, { venue: "The Union" }, "future");
     await extendSeries(db, created.series.id, "2999-02-06");
 
     const after = await listOccurrences(db, created.series.id);
-    expect(titles(after).at(-1)).toBe("Renamed");
+    expect(titles(after).at(-1)).toBe("Training @ The Union");
   });
 
   it("rejects an edit that would end before it starts", async () => {
@@ -230,17 +237,16 @@ describe("Query efficiency", () => {
     return () => count;
   }
 
-  it("creates a Series' Occurrences and their Teams in a fixed number of inserts, however many Occurrences", async () => {
+  it("creates a Series' Occurrences in a fixed number of inserts, however many Occurrences", async () => {
     const { db, pattern } = await setup();
-    const teams = await listTeams(db);
 
     const fewInserts = countInserts(db);
-    const short = await createSeries(db, { ...pattern, endDate: pattern.startDate, teamIds: [teams[0].id] });
+    const short = await createSeries(db, { ...pattern, endDate: pattern.startDate });
     if (!short.ok) throw new Error(short.error);
     const insertsForOneOccurrence = fewInserts();
 
     const manyInserts = countInserts(db);
-    const long = await createSeries(db, { ...pattern, endDate: "2999-03-27", teamIds: [teams[0].id] });
+    const long = await createSeries(db, { ...pattern, endDate: "2999-03-27" });
     if (!long.ok) throw new Error(long.error);
     expect(await listOccurrences(db, long.series.id)).toHaveLength(12);
     expect(manyInserts()).toBe(insertsForOneOccurrence);

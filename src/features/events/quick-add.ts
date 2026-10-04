@@ -3,60 +3,57 @@ import { londonToUtc, type SeriesPattern } from "./series-rules";
 
 export type QuickEventInput = {
   date: string; // YYYY-MM-DD, London
-  startTime: string; // HH:MM, London
-  endTime: string;
+  startTime: string; // HH:MM, London; a Match's kick-off, which is ignored when `kickoffTbc`
+  endTime?: string; // HH:MM, London; Training and Social only, a Match runs two hours
   type: EventType;
-  title: string;
+  title?: string; // Social only; every other Event is titled from its details
   venue: string;
-  opponent?: string;
+  kickoffTbc?: boolean; // Matches only
+  teamId?: string; // Matches only
+  opponent?: string; // Matches only
   homeAway?: HomeAway;
   competition?: Competition;
-  meetTime?: string; // HH:MM, London; Matches only, defaults to kick-off
-  travelMeetTime?: string; // HH:MM, London; Matches only
+  meetTime?: string; // HH:MM, London; Matches only, blank means TBC
+  travelMeetTime?: string; // HH:MM, London; Matches only, blank means TBC
   travelMeetPoint?: string; // Matches only
   schedule?: string; // Matches only, for the Team Sheet
   travelAttire?: string;
   warmUpAttire?: string;
   postMatchActivity?: string;
   notes?: string;
-  teamIds?: string[]; // none means the whole club
   repeatUntil?: string; // YYYY-MM-DD, London; Training and Social only — repeat weekly on this day up to and including this date
 };
 
-const DEFAULT_TITLE: Record<EventType, string> = { training: "Training", match: "Match", social: "Social" };
+const MATCH_LENGTH_MS = 2 * 60 * 60 * 1000;
 
 /**
- * Turns the tap-a-day quick-add form into a NewEvent. Times are London wall clock;
- * an end time before the start time means the Event runs past midnight.
+ * Turns the quick-add form into a NewEvent. Times are London wall clock; an end time before
+ * the start time means the Event runs past midnight. A Match ends two hours after kick-off, and
+ * while its kick-off is TBC it just covers the day.
  */
 export function buildQuickEvent(input: QuickEventInput): NewEvent {
-  const start = londonToUtc(input.date, input.startTime);
-  let end = londonToUtc(input.date, input.endTime);
-  if (end < start) {
-    const next = new Date(`${input.date}T12:00:00Z`);
-    next.setUTCDate(next.getUTCDate() + 1);
-    end = londonToUtc(next.toISOString().slice(0, 10), input.endTime);
-  }
-  const common = {
-    start,
-    end,
-    venue: input.venue.trim(),
-    notes: (input.notes ?? "").trim(),
-    teamIds: input.teamIds ?? [],
-  };
+  const common = { venue: input.venue.trim(), notes: (input.notes ?? "").trim() };
 
   if (input.type === "match") {
-    const opponent = (input.opponent ?? "").trim();
+    const tbc = !!input.kickoffTbc;
+    const start = londonToUtc(input.date, tbc ? "00:00" : input.startTime);
+    const end = tbc ? londonToUtc(input.date, "23:59") : new Date(start.getTime() + MATCH_LENGTH_MS);
+    const at = (time?: string) => (time ? londonToUtc(input.date, time) : undefined);
+    const meetTime = at(input.meetTime);
+    const travelMeetTime = at(input.travelMeetTime);
     return {
       ...common,
       eventType: "match",
-      title: input.title.trim() || (opponent ? `vs ${opponent}` : DEFAULT_TITLE.match),
+      start,
+      end,
+      ...(tbc && { startTbc: true }),
       matchDetails: {
-        opponent,
+        teamId: input.teamId ?? "",
+        opponent: (input.opponent ?? "").trim(),
         homeAway: input.homeAway ?? "home",
         competition: input.competition ?? "friendly",
-        meetTime: input.meetTime ? londonToUtc(input.date, input.meetTime) : start,
-        ...(input.travelMeetTime && { travelMeetTime: londonToUtc(input.date, input.travelMeetTime) }),
+        ...(meetTime && { meetTime }),
+        ...(travelMeetTime && { travelMeetTime }),
         ...(input.travelMeetPoint?.trim() && { travelMeetPoint: input.travelMeetPoint.trim() }),
         ...(input.schedule?.trim() && { schedule: input.schedule.trim() }),
         ...(input.travelAttire?.trim() && { travelAttire: input.travelAttire.trim() }),
@@ -65,7 +62,17 @@ export function buildQuickEvent(input: QuickEventInput): NewEvent {
       },
     };
   }
-  return { ...common, eventType: input.type, title: input.title.trim() || DEFAULT_TITLE[input.type] };
+
+  const start = londonToUtc(input.date, input.startTime);
+  const endTime = input.endTime ?? input.startTime;
+  let end = londonToUtc(input.date, endTime);
+  if (end < start) {
+    const next = new Date(`${input.date}T12:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    end = londonToUtc(next.toISOString().slice(0, 10), endTime);
+  }
+  if (input.type === "social") return { ...common, eventType: "social", title: (input.title ?? "").trim(), start, end };
+  return { ...common, eventType: "training", start, end };
 }
 
 /** Turns a quick-add form with "repeat weekly until" set into a Series starting on its date. */
@@ -73,15 +80,14 @@ export function buildQuickSeries(
   input: QuickEventInput & { repeatUntil: string; type: "training" | "social" },
 ): SeriesPattern {
   return {
-    title: input.title.trim() || DEFAULT_TITLE[input.type],
+    ...(input.type === "social" && { title: (input.title ?? "").trim() }),
     eventType: input.type,
     weekdays: [new Date(`${input.date}T12:00:00Z`).getUTCDay()],
     startTime: input.startTime,
-    endTime: input.endTime,
+    endTime: input.endTime ?? input.startTime,
     venue: input.venue.trim(),
     startDate: input.date,
     endDate: input.repeatUntil,
     notes: (input.notes ?? "").trim(),
-    teamIds: input.teamIds ?? [],
   };
 }

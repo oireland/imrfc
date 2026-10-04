@@ -1,4 +1,5 @@
 // ICS (RFC 5545) rendering for the Calendar Feed. Pure, no database or Next.js.
+import { londonParts } from "@/features/events";
 
 export type FeedEvent = {
   id: string;
@@ -8,10 +9,17 @@ export type FeedEvent = {
   venue: string;
   description: string;
   cancelled: boolean;
+  /** The start time isn't known yet, so it is an all-day entry. */
+  startTbc?: boolean;
 };
 
 const escapeText = (s: string) =>
   s.replace(/\\/g, "\\\\").replace(/;/g, "\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+
+/** The day after a YYYY-MM-DD date, as YYYYMMDD. */
+function nextDay(date: string): string {
+  return new Date(Date.parse(`${date}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10).replace(/-/g, "");
+}
 
 const utc = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 
@@ -44,8 +52,9 @@ export function buildCalendar(events: FeedEvent[], now: Date): string {
       "BEGIN:VEVENT",
       `UID:${e.id}@imrfc`,
       `DTSTAMP:${utc(now)}`,
-      `DTSTART:${utc(e.start)}`,
-      `DTEND:${utc(e.end)}`,
+      ...(e.startTbc
+        ? [`DTSTART;VALUE=DATE:${londonParts(e.start).date.replace(/-/g, "")}`, `DTEND;VALUE=DATE:${nextDay(londonParts(e.start).date)}`]
+        : [`DTSTART:${utc(e.start)}`, `DTEND:${utc(e.end)}`]),
       `SUMMARY:${escapeText(e.title)}`,
       `LOCATION:${escapeText(e.venue)}`,
       ...(e.description ? [`DESCRIPTION:${escapeText(e.description)}`] : []),

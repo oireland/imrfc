@@ -13,8 +13,9 @@ async function seedEvents(run: string) {
   const matchId = crypto.randomUUID();
   await sql`insert into event (id, title, event_type, start, "end", venue)
     values (${matchId}, ${match}, 'match', now() + interval '4 hours', now() + interval '6 hours', 'Harlington')`;
-  await sql`insert into match_details (event_id, opponent, home_away, competition, meet_time)
-    values (${matchId}, 'Barts', 'home', 'friendly', now() + interval '3 hours')`;
+  await sql`insert into team (id, name) values ('1st XV', '1st XV') on conflict do nothing`;
+  await sql`insert into match_details (event_id, team_id, opponent, home_away, competition, meet_time)
+    values (${matchId}, '1st XV', 'Barts', 'home', 'friendly', now() + interval '3 hours')`;
   await sql.end();
   return { training, match };
 }
@@ -59,7 +60,7 @@ test("Events has its own tab, a bookmarkable Agenda, a type filter, and replies 
 test("replies to Training and Matches from the Calendar's selected day", async ({ page }) => {
   const run = crypto.randomUUID().slice(0, 8);
   const { training, match } = await seedEvents(run);
-  // A Member, so tapping a day selects it rather than opening Add Event.
+  // A Member, who has no Add button.
   await signIn(page, { email: await seedUser(), next: "/events?view=calendar" });
 
   const day = page.getByRole("button", { name: new RegExp(training) });

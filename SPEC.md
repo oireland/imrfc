@@ -81,19 +81,20 @@ Any User can delete their own account from Profile; an Admin can delete anyone's
 
 ## Events
 
-- Common fields: title, Event Type, start, end, Venue, notes, Teams (0..n; none = whole club), Cancelled flag.
-- **Match** adds: opponent, home/away, competition (BUCS / LUSL / Friendly / Other), Kick-off (= start), Meet Time, Travel Meet Time + travel meet point.
-- **Social**: common fields only.
-- **Training**: common fields; usually belongs to a Series.
+- The form starts with the **Event Type**, which decides the rest. Common fields: Event Type, start, end, Venue, notes, Cancelled flag. The type is chosen when an Event is created and fixed afterwards.
+- **Titles are derived**, except a Social's: a Training is "Training @ Venue" and a Match is "Team vs Opponent" (e.g. "1st XV vs St Georges"). The title is stored and re-derived whenever the Event is edited.
+- **Training**: common fields; always for the whole club (no Team); usually belongs to a Series.
+- **Match**: Team playing (exactly one, required), opponent, home/away, Venue, date, then **Kick-off, Meet Time (at the venue) and Transport Meet Time**, each a time or **TBC**, then competition (BUCS / LUSL / Friendly / Other) and the transport meet point. There is no end time: a Match runs two hours from Kick-off, or covers the whole day while Kick-off is TBC (the calendar shows "TBC", the Calendar Feed an all-day entry). Meet Time and Transport Meet Time start as TBC and display "TBC" for home and away Matches alike. Notify the team lists any that are still TBC among the things missing (Transport only for an away Match).
+- **Social**: its own title, plus the common fields; for the whole club (no Team).
 - Type-specific details are held so that new Event Types can add fields without changing existing ones.
-- Teams are seeded (1st XV, 2nd XV); Users do not belong to Teams. Everyone sees every Event.
+- Teams are seeded (1st XV, 2nd XV); Users do not belong to Teams. Only a Match has a Team. Everyone sees every Event.
 - Events list: Upcoming (default) and Past tabs. Past Events are never deleted.
-- **Import from CSV** (Committee): upload a CSV to create many Events at once. The header row is required (column names, any order, optional columns may be left out); dates are `YYYY-MM-DD` or `DD/MM/YYYY`, times 24-hour London; the venue is free text and Teams are matched by name. All or nothing — any bad row means nothing is created and every problem is listed by row. The page offers a downloadable template and a popup describing every column. Up to 500 Events per file.
+- **Import from CSV** (Committee): upload a CSV to create many Events at once. The header row is required (column names, any order, optional columns may be left out); dates are `YYYY-MM-DD` or `DD/MM/YYYY`, times 24-hour London; the venue is free text and a Match's team is matched by name. A Training or Match is titled from its details, so a `title` column is only read for Socials. For a Match, `team` and `opponent` are required, the kick-off (`start_time`) and the meet times can be `TBC` or blank, and `end_time` is ignored. All or nothing — any bad row means nothing is created and every problem is listed by row. The page offers a downloadable template and a popup describing every column. Up to 500 Events per file.
 - **Cancelled** Events stay visible with a clear cancelled marker; their Duties are voided.
 
 ### Series
 
-- Defines: title, weekday(s), start/end time, Venue, Teams, start date, **end date** (e.g. end of term), optional Series Checklist.
+- Defines: weekday(s), start/end time, Venue, start date, **end date** (e.g. end of term), optional Series Checklist. A Training Series has no title of its own (its Occurrences are "Training @ Venue"); a Social Series is titled by hand.
 - Saving a Series creates all its Occurrences immediately (no scheduled job).
 - Editing an Occurrence offers **this one** or **this and future**. "This and future" never touches past Occurrences or Occurrences already edited individually (overrides preserved).
 - Extending a Series' end date creates the extra Occurrences.
@@ -301,7 +302,7 @@ push notifications — no paid service, using the Web Push standard (see [ADR 00
 - **The crest's colours are accents only:** gold marks what is yours (Your Duty markers, the active tab dot, the "With you" Equipment group); navy marks your next Duty and Matches.
 - **Home:** greeting ("Evening, Ollie."), Your duties as small 2-up cards (the next one navy), then **What's coming up** with Calendar and Agenda tabs and the same All · Training · Matches · Socials filter as Events; its title (with a chevron) links to Events. Events uses the same view, plus Past events. The tab and filter are in the URL (`?view=agenda&type=match`) so either can be bookmarked.
 - **Agenda** (and the selected day's list under the Calendar): each Training and Match shows your reply ("You're in · Change" / "You're out · Change") or, if you haven't replied and still can, I'm in / I'm out buttons; I'm out asks why, as on Event detail.
-- **Calendar:** a month grid where every Event is readable in its day (name wraps to three lines, then its time); Training, Match and Social have distinct colours; your Duties get a gold edge. Tap a day to select it and see its Events; Committee tap again (or an empty day) to quick-add an Event, Google-Calendar style.
+- **Calendar:** a month grid where every Event is readable in its day (name wraps to three lines, then its time); Training, Match and Social have distinct colours; your Duties get a gold edge. Tapping a day selects it and scrolls down to its list of Events; it never opens anything. Committee add an Event with the **Add** button beside that day's heading, which opens the New event sheet on that date.
 - **Copy sounds like a teammate talking**, not the system: plain sentences about who is doing what ("Nobody is taking Tackle Shields to Alumni Day", "You've got: Cones & Ball Bag", "Tom gave it to Priya"). Domain terms stay the same words but go lower-case in running text ("claim a duty", "no events yet"); never build possessives or labels from them ("Tackle Shields's To Duty", "Holder has no To Duty").
 
 | Token | Light | Dark |
