@@ -221,7 +221,7 @@ An Event produced by a Series. It can be edited on its own ("this one") or with 
 
 **Cancelled**:
 An Event that will not happen but stays visible, marked as cancelled.
-_Avoid_: Deleted
+_Avoid_: Deleted (an Admin can delete an Event for good, but that is not cancelling it)
 
 ## Duties
 

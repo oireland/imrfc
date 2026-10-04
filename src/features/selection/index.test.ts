@@ -4,7 +4,7 @@ import { createTestDb } from "@/test/db";
 import { saveReply } from "@/features/availability";
 import { createEvent, listTeams, type NewEvent } from "@/features/events";
 import { user } from "@/features/users";
-import { addShirt, clearShirt, getBoard, pickGuest, pickPlayer, removeShirt, setRoles, swapShirts } from "./index";
+import { addShirt, clearShirt, deleteSelectionForEvent, getBoard, pickGuest, pickPlayer, removeShirt, setRoles, swapShirts } from "./index";
 
 const now = new Date("2026-10-01T12:00:00Z");
 const tom = { id: "tom", committee: true };
@@ -197,6 +197,20 @@ describe("clearShirt", () => {
     await pickPlayer(db, { eventId, shirt: 4, userId: "jo", viewer: tom }, now);
     await clearShirt(db, { eventId, shirt: 4, viewer: tom }, now);
     expect((await shirtOf(db, eventId, 4)).occupant).toBeNull();
+  });
+});
+
+describe("deleteSelectionForEvent", () => {
+  it("removes an Event's picks, leaving other Events' alone", async () => {
+    const db = await setup();
+    const gone = await makeMatch(db, "2026-10-03T13:00:00Z");
+    const kept = await makeMatch(db, "2026-10-10T13:00:00Z");
+    for (const eventId of [gone, kept]) await pickPlayer(db, { eventId, shirt: 4, userId: "jo", viewer: tom }, now);
+
+    await deleteSelectionForEvent(db, gone);
+
+    expect((await shirtOf(db, gone, 4)).occupant).toBeNull();
+    expect((await shirtOf(db, kept, 4)).occupant).toMatchObject({ userId: "jo" });
   });
 });
 

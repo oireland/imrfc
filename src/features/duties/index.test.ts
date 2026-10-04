@@ -7,6 +7,7 @@ import { createEquipmentUnit, getPortions, listMovementLog, raiseQuantity, recor
 import { addToChecklist, setChecklistItemCount } from "@/features/checklists";
 import { cancelEvent, createEvent } from "@/features/events";
 import { user } from "@/features/users";
+import { duty, dutyUser } from "./schema";
 import {
   actOnDuty,
   assignDuty,
@@ -27,6 +28,7 @@ import {
   markUnconfirmed,
   releaseUpcomingDuties,
   voidDutiesForEvent,
+  deleteDutiesForEvent,
   type Duty,
 } from "./index";
 
@@ -411,6 +413,18 @@ describe("Duties", () => {
 
     expect(await confirmDuty(db, to.id, { id: "tom", role: "member" })).toMatchObject({ ok: false });
     expect(await whereaboutsOf(db, equipment.id)).toMatchObject({ whereaboutsType: "store" });
+  });
+
+  it("deleteDutiesForEvent removes an Event's Duties and who was on them, leaving other Events' alone", async () => {
+    const { db, equipment, to } = await setup();
+    await claimDuty(db, to.id, "tom");
+    await ensureDuties(db, "e2", [equipment.id]);
+
+    await deleteDutiesForEvent(db, "e1");
+
+    expect(await db.select({ eventId: duty.eventId }).from(duty).where(eq(duty.eventId, "e1"))).toEqual([]);
+    expect(await db.select().from(dutyUser)).toEqual([]);
+    expect(await db.select().from(duty).where(eq(duty.eventId, "e2"))).toHaveLength(2);
   });
 
   describe("Unconfirmed", () => {

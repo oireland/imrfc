@@ -218,6 +218,15 @@ export async function cancelEvent(db: Db, id: string) {
   await db.update(event).set({ cancelled: true }).where(eq(event.id, id));
 }
 
+/**
+ * Removes an Event for good, with its Match details. Other features' records of it
+ * (Duties, Availability, selection…) go through their own `deleteFor…` functions.
+ */
+export async function deleteEvent(db: Db, id: string) {
+  await db.delete(matchDetails).where(eq(matchDetails.eventId, id));
+  await db.delete(event).where(eq(event.id, id));
+}
+
 // Re-exported for classification in read paths that already have an Event row.
 export function eventStatus(row: { end: Date }): "upcoming" | "past" {
   return classifyEvent(row, new Date());

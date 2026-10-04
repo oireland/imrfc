@@ -6,7 +6,7 @@ import { account, session, user } from "./schema";
 export { resolveNewUser } from "./access";
 export type { AccessState, Role } from "./access";
 export { displayName } from "./display-name";
-export { canAccessApp, canDeleteAccount, canManageUsers, isCommitteeOrAbove } from "./permissions";
+export { canAccessApp, canDeleteAccount, canDeleteEvent, canManageUsers, isCommitteeOrAbove } from "./permissions";
 export { RUGBY_POSITIONS } from "./positions";
 export type { RugbyPosition } from "./positions";
 // Other features' schema.ts files reference this table for foreign keys.

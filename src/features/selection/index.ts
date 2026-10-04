@@ -4,7 +4,7 @@ import { getEvent, listEventsBetween, londonParts, londonToUtc, type Event, type
 import { listPlayers } from "@/features/players";
 import { displayName, listApprovedUsers, type RugbyPosition } from "@/features/users";
 import { DEFAULT_SHIRTS, fitFor, positionOfShirt, type Candidate, type Fit } from "./shirts";
-import { selectionPitch, selectionShirt } from "./schema";
+import { selectionNotice, selectionPitch, selectionSent, selectionShirt, teamNaming } from "./schema";
 import type { Role } from "./sheet";
 
 export { DEFAULT_SHIRTS, fitFor, positionOfShirt, sortForShirt, STARTING_SHIRTS } from "./shirts";
@@ -258,4 +258,13 @@ export async function removeShirt(db: Db, input: { eventId: string; viewer: View
   if (await occupantRow(db, { eventId: input.eventId, shirt: count })) return { ok: false, error: `Empty shirt ${count} first.` };
   await db.update(selectionPitch).set({ shirtCount: count - 1 }).where(eq(selectionPitch.eventId, input.eventId));
   return { ok: true };
+}
+
+/** Removes everything picked, named and sent for a deleted Event. */
+export async function deleteSelectionForEvent(db: Db, eventId: string) {
+  await db.delete(selectionShirt).where(eq(selectionShirt.eventId, eventId));
+  await db.delete(selectionPitch).where(eq(selectionPitch.eventId, eventId));
+  await db.delete(selectionSent).where(eq(selectionSent.eventId, eventId));
+  await db.delete(selectionNotice).where(eq(selectionNotice.eventId, eventId));
+  await db.delete(teamNaming).where(eq(teamNaming.eventId, eventId));
 }

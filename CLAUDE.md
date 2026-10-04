@@ -14,7 +14,7 @@ Events and equipment-tracking app for Imperial Medicals RFC. Read before working
 - **Features talk through public entry points.** A feature imports another feature's `index.ts`, never its internals. New capabilities (e.g. Availability) arrive as new features, not edits to existing ones.
 - **Mobile-first UI.** Design at phone width first; shadcn/ui components; colours only from the theme tokens (palette in SPEC → Look and feel).
 - **Times are Europe/London.** Store UTC, convert at the edges, and test across BST changes.
-- **Nothing is hard-deleted** — Equipment Units, Stores and Events are archived, Retired or Cancelled.
+- **Nothing is hard-deleted** — Equipment Units, Stores and Events are archived, Retired or Cancelled. The one exception: an Admin may delete an Event for good.
 - Deployment to Vercel waits until the app is fully working locally.
 
 ## Environment
