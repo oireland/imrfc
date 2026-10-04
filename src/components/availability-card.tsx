@@ -34,6 +34,7 @@ export function AvailabilityCard({
   announce,
   nudge,
   dismiss,
+  retry,
 }: {
   availability: Availability;
   viewerId: string;
@@ -46,6 +47,7 @@ export function AvailabilityCard({
   announce: (replyBy: { date: string; time: string } | null) => Promise<SendResult>;
   nudge: (playerIds: string[]) => Promise<SendResult>;
   dismiss: (askId: string) => Promise<Result>;
+  retry: (askId: string) => Promise<SendResult>;
 }) {
   const { summary, myReply, open, canReplyForSelf, canReplyForOthers, announcement, canAnnounce, canNudge, asks } = availability;
   const router = useRouter();
@@ -87,6 +89,20 @@ export function AvailabilityCard({
     startTransition(async () => {
       const result = await dismiss(askId);
       if (!result.ok) toast.error(result.error);
+    });
+  }
+
+  /** Emails the people a failed Announce or Nudge missed, and watches how it goes. */
+  function retryAsk(askId: string) {
+    startTransition(async () => {
+      const result = await retry(askId);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.loading(`Trying ${people(result.sending)} again…`, { id: askId });
+      void watchAsk(askId, router.refresh);
+      router.refresh();
     });
   }
 
@@ -136,7 +152,7 @@ export function AvailabilityCard({
 
       <div className="flex flex-col gap-4 rounded-3xl bg-card px-4 py-4 shadow-card">
         {asks.map((ask) => (
-          <AskLine key={ask.id} ask={ask} pending={pending} onDismiss={() => dismissAsk(ask.id)} />
+          <AskLine key={ask.id} ask={ask} pending={pending} onDismiss={() => dismissAsk(ask.id)} onRetry={() => retryAsk(ask.id)} />
         ))}
 
         {announcement && (
@@ -393,7 +409,7 @@ async function watchAsk(askId: string, refresh: () => void) {
 }
 
 /** An Announce or Nudge still sending, or one that didn't reach everyone, until it's dismissed. */
-function AskLine({ ask, pending, onDismiss }: { ask: AskNotice; pending: boolean; onDismiss: () => void }) {
+function AskLine({ ask, pending, onDismiss, onRetry }: { ask: AskNotice; pending: boolean; onDismiss: () => void; onRetry: () => void }) {
   if (ask.status === "sending") {
     return (
       <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -404,7 +420,12 @@ function AskLine({ ask, pending, onDismiss }: { ask: AskNotice; pending: boolean
   }
   return (
     <div role="alert" className="flex items-start gap-2 rounded-xl bg-destructive/10 p-3 text-sm text-destructive-text">
-      <p className="flex-1">{failedMessage(ask)}</p>
+      <div className="flex flex-1 flex-col items-start gap-2">
+        <p>{failedMessage(ask)}</p>
+        <button type="button" onClick={onRetry} disabled={pending} className="rounded-lg bg-destructive/10 px-3 py-1.5 text-sm font-semibold hover:bg-destructive/20 disabled:opacity-60">
+          Try again
+        </button>
+      </div>
       <button
         type="button"
         onClick={onDismiss}

@@ -76,4 +76,9 @@ export const matchDetails = pgTable("match_details", {
   meetTime: timestamp("meet_time", { withTimezone: true }).notNull(),
   travelMeetTime: timestamp("travel_meet_time", { withTimezone: true }),
   travelMeetPoint: text("travel_meet_point"),
+  // What goes on the Team Sheet: the day's timings and what to wear. Free text.
+  schedule: text("schedule"),
+  travelAttire: text("travel_attire"),
+  warmUpAttire: text("warm_up_attire"),
+  postMatchActivity: text("post_match_activity"),
 });

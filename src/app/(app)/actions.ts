@@ -6,6 +6,7 @@ import { saveReply, type ReplyStatus } from "@/features/availability";
 import { buildQuickEvent, buildQuickSeries, createEvent, createSeries, type QuickEventInput } from "@/features/events";
 import { isCommitteeOrAbove, setThemePreference, type ThemePreference } from "@/features/users";
 import { requireApprovedUser } from "@/lib/session";
+import { alertCommitteeLater } from "./alert-committee";
 
 /** Saves the colour theme chosen from the crest menu. */
 export async function setTheme(theme: ThemePreference) {
@@ -40,6 +41,7 @@ export async function saveMyReply(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const user = await requireApprovedUser();
   const result = await saveReply(db, { eventId, playerId: user.id, viewer: { id: user.id, committee: isCommitteeOrAbove(user.role) }, ...answer });
+  if (result.ok && answer.status === "not_available") alertCommitteeLater({ eventId, playerId: user.id });
   revalidatePath("/");
   revalidatePath("/events");
   revalidatePath(`/events/${eventId}`);

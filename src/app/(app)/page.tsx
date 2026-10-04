@@ -7,6 +7,7 @@ import { CrestThemePicker } from "@/components/crest-theme-picker";
 import { listWaitingOnReply } from "@/features/availability";
 import { joinNames, listUpcomingDutiesForUser, markUnconfirmed } from "@/features/duties";
 import { listEquipmentHeldBy, listEquipmentUnits } from "@/features/equipment";
+import { listPlayingFor } from "@/features/selection";
 import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
 import { greeting, londonDay, londonTime } from "@/lib/calendar";
 import { requireApprovedUser } from "@/lib/session";
@@ -32,8 +33,9 @@ export default async function Home() {
 
   await markUnconfirmed(db);
   const upcomingDuties = listUpcomingDutiesForUser(db, user.id);
-  const [asks, duties, held, comingUp, allEquipment, people] = await Promise.all([
+  const [asks, playing, duties, held, comingUp, allEquipment, people] = await Promise.all([
     listWaitingOnReply(db, user.id),
+    listPlayingFor(db, user.id),
     upcomingDuties,
     listEquipmentHeldBy(db, user.id),
     loadComingUp(user.id, upcomingDuties),
@@ -88,6 +90,34 @@ export default async function Home() {
       </header>
 
       <CanYouMakeIt asks={asks} now={new Date(comingUp.now)} reply={saveMyReply} />
+
+      {playing.length > 0 && (
+        <section aria-labelledby="youre-playing" className="flex flex-col gap-3">
+          <h2 id="youre-playing" className="font-heading text-[28px] leading-none">
+            You&apos;re playing
+          </h2>
+          <ul className="flex flex-col gap-2.5">
+            {playing.map((match) => (
+              <li key={match.eventId}>
+                <Link
+                  href={`/events/${match.eventId}`}
+                  className="flex items-center justify-between gap-3 rounded-[20px] bg-lead p-4 text-lead-foreground transition-transform active:scale-[0.98]"
+                >
+                  <span>
+                    <span className="block font-heading text-[21px] leading-tight">
+                      {relativeDay(match.start, comingUp.today)} · {match.bench ? "on the bench" : "starting"}
+                    </span>
+                    <span className="block text-xs text-lead-foreground/70">
+                      {match.label} · {londonTime(match.start)}
+                    </span>
+                  </span>
+                  <span className="font-heading text-[40px] leading-none">{match.shirt}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section aria-labelledby="your-duties" className="flex flex-col gap-3">
         <div className="flex items-baseline justify-between">

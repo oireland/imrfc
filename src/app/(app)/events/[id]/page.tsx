@@ -9,9 +9,12 @@ import type { KitEditing } from "@/components/kit-editing";
 import { EventDuties, type DutyEquipment, type DutySlot, type HolderOption, type SourceOption } from "@/components/event-duties";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import Link from "next/link";
 import { BackLink } from "@/components/back-link";
 import { AvailabilitySlot } from "@/components/availability-slot";
+import { TeamCard } from "@/components/team-card";
 import { ShareButton } from "@/components/share-button";
+import { buttonVariants } from "@/components/ui/button";
 import { formatWhen } from "@/lib/format-time";
 import { mapsSearchUrl } from "@/lib/maps";
 import {
@@ -52,6 +55,7 @@ import {
   londonParts,
   type QuickEventInput,
 } from "@/features/events";
+import { getTeamCard } from "@/features/selection";
 import { listStores, type Store } from "@/features/stores";
 import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
 import { requireApprovedUser } from "@/lib/session";
@@ -77,7 +81,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
 
   const committee = isCommitteeOrAbove(user.role);
   // Everything that doesn't depend on the Event itself starts at once.
-  const [eventDetails, equipmentUnits, people, stores, warnings, venues, allTeams] = await Promise.all([
+  const [eventDetails, equipmentUnits, people, stores, warnings, venues, allTeams, teamCard] = await Promise.all([
     getEvent(db, id),
     listEquipmentUnits(db),
     listApprovedUsers(db),
@@ -85,6 +89,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     listPlanWarnings(db),
     committee ? listVenues(db) : [],
     committee ? listTeams(db) : [],
+    getTeamCard(db, id, { id: user.id, committee }),
   ]);
   if (!eventDetails) notFound();
   const seriesId = eventDetails.seriesId;
@@ -337,6 +342,10 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
       meetTime: londonParts(eventDetails.matchDetails.meetTime).time,
       travelMeetTime: eventDetails.matchDetails.travelMeetTime ? londonParts(eventDetails.matchDetails.travelMeetTime).time : undefined,
       travelMeetPoint: eventDetails.matchDetails.travelMeetPoint ?? undefined,
+      schedule: eventDetails.matchDetails.schedule ?? undefined,
+      travelAttire: eventDetails.matchDetails.travelAttire ?? undefined,
+      warmUpAttire: eventDetails.matchDetails.warmUpAttire ?? undefined,
+      postMatchActivity: eventDetails.matchDetails.postMatchActivity ?? undefined,
     }),
   };
 
@@ -393,17 +402,29 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
                     ` at ${eventDetails.matchDetails.travelMeetPoint}`}
                 </p>
               )}
+              {eventDetails.matchDetails.schedule && <p>Schedule: {eventDetails.matchDetails.schedule}</p>}
+              {eventDetails.matchDetails.travelAttire && <p>Travel attire: {eventDetails.matchDetails.travelAttire}</p>}
+              {eventDetails.matchDetails.warmUpAttire && <p>Warm up attire: {eventDetails.matchDetails.warmUpAttire}</p>}
+              {eventDetails.matchDetails.postMatchActivity && <p>Post match: {eventDetails.matchDetails.postMatchActivity}</p>}
             </div>
           )}
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-            <ShareButton title={eventDetails.title} />
+            <div className="flex flex-wrap items-center gap-2">
+              <ShareButton title={eventDetails.title} size="lg" />
+              {committee && eventDetails.eventType === "match" && (
+                <Link href={`/events/${id}/selection`} className={buttonVariants({ size: "lg" })}>
+                  Pick the team
+                </Link>
+              )}
+            </div>
 
             {!eventDetails.cancelled && committee && (
               <form id={`cancel-event-${id}`} action={cancel}>
                 <ConfirmSubmit
                   formId={`cancel-event-${id}`}
                   triggerLabel="Cancel event"
+                  triggerSize="lg"
                   title="Cancel this event?"
                   description="Nobody will need to bring equipment to it. It stays in the calendar, marked as cancelled."
                   confirmLabel="Cancel event"
@@ -414,6 +435,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
         </CardContent>
       </Card>
 
+      {teamCard && <TeamCard card={teamCard} />}
       <AvailabilitySlot eventId={id} viewer={user} />
       <ClashList clashes={clashes} />
       <EventDuties

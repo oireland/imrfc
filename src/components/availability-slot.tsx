@@ -10,6 +10,7 @@ import {
   dismissAsk,
   getAvailability,
   nudge,
+  retryAsk,
   saveReply,
   type AskedEvent,
   type ReplyStatus,
@@ -20,6 +21,7 @@ import { isCommitteeOrAbove } from "@/features/users";
 import { getMailSender } from "@/lib/mail";
 import { getPushSender } from "@/lib/push";
 import { requireApprovedUser, type CurrentUser } from "@/lib/session";
+import { alertCommitteeLater } from "@/app/(app)/alert-committee";
 import { AvailabilityCard } from "./availability-card";
 
 async function currentViewer() {
@@ -52,6 +54,7 @@ export async function AvailabilitySlot({ eventId, viewer }: { eventId: string; v
   async function reply(playerId: string, answer: { status: ReplyStatus; note: string; reason: string }) {
     "use server";
     const result = await saveReply(db, { eventId, playerId, viewer: await currentViewer(), ...answer });
+    if (result.ok && answer.status === "not_available") alertCommitteeLater({ eventId, playerId });
     revalidatePath(`/events/${eventId}`);
     return result;
   }
@@ -83,6 +86,15 @@ export async function AvailabilitySlot({ eventId, viewer }: { eventId: string; v
     return result;
   }
 
+  async function retryAction(askId: string) {
+    "use server";
+    const result = await retryAsk(db, askId, await currentViewer());
+    const ask = availability.asks.find((a) => a.id === askId);
+    if (result.ok && ask) deliverLater(askId, ask.kind, { eventId, url, events: availability.events });
+    revalidatePath(`/events/${eventId}`);
+    return result;
+  }
+
   const chase =
     committee && availability.summary.noReply.length > 0
       ? chaseMessage({ events: availability.events, names: availability.summary.noReply.map((r) => r.name), url })
@@ -100,6 +112,7 @@ export async function AvailabilitySlot({ eventId, viewer }: { eventId: string; v
       announce={announceAction}
       nudge={nudgeAction}
       dismiss={dismissAction}
+      retry={retryAction}
     />
   );
 }
