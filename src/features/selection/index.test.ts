@@ -26,13 +26,11 @@ async function setup() {
 async function makeMatch(db: Awaited<ReturnType<typeof setup>>, start: string, teamId = "1st XV", overrides: Partial<NewEvent> = {}) {
   const startDate = new Date(start);
   const made = await createEvent(db, {
-    title: `${teamId} vs Barts`,
     eventType: "match",
     start: startDate,
     end: new Date(startDate.getTime() + 2 * 3_600_000),
     venue: "Harlington",
-    teamIds: [teamId],
-    matchDetails: { opponent: "Barts", homeAway: "home", competition: "bucs", meetTime: startDate },
+    matchDetails: { teamId, opponent: "Barts", homeAway: "home", competition: "bucs", meetTime: startDate },
     ...overrides,
   } as NewEvent);
   if (!made.ok) throw new Error(made.error);
@@ -71,7 +69,6 @@ describe("getBoard", () => {
     ]);
 
     const training = await createEvent(db, {
-      title: "Training",
       eventType: "training",
       start: new Date("2026-10-02T18:00:00Z"),
       end: new Date("2026-10-02T19:00:00Z"),

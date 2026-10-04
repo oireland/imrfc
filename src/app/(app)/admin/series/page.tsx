@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { BackLink } from "@/components/back-link";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
-import { createSeries, extendSeries, listSeries, listTeams, listVenues } from "@/features/events";
+import { createSeries, extendSeries, listSeries, listVenues } from "@/features/events";
 import { isCommitteeOrAbove } from "@/features/users";
 import { getCurrentUser } from "@/lib/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,11 +18,7 @@ export default async function AdminSeriesPage() {
   const user = await getCurrentUser();
   if (!user || !isCommitteeOrAbove(user.role)) redirect("/");
 
-  const [venues, teams, allSeries] = await Promise.all([
-    listVenues(db),
-    listTeams(db),
-    listSeries(db),
-  ]);
+  const [venues, allSeries] = await Promise.all([listVenues(db), listSeries(db)]);
 
   async function create(formData: FormData) {
     "use server";
@@ -36,7 +32,6 @@ export default async function AdminSeriesPage() {
       startDate: String(formData.get("startDate")),
       endDate: String(formData.get("endDate")),
       notes: String(formData.get("notes") ?? ""),
-      teamIds: formData.getAll("teamIds").map(String),
     });
     revalidatePath("/admin/series");
     revalidatePath("/events");
@@ -63,8 +58,8 @@ export default async function AdminSeriesPage() {
         <CardContent>
           <form action={create} className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="series-title">Title</Label>
-              <Input id="series-title" name="title" required />
+              <Label htmlFor="series-title">Title (Socials only)</Label>
+              <Input id="series-title" name="title" placeholder="Training is called “Training @ Venue”" />
             </div>
             <fieldset className="flex gap-3 text-sm">
               <legend className="mb-1 font-medium">Event type</legend>
@@ -103,14 +98,6 @@ export default async function AdminSeriesPage() {
               <Label htmlFor="series-venue">Venue</Label>
               <VenueInput id="series-venue" name="venue" suggestions={venues} required />
             </div>
-            <fieldset className="flex flex-col gap-1 text-sm">
-              <legend className="mb-1 font-medium">Teams (leave blank for the whole club)</legend>
-              {teams.map((t) => (
-                <label key={t.id} className="flex items-center gap-2">
-                  <input type="checkbox" name="teamIds" value={t.id} className="size-4" /> {t.name}
-                </label>
-              ))}
-            </fieldset>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="series-notes">Notes</Label>
               <Textarea id="series-notes" name="notes" />

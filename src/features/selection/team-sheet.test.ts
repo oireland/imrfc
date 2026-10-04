@@ -25,13 +25,11 @@ async function setup() {
 async function makeMatch(db: Awaited<ReturnType<typeof setup>>, start = "2026-10-03T13:30:00Z", teamId = "1st XV", meetTime = "2026-10-03T11:00:00Z", extra: Partial<Extract<NewEvent, { eventType: "match" }>["matchDetails"]> = {}) {
   const startDate = new Date(start);
   const made = await createEvent(db, {
-    title: `${teamId} vs Barts`,
     eventType: "match",
     start: startDate,
     end: new Date(startDate.getTime() + 2 * 3_600_000),
     venue: "Harlington",
-    teamIds: [teamId],
-    matchDetails: { opponent: "Barts", homeAway: "home", competition: "bucs", meetTime: new Date(meetTime), ...extra },
+    matchDetails: { teamId, opponent: "Barts", homeAway: "home", competition: "bucs", meetTime: new Date(meetTime), ...extra },
   } as NewEvent);
   if (!made.ok) throw new Error(made.error);
   return made.event.id;
@@ -52,6 +50,37 @@ describe("getTeamSheet", () => {
     ]);
 
     expect(await getTeamSheet(db, eventId, sam, now)).toBeNull();
+  });
+
+  it("prints TBC for a kick-off and meet time that aren't known yet, and lists them as missing", async () => {
+    const db = await setup();
+    const made = await createEvent(db, {
+      eventType: "match",
+      start: new Date("2026-10-03T00:00:00Z"),
+      end: new Date("2026-10-03T23:59:00Z"),
+      startTbc: true,
+      venue: "Brighton",
+      matchDetails: { teamId: "1st XV", opponent: "Brighton", homeAway: "away", competition: "friendly" },
+    });
+    if (!made.ok) throw new Error(made.error);
+    const eventId = made.event.id;
+
+    const sheet = (await getTeamSheet(db, eventId, tom, now))!;
+
+    expect(sheet.layout.details.slice(0, 2)).toEqual([
+      { label: "Kick-off", value: "TBC" },
+      { label: "Meet", value: "TBC" },
+    ]);
+    expect(sheet.missing).toEqual(
+      expect.arrayContaining(["Kick-off time is TBC", "Meet time is TBC", "Transport meet time is TBC"]),
+    );
+  });
+
+  it("only asks for a transport meet time on an away Match", async () => {
+    const db = await setup();
+    const eventId = await makeMatch(db);
+
+    expect((await getTeamSheet(db, eventId, tom, now))!.missing).not.toContain("Transport meet time is TBC");
   });
 
   it("carries the schedule, attire and post match text kept on the Match", async () => {

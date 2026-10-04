@@ -266,7 +266,6 @@ describe("Duties", () => {
       if (!made.ok) throw new Error(made.error);
       await raiseQuantity(db, made.equipmentUnit.id, "tom", quantity - 1); // Quantity now `quantity`, all at the Shed
       const created = await createEvent(db, {
-        title: "Match",
         eventType: "training",
         start: new Date(Date.now() + 3600_000),
         end: new Date(Date.now() + 7200_000),
@@ -417,7 +416,6 @@ describe("Duties", () => {
   describe("Unconfirmed", () => {
     async function pastEvent(db: Awaited<ReturnType<typeof setup>>["db"], shedId: string, hoursAgo: number) {
       const made = await createEvent(db, {
-        title: "Training",
         eventType: "training",
         start: new Date(Date.now() - (hoursAgo + 2) * 3600_000),
         end: new Date(Date.now() - hoursAgo * 3600_000),
@@ -456,7 +454,6 @@ describe("Duties", () => {
       await confirmDuty(db, to.id, { id: "tom", role: "member" });
       await confirmDuty(db, from.id, { id: "tom", role: "member" });
       const ongoing = await createEvent(db, {
-        title: "Match",
         eventType: "training",
         start: new Date(Date.now() - 3600_000),
         end: new Date(Date.now() + 3600_000),
@@ -533,14 +530,12 @@ describe("Duties", () => {
   it("releases a Blocked User from their unconfirmed Duties on upcoming Events, keeping past ones, and keeping other People on it", async () => {
     const { db, equipment } = await setup();
     const soon = await createEvent(db, {
-      title: "Training",
       eventType: "training",
       start: new Date(Date.now() + 3600_000),
       end: new Date(Date.now() + 7200_000),
       venue: "Harlington",
     });
     const past = await createEvent(db, {
-      title: "Old",
       eventType: "training",
       start: new Date(Date.now() - 7200_000),
       end: new Date(Date.now() - 3600_000),
@@ -566,11 +561,10 @@ describe("Duties", () => {
 describe("listUpcomingDutiesForUser", () => {
   async function futureEvent(db: Awaited<ReturnType<typeof setup>>["db"], shedId: string, title: string, hours: number) {
     const made = await createEvent(db, {
-      title,
       eventType: "training",
       start: new Date(Date.now() + hours * 3600_000),
       end: new Date(Date.now() + (hours + 1) * 3600_000),
-      venue: "Harlington",
+      venue: title,
     });
     if (!made.ok) throw new Error(made.error);
     return made.event;
@@ -594,7 +588,7 @@ describe("listUpcomingDutiesForUser", () => {
 
     const mine = await listUpcomingDutiesForUser(db, "tom");
 
-    expect(mine.map((m) => `${m.event.title} ${m.duty.direction}`)).toEqual([
+    expect(mine.map((m) => `${m.event.venue} ${m.duty.direction}`)).toEqual([
       "Done from",
       "Sooner to",
       "Later to",
@@ -666,7 +660,6 @@ describe("Clashes and heads-ups", () => {
     const { addToChecklist } = await import("@/features/checklists");
     const soon = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const made = await createEvent(db, {
-      title: "Training",
       eventType: "training",
       start: soon,
       end: new Date(soon.getTime() + 2 * 60 * 60 * 1000),
@@ -692,7 +685,7 @@ describe("Clashes and heads-ups", () => {
         kind: "unfilled_duty",
         equipmentUnitId: equipment.id,
         eventIds: [event.id],
-        message: "Nobody is taking Balls to or back from Training, and it starts within 48 hours.",
+        message: "Nobody is taking Balls to or back from Training @ Harlington, and it starts within 48 hours.",
       },
     ]);
   });
@@ -705,7 +698,7 @@ describe("Clashes and heads-ups", () => {
     await assignDuty(db, duties.find((d) => d.direction === "to")!.id, ["tom"]);
 
     expect((await listHeadsUps(db)).map((h) => h.message)).toEqual([
-      "Sam Okafor needs to pass Balls to Tom Reed before Training.",
+      "Sam Okafor needs to pass Balls to Tom Reed before Training @ Harlington.",
     ]);
   });
 });
@@ -726,7 +719,6 @@ describe("Query efficiency", () => {
     const { db, shed } = await setup();
     const soon = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const made = await createEvent(db, {
-      title: "Training",
       eventType: "training",
       start: soon,
       end: new Date(soon.getTime() + 2 * 60 * 60 * 1000),
@@ -753,7 +745,6 @@ describe("Query efficiency", () => {
     const { addToChecklist } = await import("@/features/checklists");
     const soon = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const made = await createEvent(db, {
-      title: "Training",
       eventType: "training",
       start: soon,
       end: new Date(soon.getTime() + 2 * 60 * 60 * 1000),
@@ -784,7 +775,6 @@ describe("Query efficiency", () => {
   async function makeEndedPickedUpDutiesDb(count: number) {
     const { db, shed } = await setup();
     const ev = await createEvent(db, {
-      title: "Training",
       eventType: "training",
       start: new Date(Date.now() - 3 * 3600_000),
       end: new Date(Date.now() - 3600_000),
@@ -818,7 +808,6 @@ describe("Query efficiency", () => {
   async function makeUpcomingClaimedDutiesDb(count: number, claimant: string) {
     const { db, shed } = await setup();
     const ev = await createEvent(db, {
-      title: "Training",
       eventType: "training",
       start: new Date(Date.now() + 3600_000),
       end: new Date(Date.now() + 7200_000),
@@ -837,7 +826,6 @@ describe("Query efficiency", () => {
   /** A training `hours` from now (negative: in the past) with the default Checklist's Balls on it. */
   async function addTraining(db: Awaited<ReturnType<typeof setup>>["db"], hours: number) {
     const made = await createEvent(db, {
-      title: "Training",
       eventType: "training",
       start: new Date(Date.now() + hours * 3600_000),
       end: new Date(Date.now() + (hours + 2) * 3600_000),
@@ -943,7 +931,7 @@ describe("Query efficiency", () => {
 
 describe("listDutyRecordForUser", () => {
   async function pastEvent(db: Awaited<ReturnType<typeof setup>>["db"], title: string, end: Date) {
-    const made = await createEvent(db, { title, eventType: "training", start: new Date(end.getTime() - 3600_000), end, venue: "Harlington" });
+    const made = await createEvent(db, { eventType: "training", start: new Date(end.getTime() - 3600_000), end, venue: title });
     if (!made.ok) throw new Error(made.error);
     return made.event;
   }
@@ -986,7 +974,7 @@ describe("listDutyRecordForUser", () => {
     const record = await listDutyRecordForUser(db, "tom", now);
 
     expect(record.season).toEqual({ done: 1, neverConfirmed: 1 });
-    expect(record.last.map((r) => r.event.title)).toEqual(["Never confirmed", "Done", "Last season"]);
+    expect(record.last.map((r) => r.event.title)).toEqual(["Training @ Never confirmed", "Training @ Done", "Training @ Last season"]);
   });
 });
 

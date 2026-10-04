@@ -193,17 +193,24 @@ _Avoid_: Fixture (a Match is a fixture; not all Events are), session
 One of Training, Match or Social. It decides which extra details the Event has and supplies the Default Checklist.
 
 **Team**:
-A club side (1st XV, 2nd XV). Events are tagged with zero or more Teams as a label; no tag means whole club. Users do not belong to Teams.
+A club side (1st XV, 2nd XV). A Match is for exactly one Team; Training and Socials are for the whole club and have none. Users do not belong to Teams.
 _Avoid_: Squad, XV (except in Team names)
 
 **Kick-off**:
-The start time of a Match.
+The start time of a Match. Can be **TBC** until it is known.
 
 **Meet Time**:
-When players should arrive at the Venue for a Match.
+When players should arrive at the Venue for a Match. Can be TBC.
 
-**Travel Meet Time**:
-When and where players meet to travel together to an away Match.
+**Transport Meet Time**:
+When and where players meet to travel together to a Match. Can be TBC. (Stored as `travelMeetTime` in the code.)
+_Avoid_: Travel meet time
+
+**TBC**:
+"To be confirmed": a Match time that isn't known yet. It is shown as TBC and listed as missing when naming the team.
+
+**Event title**:
+What an Event is called, derived from its details: "Training @ Venue" for a Training, "Team vs Opponent" for a Match. Only a Social is titled by hand.
 
 **Series**:
 A recurring pattern of Training (e.g. "Wednesdays 19:00, Harlington, until 10 Dec") that produces Occurrences.

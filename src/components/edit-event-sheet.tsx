@@ -5,39 +5,13 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ChevronDown } from "lucide-react";
 import { BottomSheet, SheetSaveButton } from "@/components/bottom-sheet";
+import { MatchWhen, MatchWho, matchInput, type EventType, type HomeAway, type Competition, type MatchFieldValues } from "@/components/event-fields";
 import { VenueInput } from "@/components/venue-input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { cn } from "cn";
 import type { QuickEventInput } from "@/features/events";
 
-type EventType = QuickEventInput["type"];
-type HomeAway = NonNullable<QuickEventInput["homeAway"]>;
-type Competition = NonNullable<QuickEventInput["competition"]>;
-
-const COMPETITIONS: { key: Competition; label: string }[] = [
-  { key: "bucs", label: "BUCS" },
-  { key: "lusl", label: "LUSL" },
-  { key: "friendly", label: "Friendly" },
-  { key: "other", label: "Other" },
-];
-
 const TYPE_LABEL: Record<EventType, string> = { training: "Training", match: "Match", social: "Social" };
-
-function Chip({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      onClick={onClick}
-      className={cn(
-        "rounded-full px-4 py-2 text-sm font-medium transition-colors",
-        selected ? "bg-foreground text-background" : "bg-muted text-foreground hover:bg-muted/70",
-      )}
-    >
-      {children}
-    </button>
-  );
-}
 
 // Free text for the Team Sheet, kept on the Match.
 const SHEET_TEXT = [
@@ -49,17 +23,17 @@ const SHEET_TEXT = [
 
 export type EditEventInitial = {
   date: string; // YYYY-MM-DD, London
-  startTime: string; // HH:MM, London
+  startTime: string; // HH:MM, London; a Match's kick-off, empty while TBC
   endTime: string;
-  title: string;
+  title: string; // Social only
   venue: string;
   notes: string;
-  teamIds: string[];
+  teamId?: string;
   opponent?: string;
   homeAway?: HomeAway;
   competition?: Competition;
-  meetTime?: string;
-  travelMeetTime?: string;
+  meetTime?: string; // empty while TBC
+  travelMeetTime?: string; // empty while TBC
   travelMeetPoint?: string;
   schedule?: string;
   travelAttire?: string;
@@ -69,7 +43,8 @@ export type EditEventInitial = {
 
 /**
  * "Edit event" sheet, opened from the pencil icon on an Event's detail page. Committee and
- * above only. For an Occurrence, the date stays fixed and offers "this one" or "this and future".
+ * above only. The type is fixed once an Event exists. For an Occurrence, the date stays fixed
+ * and it offers "this one" or "this and future".
  */
 export function EditEventSheet({
   eventType,
@@ -96,38 +71,38 @@ export function EditEventSheet({
   const [end, setEnd] = useState(initial.endTime);
   const [venue, setVenue] = useState(initial.venue);
   const [notes, setNotes] = useState(initial.notes);
-  const [teamIds, setTeamIds] = useState<string[]>(initial.teamIds);
   const [scope, setScope] = useState<"this" | "future">("this");
   const [moreOpen, setMoreOpen] = useState(false);
-  const [meetTime, setMeetTime] = useState(initial.meetTime ?? "");
-  const [travelMeetTime, setTravelMeetTime] = useState(initial.travelMeetTime ?? "");
-  const [travelMeetPoint, setTravelMeetPoint] = useState(initial.travelMeetPoint ?? "");
+  const [match, setMatch] = useState<MatchFieldValues>({
+    teamId: initial.teamId ?? "",
+    opponent: initial.opponent ?? "",
+    homeAway: initial.homeAway ?? "home",
+    kickoff: initial.startTime,
+    meetTime: initial.meetTime ?? "",
+    travelMeetTime: initial.travelMeetTime ?? "",
+    travelMeetPoint: initial.travelMeetPoint ?? "",
+    competition: initial.competition ?? "friendly",
+  });
+  const patchMatch = (patch: Partial<MatchFieldValues>) => setMatch((m) => ({ ...m, ...patch }));
   const [sheetText, setSheetText] = useState({
     schedule: initial.schedule ?? "",
     travelAttire: initial.travelAttire ?? "",
     warmUpAttire: initial.warmUpAttire ?? "",
     postMatchActivity: initial.postMatchActivity ?? "",
   });
-  const [opponent, setOpponent] = useState(initial.opponent ?? "");
-  const [homeAway, setHomeAway] = useState<HomeAway>(initial.homeAway ?? "home");
-  const [competition, setCompetition] = useState<Competition>(initial.competition ?? "friendly");
 
   function save(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
       const result = await action({
         date,
-        startTime: start,
-        endTime: end,
         type: eventType,
-        title,
         venue,
         notes,
-        teamIds,
         scope,
         ...(eventType === "match"
-          ? { opponent, homeAway, competition, meetTime: meetTime || undefined, travelMeetTime: travelMeetTime || undefined, travelMeetPoint, ...sheetText }
-          : {}),
+          ? { ...matchInput(match), ...sheetText }
+          : { startTime: start, endTime: end, ...(eventType === "social" ? { title } : {}) }),
       });
       if (!result.ok) {
         toast.error(result.error);
@@ -141,44 +116,21 @@ export function EditEventSheet({
 
   return (
     <BottomSheet eyebrow="Edit event" onSubmit={save} onClose={onClose}>
-      <input
-        autoFocus
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder={eventType === "match" ? "Title (defaults to vs Opponent)" : "Add title"}
-        aria-label="Title"
-        className="mb-4 w-full border-b border-border bg-transparent pb-2 text-2xl font-semibold outline-none placeholder:text-muted-foreground/60"
-      />
+      <p className="mb-4 text-sm font-medium text-muted-foreground">{TYPE_LABEL[eventType]}</p>
 
-      <p className="mb-4 text-sm text-muted-foreground capitalize">{TYPE_LABEL[eventType]}</p>
-
-      {eventType === "match" && (
-        <div className="mb-4 flex flex-col gap-3 rounded-2xl bg-muted/60 p-3">
-          <input
-            value={opponent}
-            onChange={(e) => setOpponent(e.target.value)}
-            placeholder="Opponent"
-            aria-label="Opponent"
-            required
-            className="rounded-xl bg-background px-3 py-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-          />
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Home or away">
-            <Chip selected={homeAway === "home"} onClick={() => setHomeAway("home")}>
-              Home
-            </Chip>
-            <Chip selected={homeAway === "away"} onClick={() => setHomeAway("away")}>
-              Away
-            </Chip>
-          </div>
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Competition">
-            {COMPETITIONS.map((c) => (
-              <Chip key={c.key} selected={competition === c.key} onClick={() => setCompetition(c.key)}>
-                {c.label}
-              </Chip>
-            ))}
-          </div>
-        </div>
+      {eventType === "social" && (
+        <input
+          autoFocus
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Add title"
+          aria-label="Title"
+          required
+          className="mb-4 w-full border-b border-border bg-transparent pb-2 text-2xl font-semibold outline-none placeholder:text-muted-foreground/60"
+        />
       )}
+
+      {eventType === "match" && <MatchWho values={match} teams={teams} onChange={patchMatch} />}
 
       {!isOccurrence && (
         <input
@@ -191,27 +143,29 @@ export function EditEventSheet({
         />
       )}
 
-      <div className="mb-3 flex items-center gap-2 text-sm">
-        <input
-          type="time"
-          value={start}
-          onChange={(e) => setStart(e.target.value)}
-          aria-label="Start time"
-          required
-          className="rounded-xl bg-muted px-3 py-2 tabular-nums"
-        />
-        <span className="text-muted-foreground" aria-hidden="true">
-          →
-        </span>
-        <input
-          type="time"
-          value={end}
-          onChange={(e) => setEnd(e.target.value)}
-          aria-label="End time"
-          required
-          className="rounded-xl bg-muted px-3 py-2 tabular-nums"
-        />
-      </div>
+      {eventType !== "match" && (
+        <div className="mb-3 flex items-center gap-2 text-sm">
+          <input
+            type="time"
+            value={start}
+            onChange={(e) => setStart(e.target.value)}
+            aria-label="Start time"
+            required
+            className="rounded-xl bg-muted px-3 py-2 tabular-nums"
+          />
+          <span className="text-muted-foreground" aria-hidden="true">
+            →
+          </span>
+          <input
+            type="time"
+            value={end}
+            onChange={(e) => setEnd(e.target.value)}
+            aria-label="End time"
+            required
+            className="rounded-xl bg-muted px-3 py-2 tabular-nums"
+          />
+        </div>
+      )}
 
       <VenueInput
         id="edit-event-venue"
@@ -223,6 +177,8 @@ export function EditEventSheet({
         required
         className="mb-3 h-10 w-full rounded-xl"
       />
+
+      {eventType === "match" && <MatchWhen values={match} onChange={patchMatch} />}
 
       {isOccurrence && (
         <div className="mb-3 flex flex-col gap-1">
@@ -249,63 +205,17 @@ export function EditEventSheet({
 
       {moreOpen && (
         <div id="edit-event-more" className="mb-5 flex flex-col gap-4">
-          {eventType === "match" && (
-            <>
-              <label className="flex items-center gap-3 text-sm">
-                <span className="text-muted-foreground">Meet time</span>
-                <input
-                  type="time"
-                  value={meetTime}
-                  onChange={(e) => setMeetTime(e.target.value)}
-                  aria-label="Meet time"
-                  className="rounded-xl bg-muted px-3 py-2 tabular-nums"
-                />
-              </label>
-              <label className="flex items-center gap-3 text-sm">
-                <span className="text-muted-foreground">Travel meet time</span>
-                <input
-                  type="time"
-                  value={travelMeetTime}
-                  onChange={(e) => setTravelMeetTime(e.target.value)}
-                  aria-label="Travel meet time"
-                  className="rounded-xl bg-muted px-3 py-2 tabular-nums"
-                />
-              </label>
+          {eventType === "match" &&
+            SHEET_TEXT.map(([field, label, hint]) => (
               <input
-                value={travelMeetPoint}
-                onChange={(e) => setTravelMeetPoint(e.target.value)}
-                placeholder="Travel meet point"
-                aria-label="Travel meet point"
+                key={field}
+                value={sheetText[field]}
+                onChange={(e) => setSheetText((t) => ({ ...t, [field]: e.target.value }))}
+                placeholder={hint ? `${label}, e.g. ${hint}` : label}
+                aria-label={label}
                 className="rounded-xl bg-muted px-3 py-2 text-sm outline-none placeholder:text-muted-foreground/60 focus-visible:ring-3 focus-visible:ring-ring/50"
               />
-              {SHEET_TEXT.map(([field, label, hint]) => (
-                <input
-                  key={field}
-                  value={sheetText[field]}
-                  onChange={(e) => setSheetText((t) => ({ ...t, [field]: e.target.value }))}
-                  placeholder={hint ? `${label}, e.g. ${hint}` : label}
-                  aria-label={label}
-                  className="rounded-xl bg-muted px-3 py-2 text-sm outline-none placeholder:text-muted-foreground/60 focus-visible:ring-3 focus-visible:ring-ring/50"
-                />
-              ))}
-            </>
-          )}
-          {!isOccurrence && teams.length > 0 && (
-            <fieldset className="flex flex-col gap-2">
-              <legend className="mb-2 text-sm text-muted-foreground">Teams (leave blank for the whole club)</legend>
-              <div className="flex flex-wrap gap-2">
-                {teams.map((t) => (
-                  <Chip
-                    key={t.id}
-                    selected={teamIds.includes(t.id)}
-                    onClick={() => setTeamIds((ids) => (ids.includes(t.id) ? ids.filter((id) => id !== t.id) : [...ids, t.id]))}
-                  >
-                    {t.name}
-                  </Chip>
-                ))}
-              </div>
-            </fieldset>
-          )}
+            ))}
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}

@@ -35,6 +35,13 @@ describe("buildCalendar", () => {
     expect(l).toContain("STATUS:CONFIRMED");
   });
 
+  it("writes an Event whose start is TBC as an all-day entry on its London date", () => {
+    const tbc = { ...training, start: new Date("2026-10-23T23:00:00Z"), end: new Date("2026-10-24T22:59:00Z"), startTbc: true };
+    const l = lines(buildCalendar([tbc], now));
+    expect(l).toContain("DTSTART;VALUE=DATE:20261024");
+    expect(l).toContain("DTEND;VALUE=DATE:20261025");
+  });
+
   it("marks a Cancelled Event STATUS:CANCELLED", () => {
     const l = lines(buildCalendar([{ ...training, cancelled: true }], now));
     expect(l).toContain("STATUS:CANCELLED");

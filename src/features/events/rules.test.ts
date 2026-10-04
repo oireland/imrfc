@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { classifyEvent, validateEvent, type NewEvent } from "./rules";
+import { classifyEvent, eventTitle, validateEvent, type NewEvent } from "./rules";
 
 const training: NewEvent = {
-  title: "Training",
   eventType: "training",
   start: new Date("2026-01-07T19:00:00Z"),
   end: new Date("2026-01-07T20:30:00Z"),
@@ -14,8 +13,8 @@ describe("validateEvent", () => {
     expect(validateEvent(training)).toEqual({ ok: true });
   });
 
-  it("rejects an Event without a title", () => {
-    expect(validateEvent({ ...training, title: "" })).toEqual({
+  it("rejects a Social without a title", () => {
+    expect(validateEvent({ ...training, eventType: "social", title: " " })).toEqual({
       ok: false,
       error: "Give the event a title.",
     });
@@ -39,6 +38,7 @@ describe("validateEvent", () => {
       ...training,
       eventType: "match",
       matchDetails: {
+        teamId: "1st XV",
         opponent: "",
         homeAway: "home",
         competition: "bucs",
@@ -48,11 +48,31 @@ describe("validateEvent", () => {
     expect(validateEvent(match)).toEqual({ ok: false, error: "Who's the match against? Add an opponent." });
   });
 
+  it("rejects a Match without a Team", () => {
+    const match: NewEvent = {
+      ...training,
+      eventType: "match",
+      matchDetails: { teamId: " ", opponent: "UCL", homeAway: "home", competition: "bucs" },
+    };
+    expect(validateEvent(match)).toEqual({ ok: false, error: "Which team is playing? Pick a team." });
+  });
+
+  it("accepts a Match whose times are all still TBC", () => {
+    const match: NewEvent = {
+      ...training,
+      eventType: "match",
+      startTbc: true,
+      matchDetails: { teamId: "1st XV", opponent: "UCL", homeAway: "away", competition: "bucs" },
+    };
+    expect(validateEvent(match)).toEqual({ ok: true });
+  });
+
   it("accepts a valid Match", () => {
     const match: NewEvent = {
       ...training,
       eventType: "match",
       matchDetails: {
+        teamId: "1st XV",
         opponent: "UCL",
         homeAway: "home",
         competition: "bucs",
@@ -72,5 +92,24 @@ describe("classifyEvent", () => {
   it("is Past once the Event has ended", () => {
     const now = new Date("2026-01-08T00:00:00Z");
     expect(classifyEvent({ end: training.end }, now)).toBe("past");
+  });
+});
+
+describe("eventTitle", () => {
+  it("calls a Training 'Training @ Location'", () => {
+    expect(eventTitle(training)).toBe("Training @ Harlington");
+  });
+
+  it("calls a Match 'Team vs Opponent'", () => {
+    const match: NewEvent = {
+      ...training,
+      eventType: "match",
+      matchDetails: { teamId: "1st XV", opponent: " St Georges ", homeAway: "home", competition: "friendly" },
+    };
+    expect(eventTitle(match, "1st XV")).toBe("1st XV vs St Georges");
+  });
+
+  it("keeps a Social's own title", () => {
+    expect(eventTitle({ ...training, eventType: "social", title: " Curry night " })).toBe("Curry night");
   });
 });

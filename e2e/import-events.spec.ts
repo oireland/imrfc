@@ -33,16 +33,16 @@ test("Committee import events from a CSV, with the format explained and a templa
     .toISOString()
     .slice(0, 10);
   const csv = [
-    "title,type,date,start_time,end_time,venue,opponent",
-    `Training ${run},training,${day},18:00,20:00,${venueName},`,
-    `Match ${run},match,${day},20:30,22:00,${venueName},UCL Medics`,
+    "type,date,start_time,end_time,venue,team,opponent",
+    `training,${day},18:00,20:00,${venueName},,`,
+    `match,${day},20:30,,${venueName},1st XV,UCL Medics ${run}`,
   ].join("\n");
   await file.setInputFiles({ name: "events.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
   await page.getByRole("button", { name: "Import events" }).click();
   await expect(page.getByText("2 events imported")).toBeVisible();
   await expect(page).toHaveURL(/\/events$/);
 
-  const rows = await sql`select venue from event where title in (${`Training ${run}`}, ${`Match ${run}`})`;
-  expect(rows.map((r) => r.venue)).toEqual([venueName, venueName]);
+  const rows = await sql`select title from event where title in (${`Training @ ${venueName}`}, ${`1st XV vs UCL Medics ${run}`}) order by title`;
+  expect(rows.map((r) => r.title)).toEqual([`1st XV vs UCL Medics ${run}`, `Training @ ${venueName}`]);
   await sql.end();
 });

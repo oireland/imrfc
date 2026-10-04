@@ -26,14 +26,13 @@ test("Committee add Equipment Units and Events from the Equipment and Events pag
   await page.getByRole("button", { name: `I've got ${equipmentName}` }).click();
   await expect(page.getByRole("region", { name: "With you" }).getByRole("link", { name: equipmentName })).toBeVisible();
 
-  const title = `Training ${run}`;
+  const title = `Training @ ${venueName}`;
   // A near-future day, so it lands in the Agenda tab's soonest-15 list, distinct from other tests' events.
   const day = new Date(Date.now() + (1 + Math.floor(Math.random() * 3)) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   await page.goto("/events");
   await page.getByRole("button", { name: "Add event" }).click();
   const sheet = page.getByRole("dialog");
   await sheet.getByLabel("Date").fill(day);
-  await sheet.getByLabel("Title").fill(title);
   await sheet.getByLabel("Start time").fill("18:00");
   await sheet.getByLabel("End time").fill("20:00");
   await sheet.getByLabel("Venue").fill(venueName);

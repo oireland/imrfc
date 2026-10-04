@@ -36,6 +36,7 @@ export async function loadComingUp(userId: string, upcomingDuties?: Promise<{ ev
         type: e.eventType,
         start: e.start.toISOString(),
         end: e.end.toISOString(),
+        startTbc: e.startTbc,
         venue: e.venue,
         cancelled: e.cancelled,
         mine: mine.has(e.id),

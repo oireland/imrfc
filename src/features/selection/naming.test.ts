@@ -43,13 +43,11 @@ type Db = Awaited<ReturnType<typeof setup>>;
 async function makeMatch(db: Db, start = "2026-10-03T13:30:00Z", teamId = "1st XV") {
   const startDate = new Date(start);
   const made = await createEvent(db, {
-    title: `${teamId} vs Barts`,
     eventType: "match",
     start: startDate,
     end: new Date(startDate.getTime() + 2 * 3_600_000),
     venue: "Harlington",
-    teamIds: [teamId],
-    matchDetails: { opponent: "Barts", homeAway: "home", competition: "bucs", meetTime: startDate },
+    matchDetails: { teamId, opponent: "Barts", homeAway: "home", competition: "bucs", meetTime: startDate },
   } as NewEvent);
   if (!made.ok) throw new Error(made.error);
   return made.event.id;

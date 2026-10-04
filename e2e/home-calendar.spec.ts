@@ -3,24 +3,22 @@ import postgres from "postgres";
 import { TEST_DATABASE_URL } from "./support/test-db";
 import { seedUser, signIn } from "./support/sign-in";
 
-test("Committee add an Event by tapping a day on the Home calendar", async ({ page }) => {
+test("Committee add an Event with the Add button under the Home calendar's selected day", async ({ page }) => {
   const sql = postgres(TEST_DATABASE_URL);
   const run = crypto.randomUUID().slice(0, 8);
   const venueName = `Pitch ${run}`;
   await signIn(page);
 
   const calendar = page.getByRole("region", { name: "What's coming up" });
-  // Tap the 28th (every month has one): an empty day opens the sheet at once; a busy day
-  // is selected first and opens on a second tap.
-  const day = calendar.getByRole("button", { name: /\b28 / }).last();
-  await day.click();
-  const opened = await page.getByRole("dialog").waitFor({ timeout: 1000 }).then(() => true, () => false);
-  if (!opened) await day.click();
+  // Tapping a day only selects it and scrolls to its list; it never opens the sheet.
+  await calendar.getByRole("button", { name: /\b28 / }).last().click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await calendar.getByRole("button", { name: "Add" }).click();
 
   const sheet = page.getByRole("dialog", { name: /28/ });
-  const title = `Fitness ${run}`;
-  await sheet.getByLabel("Title").fill(title);
+  const title = `Quiz ${run}`;
   await sheet.getByRole("button", { name: "Social" }).click();
+  await sheet.getByLabel("Title").fill(title);
   await sheet.getByLabel("Venue").fill(venueName);
   await sheet.getByRole("button", { name: "Save" }).click();
 
@@ -65,8 +63,9 @@ test("Home filters What's coming up by Event Type, like Events", async ({ page }
   const matchId = crypto.randomUUID();
   await sql`insert into event (id, title, event_type, start, "end", venue)
     values (${matchId}, ${match}, 'match', now() + interval '4 hours', now() + interval '6 hours', 'Harlington')`;
-  await sql`insert into match_details (event_id, opponent, home_away, competition, meet_time)
-    values (${matchId}, 'Barts', 'home', 'friendly', now() + interval '3 hours')`;
+  await sql`insert into team (id, name) values ('1st XV', '1st XV') on conflict do nothing`;
+  await sql`insert into match_details (event_id, team_id, opponent, home_away, competition, meet_time)
+    values (${matchId}, '1st XV', 'Barts', 'home', 'friendly', now() + interval '3 hours')`;
   await sql.end();
   await signIn(page, { email: await seedUser(), next: "/?view=agenda" });
 

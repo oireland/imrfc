@@ -71,6 +71,7 @@ export async function renderFeed(db: Db, token: string, now: Date = new Date()):
     title: e.title,
     start: e.start,
     end: e.end,
+    startTbc: e.startTbc,
     venue: e.venue,
     cancelled: e.cancelled,
     description: duties

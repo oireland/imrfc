@@ -21,7 +21,6 @@ async function setup() {
   const made = await createEquipmentUnit(db, { name: "Ball bag A", homeId: "shed" });
   if (!made.ok) throw new Error(made.error);
   const created = await createEvent(db, {
-    title: "Tuesday Training",
     eventType: "training",
     start: future(2),
     end: future(2, 20),

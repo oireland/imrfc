@@ -34,16 +34,32 @@ function clock(instant: Date): string {
   return `${h % 12 || 12}.${String(m).padStart(2, "0")}${h < 12 ? "am" : "pm"}`;
 }
 
+/** The Match's times that are still TBC. Transport only matters for an away Match. */
+function missingTimes(event: NonNullable<Awaited<ReturnType<typeof getEvent>>>): string[] {
+  const details = event.matchDetails;
+  const missing: string[] = [];
+  if (event.startTbc) missing.push("Kick-off time is TBC");
+  if (details && !details.meetTime) missing.push("Meet time is TBC");
+  if (details?.homeAway === "away" && !details.travelMeetTime) missing.push("Transport meet time is TBC");
+  return missing;
+}
+
 /** A Match's Team Sheet fields, read from the Event and its match details; null for a non-Match. */
 export async function settleFields(db: Db, eventId: string) {
   const event = await getEvent(db, eventId);
   if (!event || event.eventType !== "match") return null;
   const details = event.matchDetails;
 
-  const meet = details ? (details.travelMeetTime ? `${clock(details.travelMeetTime)}${details.travelMeetPoint ? ` at ${details.travelMeetPoint}` : ""}` : clock(details.meetTime)) : "";
+  const meet = !details
+    ? ""
+    : details.travelMeetTime
+      ? `${clock(details.travelMeetTime)}${details.travelMeetPoint ? ` at ${details.travelMeetPoint}` : ""}`
+      : details.meetTime
+        ? clock(details.meetTime)
+        : "TBC";
   const fields: SheetFields = {
-    title: event.teams[0] && details ? `IMRFC ${event.teams[0].name} vs ${details.opponent}` : event.title,
-    kickoff: clock(event.start),
+    title: `IMRFC ${event.title}`,
+    kickoff: event.startTbc ? "TBC" : clock(event.start),
     meet,
     location: event.venue,
     schedule: details?.schedule ?? "",
@@ -88,7 +104,7 @@ export async function getTeamSheet(db: Db, eventId: string, viewer: Viewer, now:
     date,
     readOnly: pitch.readOnly,
     layout: buildSheet({ date, fields, shirts: people }),
-    missing: missingFromSheet(people),
+    missing: [...missingTimes(event), ...missingFromSheet(people)],
   };
 }
 

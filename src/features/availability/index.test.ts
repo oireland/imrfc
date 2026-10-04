@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
-import { createEvent, type NewEvent } from "@/features/events";
+import { createEvent, listTeams, type NewEvent } from "@/features/events";
 import { user } from "@/features/users";
 import type { MailSender } from "@/lib/mail";
 import { listEventsBetween } from "@/features/events";
@@ -22,15 +22,22 @@ async function setup() {
     { id: "jo", name: "Jo King", email: "jo@x.org", accessState: "approved" },
     { id: "bex", name: "Bex Gone", email: "bex@x.org", accessState: "blocked" },
   ]);
+  await listTeams(db);
   return db;
 }
 
-async function makeEvent(db: Awaited<ReturnType<typeof setup>>, overrides: Partial<NewEvent> & { start: Date }) {
-  const base = { title: "Training", eventType: "training", venue: "Harlington", end: new Date(overrides.start.getTime() + 3_600_000) };
-  const input = { ...base, ...overrides } as NewEvent;
-  if (input.eventType === "match") {
-    Object.assign(input, { matchDetails: { opponent: "Barts", homeAway: "home", competition: "bucs", meetTime: input.start } });
-  }
+async function makeEvent(
+  db: Awaited<ReturnType<typeof setup>>,
+  overrides: { start: Date; title?: string; eventType?: "training" | "match" | "social" },
+) {
+  const { start, title, eventType = "training" } = overrides;
+  const common = { start, end: new Date(start.getTime() + 3_600_000), venue: eventType === "training" ? (title ?? "Harlington") : "Harlington" };
+  const input: NewEvent =
+    eventType === "match"
+      ? { ...common, eventType, matchDetails: { teamId: "1st XV", opponent: title ?? "Barts", homeAway: "home", competition: "bucs", meetTime: start } }
+      : eventType === "social"
+        ? { ...common, eventType, title: title ?? "Social" }
+        : { ...common, eventType };
   const made = await createEvent(db, input);
   if (!made.ok) throw new Error(made.error);
   return made.event.id;
@@ -79,8 +86,8 @@ describe("saveReply", () => {
 describe("getAvailability", () => {
   it("counts one reply for every Match that day", async () => {
     const db = await setup();
-    const firsts = await makeEvent(db, { title: "1st XV v Barts", eventType: "match", start: new Date("2026-10-03T13:00:00Z") });
-    const seconds = await makeEvent(db, { title: "2nd XV v UCL", eventType: "match", start: new Date("2026-10-03T15:00:00Z") });
+    const firsts = await makeEvent(db, { title: "Barts", eventType: "match", start: new Date("2026-10-03T13:00:00Z") });
+    const seconds = await makeEvent(db, { title: "UCL", eventType: "match", start: new Date("2026-10-03T15:00:00Z") });
     await saveReply(db, { eventId: firsts, playerId: "sam", viewer: sam, status: "available", note: "", reason: "" }, now);
     const availability = await getAvailability(db, seconds, sam, now);
     expect(availability.summary.available.map((r) => r.name)).toEqual(["Sam Patel"]);
@@ -140,12 +147,12 @@ describe("announce", () => {
 
   it("only happens once, and once for every Match that day", async () => {
     const db = await setup();
-    const firsts = await makeEvent(db, { title: "1st XV v Barts", eventType: "match", start: new Date("2026-10-03T13:00:00Z") });
-    const seconds = await makeEvent(db, { title: "2nd XV v UCL", eventType: "match", start: new Date("2026-10-03T15:00:00Z") });
+    const firsts = await makeEvent(db, { title: "Barts", eventType: "match", start: new Date("2026-10-03T13:00:00Z") });
+    const seconds = await makeEvent(db, { title: "UCL", eventType: "match", start: new Date("2026-10-03T15:00:00Z") });
     const { mail, sent } = fakeMail();
     await announceAndDeliver(db, { eventId: firsts, viewer: tom, replyBy: null }, mail);
 
-    expect(sent[0].subject).toBe("Can you make it? Sat 3 Oct — 1st XV v Barts & 2nd XV v UCL");
+    expect(sent[0].subject).toBe("Can you make it? Sat 3 Oct — 1st XV vs Barts & 1st XV vs UCL");
     expect(await announce(db, { eventId: seconds, viewer: tom, replyBy: null }, now)).toEqual({
       ok: false,
       error: "This has already been announced.",
@@ -308,7 +315,7 @@ describe("listWaitingOnReply", () => {
     await announce(db, { eventId: asked, viewer: tom, replyBy }, now);
 
     expect(await listWaitingOnReply(db, "sam", now)).toEqual([
-      { eventId: asked, events: [{ title: "Thursday training", start: new Date("2026-10-02T18:00:00Z") }], replyBy },
+      { eventId: asked, events: [{ title: "Training @ Thursday training", start: new Date("2026-10-02T18:00:00Z") }], replyBy },
     ]);
 
     await saveReply(db, { eventId: asked, playerId: "sam", viewer: sam, status: "available", note: "", reason: "" }, now);

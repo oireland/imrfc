@@ -48,7 +48,6 @@ describe("occurrenceDates", () => {
 
 describe("validateSeries", () => {
   const ok = {
-    title: "Training",
     weekdays: [3],
     startTime: "19:00",
     endTime: "20:30",
@@ -61,8 +60,12 @@ describe("validateSeries", () => {
     expect(validateSeries(ok)).toEqual({ ok: true });
   });
 
+  it("doesn't need a title for a Training", () => {
+    expect(validateSeries({ ...ok, eventType: "training" })).toEqual({ ok: true });
+  });
+
   it.each([
-    [{ title: " " }, "title"],
+    [{ eventType: "social" as const, title: " " }, "title"],
     [{ weekdays: [] }, "day of the week"],
     [{ venue: " " }, "venue"],
     [{ endTime: "18:00" }, "end"],

@@ -22,6 +22,8 @@ export type CalendarEvent = {
   type: CalendarEventType;
   start: string; // ISO
   end: string; // ISO
+  /** The start time isn't known yet (a Match's kick-off), so only the day is. */
+  startTbc: boolean;
   venue: string;
   cancelled: boolean;
   /** The signed-in User has a Duty on it. */
@@ -47,7 +49,7 @@ const monthLabel = (year: number, month: number) =>
 
 /**
  * "What's coming up": a month Calendar (every Event readable in its day, tap a day to
- * add one) and an Agenda list (reply to Training and Matches in place), as two tabs.
+ * see it below) and an Agenda list (reply to Training and Matches in place), as two tabs.
  * The tab and any Event Type filter live in the URL, so either can be bookmarked.
  */
 export function ComingUp({
@@ -187,18 +189,15 @@ function MonthCalendar({
     setView({ year: d.getUTCFullYear(), month: d.getUTCMonth() });
   }
 
+  /** Selects the day and scrolls down to its list, which Committee add to with the Add button. */
   function tapDay(ymd: string) {
-    const hasEvents = byDay.has(ymd);
-    if (canAdd && (ymd === selected || !hasEvents)) onAdd(ymd);
     setSelected(ymd);
-    if (hasEvents) {
-      const el = selectedDayRef.current;
-      if (el) {
-        // Clear the fixed bottom tab bar, not just the viewport edge.
-        const bottomBarClearance = 96;
-        const distance = el.getBoundingClientRect().bottom - window.innerHeight + bottomBarClearance;
-        if (distance > 0) window.scrollBy({ top: distance, behavior: "smooth" });
-      }
+    const el = selectedDayRef.current;
+    if (el) {
+      // Clear the fixed bottom tab bar, not just the viewport edge.
+      const bottomBarClearance = 96;
+      const distance = el.getBoundingClientRect().bottom - window.innerHeight + bottomBarClearance;
+      if (distance > 0) window.scrollBy({ top: distance, behavior: "smooth" });
     }
   }
 
@@ -266,7 +265,7 @@ function MonthCalendar({
                   <span className="line-clamp-3 text-[10px] font-semibold tracking-[-0.01em] hyphens-auto [overflow-wrap:anywhere]">
                     {e.title}
                   </span>
-                  <span className="text-[9px] font-normal tabular-nums not-italic">{londonTime(new Date(e.start))}</span>
+                  <span className="text-[9px] font-normal tabular-nums not-italic">{e.startTbc ? "TBC" : londonTime(new Date(e.start))}</span>
                 </span>
               ))}
               {dayEvents.length > 2 && <span className="px-0.5 text-[9px] font-medium text-muted-foreground">+{dayEvents.length - 2} more</span>}
@@ -302,7 +301,7 @@ function MonthCalendar({
         </div>
         {selectedEvents.length === 0 ? (
           <p className="py-2 text-sm text-muted-foreground">
-            Nothing on.{canAdd && " Tap the day again or press Add."}
+            Nothing on.{canAdd && " Press Add."}
           </p>
         ) : (
           <ul className="flex flex-col">
@@ -313,7 +312,7 @@ function MonthCalendar({
                   <span className="min-w-0 flex-1">
                     <span className={cn("block truncate font-medium", e.cancelled && "line-through")}>{e.title}</span>
                     <span className="block truncate text-sm text-muted-foreground">
-                      {londonTime(new Date(e.start))}–{londonTime(new Date(e.end))} · {e.venue}
+                      {e.startTbc ? "Time TBC" : `${londonTime(new Date(e.start))}–${londonTime(new Date(e.end))}`} · {e.venue}
                     </span>
                   </span>
                   {e.mine && <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-accent-foreground">Your Duty</span>}
@@ -434,7 +433,7 @@ function Agenda({
                 <span className="min-w-0 flex-1">
                   <span className={cn("block truncate font-medium", e.cancelled && "line-through")}>{e.title}</span>
                   <span className="flex items-center gap-1 truncate text-sm text-muted-foreground">
-                    {new Intl.DateTimeFormat("en-GB", { weekday: "short", timeZone: "Europe/London" }).format(start)} {londonTime(start)} ·{" "}
+                    {new Intl.DateTimeFormat("en-GB", { weekday: "short", timeZone: "Europe/London" }).format(start)} {e.startTbc ? "TBC" : londonTime(start)} ·{" "}
                     <MapPin className="size-3 shrink-0" aria-hidden="true" /> {e.venue}
                   </span>
                 </span>

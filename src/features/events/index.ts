@@ -1,9 +1,9 @@
 import { and, asc, desc, eq, gte, inArray, lt } from "drizzle-orm";
-import { event, eventTeam, matchDetails, team } from "./schema";
-import { classifyEvent, validateEvent, type NewEvent } from "./rules";
+import { event, matchDetails, team } from "./schema";
+import { classifyEvent, eventTitle, validateEvent, type NewEvent } from "./rules";
 
 export { event } from "./schema";
-export { validateEvent, classifyEvent } from "./rules";
+export { validateEvent, classifyEvent, eventTitle, trainingTitle, matchTitle } from "./rules";
 export {
   createSeries,
   editOccurrence,
@@ -48,7 +48,17 @@ export async function createEvent(
 ): Promise<{ ok: true; event: Event } | { ok: false; error: string }> {
   const result = validateEvent(input);
   if (!result.ok) return result;
-  return { ok: true, event: await insertEvent(db, input) };
+  const title = await titleFor(db, input);
+  if (!title.ok) return title;
+  return { ok: true, event: await insertEvent(db, input, title.title) };
+}
+
+/** The Event's derived title; a Match's needs its Team's name, so an unknown Team is an error. */
+async function titleFor(db: Db, input: NewEvent): Promise<{ ok: true; title: string } | { ok: false; error: string }> {
+  if (input.eventType !== "match") return { ok: true, title: eventTitle(input) };
+  const [row]: Team[] = await db.select().from(team).where(eq(team.id, input.matchDetails.teamId));
+  if (!row) return { ok: false, error: "That team doesn't exist." };
+  return { ok: true, title: eventTitle(input, row.name) };
 }
 
 /**
@@ -59,53 +69,57 @@ export async function createEvents(
   db: Db,
   inputs: NewEvent[],
 ): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  const titles: string[] = [];
   for (const input of inputs) {
     const result = validateEvent(input);
-    if (!result.ok) return { ok: false, error: `"${input.title}": ${result.error}` };
+    if (!result.ok) return { ok: false, error: `"${eventTitle(input)}": ${result.error}` };
+    const title = await titleFor(db, input);
+    if (!title.ok) return title;
+    titles.push(title.title);
   }
   try {
     await db.transaction(async (tx: Db) => {
-      for (const input of inputs) await insertEvent(tx, input);
+      for (const [i, input] of inputs.entries()) await insertEvent(tx, input, titles[i]);
     });
   } catch {
-    return { ok: false, error: "Couldn't save the events, so none were added. Check the teams still exist." };
+    return { ok: false, error: "Couldn't save the events, so none were added." };
   }
   return { ok: true, count: inputs.length };
 }
 
-async function insertEvent(db: Db, input: NewEvent): Promise<Event> {
+function matchRow(details: Extract<NewEvent, { eventType: "match" }>["matchDetails"]) {
+  return {
+    teamId: details.teamId,
+    opponent: details.opponent.trim(),
+    homeAway: details.homeAway,
+    competition: details.competition,
+    meetTime: details.meetTime ?? null,
+    travelMeetTime: details.travelMeetTime ?? null,
+    travelMeetPoint: details.travelMeetPoint ?? null,
+    schedule: details.schedule?.trim() || null,
+    travelAttire: details.travelAttire?.trim() || null,
+    warmUpAttire: details.warmUpAttire?.trim() || null,
+    postMatchActivity: details.postMatchActivity?.trim() || null,
+  };
+}
+
+async function insertEvent(db: Db, input: NewEvent, title: string): Promise<Event> {
   const [row] = await db
     .insert(event)
     .values({
       id: crypto.randomUUID(),
-      title: input.title,
+      title,
       eventType: input.eventType,
       start: input.start,
       end: input.end,
+      startTbc: !!input.startTbc,
       venue: input.venue.trim(),
       notes: input.notes ?? "",
     })
     .returning();
 
   if (input.eventType === "match") {
-    await db.insert(matchDetails).values({
-      eventId: row.id,
-      opponent: input.matchDetails.opponent,
-      homeAway: input.matchDetails.homeAway,
-      competition: input.matchDetails.competition,
-      meetTime: input.matchDetails.meetTime,
-      travelMeetTime: input.matchDetails.travelMeetTime ?? null,
-      travelMeetPoint: input.matchDetails.travelMeetPoint ?? null,
-      schedule: input.matchDetails.schedule?.trim() || null,
-      travelAttire: input.matchDetails.travelAttire?.trim() || null,
-      warmUpAttire: input.matchDetails.warmUpAttire?.trim() || null,
-      postMatchActivity: input.matchDetails.postMatchActivity?.trim() || null,
-    });
-  }
-
-  const teamIds = input.teamIds ?? [];
-  if (teamIds.length > 0) {
-    await db.insert(eventTeam).values(teamIds.map((teamId) => ({ id: crypto.randomUUID(), eventId: row.id, teamId })));
+    await db.insert(matchDetails).values({ eventId: row.id, ...matchRow(input.matchDetails) });
   }
 
   return row;
@@ -158,22 +172,13 @@ export async function getEvent(db: Db, id: string): Promise<EventWithDetails | u
   const [row] = await db.select().from(event).where(eq(event.id, id));
   if (!row) return undefined;
 
-  const [details, teamRows] = await Promise.all([
+  const details: MatchDetails | null =
     row.eventType === "match"
-      ? db
-          .select()
-          .from(matchDetails)
-          .where(eq(matchDetails.eventId, id))
-          .then((rows: MatchDetails[]) => rows[0] ?? null)
-      : Promise.resolve(null),
-    db
-      .select({ id: team.id, name: team.name })
-      .from(eventTeam)
-      .innerJoin(team, eq(eventTeam.teamId, team.id))
-      .where(eq(eventTeam.eventId, id)),
-  ]);
+      ? ((await db.select().from(matchDetails).where(eq(matchDetails.eventId, id)))[0] ?? null)
+      : null;
+  const teams: Team[] = details ? await db.select().from(team).where(eq(team.id, details.teamId)) : [];
 
-  return { ...row, matchDetails: details, teams: teamRows };
+  return { ...row, matchDetails: details, teams };
 }
 
 /**
@@ -187,40 +192,23 @@ export async function editEvent(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const result = validateEvent(input);
   if (!result.ok) return result;
+  const title = await titleFor(db, input);
+  if (!title.ok) return title;
 
   await db
     .update(event)
     .set({
-      title: input.title,
+      title: title.title,
       start: input.start,
       end: input.end,
+      startTbc: !!input.startTbc,
       venue: input.venue.trim(),
       notes: input.notes ?? "",
     })
     .where(eq(event.id, id));
 
   if (input.eventType === "match") {
-    await db
-      .update(matchDetails)
-      .set({
-        opponent: input.matchDetails.opponent,
-        homeAway: input.matchDetails.homeAway,
-        competition: input.matchDetails.competition,
-        meetTime: input.matchDetails.meetTime,
-        travelMeetTime: input.matchDetails.travelMeetTime ?? null,
-        travelMeetPoint: input.matchDetails.travelMeetPoint ?? null,
-        schedule: input.matchDetails.schedule?.trim() || null,
-        travelAttire: input.matchDetails.travelAttire?.trim() || null,
-        warmUpAttire: input.matchDetails.warmUpAttire?.trim() || null,
-        postMatchActivity: input.matchDetails.postMatchActivity?.trim() || null,
-      })
-      .where(eq(matchDetails.eventId, id));
-  }
-
-  await db.delete(eventTeam).where(eq(eventTeam.eventId, id));
-  const teamIds = input.teamIds ?? [];
-  if (teamIds.length > 0) {
-    await db.insert(eventTeam).values(teamIds.map((teamId) => ({ id: crypto.randomUUID(), eventId: id, teamId })));
+    await db.update(matchDetails).set(matchRow(input.matchDetails)).where(eq(matchDetails.eventId, id));
   }
 
   return { ok: true };

@@ -1,5 +1,6 @@
 import { and, asc, eq, gte } from "drizzle-orm";
-import { event, eventTeam, series, seriesTeam } from "./schema";
+import { event, series } from "./schema";
+import { trainingTitle } from "./rules";
 import {
   londonParts,
   londonToUtc,
@@ -19,7 +20,7 @@ export type OccurrenceChanges = Partial<
 type Db = any;
 type Failure = { ok: false; error: string };
 
-async function insertOccurrences(db: Db, s: Series, dates: string[], teamIds: string[]) {
+async function insertOccurrences(db: Db, s: Series, dates: string[]) {
   if (dates.length === 0) return;
   const rows = dates.map((date) => ({
     id: crypto.randomUUID(),
@@ -32,15 +33,11 @@ async function insertOccurrences(db: Db, s: Series, dates: string[], teamIds: st
     seriesId: s.id,
   }));
   await db.insert(event).values(rows);
-  if (teamIds.length === 0) return;
-  await db.insert(eventTeam).values(
-    rows.flatMap((row) => teamIds.map((teamId) => ({ id: crypto.randomUUID(), eventId: row.id, teamId }))),
-  );
 }
 
-async function seriesTeamIds(db: Db, seriesId: string): Promise<string[]> {
-  const rows = await db.select().from(seriesTeam).where(eq(seriesTeam.seriesId, seriesId));
-  return rows.map((r: { teamId: string }) => r.teamId);
+/** A Social Series is titled by hand; a Training Series after its venue. */
+function seriesTitle(p: { eventType?: string; title?: string; venue: string }): string {
+  return p.eventType === "social" ? (p.title ?? "").trim() : trainingTitle(p.venue);
 }
 
 export async function createSeries(
@@ -54,7 +51,7 @@ export async function createSeries(
     .insert(series)
     .values({
       id: crypto.randomUUID(),
-      title: input.title,
+      title: seriesTitle(input),
       eventType: input.eventType ?? "training",
       weekdays: input.weekdays,
       startTime: input.startTime,
@@ -66,11 +63,7 @@ export async function createSeries(
     })
     .returning();
 
-  const teamIds = input.teamIds ?? [];
-  if (teamIds.length > 0) {
-    await db.insert(seriesTeam).values(teamIds.map((teamId) => ({ id: crypto.randomUUID(), seriesId: row.id, teamId })));
-  }
-  await insertOccurrences(db, row, occurrenceDates(input), teamIds);
+  await insertOccurrences(db, row, occurrenceDates(input));
   return { ok: true, series: row };
 }
 
@@ -97,7 +90,7 @@ export async function extendSeries(
     .toISOString()
     .slice(0, 10);
   const dates = occurrenceDates({ weekdays: row.weekdays, startDate: nextDay, endDate: newEndDate });
-  await insertOccurrences(db, row, dates, await seriesTeamIds(db, seriesId));
+  await insertOccurrences(db, row, dates);
   await db.update(series).set({ endDate: newEndDate }).where(eq(series.id, seriesId));
   return { ok: true };
 }
@@ -115,16 +108,21 @@ export async function editOccurrence(
   const startTime = changes.startTime ?? current.start;
   const endTime = changes.endTime ?? current.end;
   if (endTime <= startTime) return { ok: false, error: "The end time must be after the start time." };
-  if (changes.title !== undefined && !changes.title.trim()) {
+  if (target.eventType === "social" && changes.title !== undefined && !changes.title.trim()) {
     return { ok: false, error: "Give the event a title." };
   }
+  // A Training is titled from its venue, so only a Social can be retitled.
+  const titleFor = (row: { eventType: string; venue: string; title: string }): string | undefined => {
+    const venue = changes.venue ?? row.venue;
+    return row.eventType === "training" ? trainingTitle(venue) : changes.title?.trim();
+  };
 
   const apply = (row: Occurrence, edited: boolean) => {
     const date = londonParts(row.start).date;
     return db
       .update(event)
       .set({
-        ...(changes.title !== undefined && { title: changes.title }),
+        ...(titleFor(row) !== undefined && { title: titleFor(row) }),
         ...(changes.venue !== undefined && { venue: changes.venue }),
         ...(changes.notes !== undefined && { notes: changes.notes }),
         start: londonToUtc(date, startTime),
@@ -147,7 +145,7 @@ export async function editOccurrence(
   await db
     .update(series)
     .set({
-      ...(changes.title !== undefined && { title: changes.title }),
+      ...(titleFor(target) !== undefined && { title: titleFor(target) }),
       ...(changes.venue !== undefined && { venue: changes.venue }),
       ...(changes.notes !== undefined && { notes: changes.notes }),
       startTime,
