@@ -15,6 +15,7 @@ export type NamingActions = {
   name: (eventId: string) => Promise<SendResult>;
   sendChanges: (eventId: string) => Promise<SendResult>;
   dismiss: (eventId: string, noticeId: string) => Promise<Result>;
+  retry: (eventId: string, noticeId: string) => Promise<SendResult>;
 };
 
 const people = (n: number) => (n === 1 ? "1 person" : `${n} people`);
@@ -51,8 +52,8 @@ async function watchNotice(noticeId: string, refresh: () => void) {
   }
 }
 
-/** Name the team (or Send changes) for one Match: who has been told, what's unsent, and how the emails went. */
-export function NameTheTeam({ eventId, label, naming, actions }: { eventId: string; label: string; naming: Naming; actions: NamingActions }) {
+/** Notify the team (or Send changes) for one Match: who has been told, what's unsent, and how the emails went. */
+export function NameTheTeam({ eventId, label, naming, actions, sheet }: { eventId: string; label: string; naming: Naming; actions: NamingActions; sheet: React.ReactNode }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -64,7 +65,7 @@ export function NameTheTeam({ eventId, label, naming, actions }: { eventId: stri
       if (!result.ok) return void toast.error(result.error);
       setConfirming(false);
       if (!result.noticeId) {
-        toast.success(verb === "name" ? "Named. Nobody to tell." : "Updated the team card. Nobody to tell.");
+        toast.success(verb === "name" ? "Nobody to tell yet." : "Updated the team card. Nobody to tell.");
       } else {
         toast.loading(`Telling ${people(result.sending)}…`, { id: result.noticeId });
         void watchNotice(result.noticeId, router.refresh);
@@ -81,7 +82,15 @@ export function NameTheTeam({ eventId, label, naming, actions }: { eventId: stri
     });
   }
 
-  if (!named && !canName && notices.length === 0) return null;
+  function retry(noticeId: string) {
+    startTransition(async () => {
+      const result = await actions.retry(eventId, noticeId);
+      if (!result.ok) return void toast.error(result.error);
+      toast.loading(`Trying ${people(result.sending)} again…`, { id: noticeId });
+      void watchNotice(noticeId, router.refresh);
+      router.refresh();
+    });
+  }
 
   return (
     <div className="flex flex-col gap-2 rounded-2xl bg-card p-3 shadow-card">
@@ -93,7 +102,12 @@ export function NameTheTeam({ eventId, label, naming, actions }: { eventId: stri
           </p>
         ) : (
           <div key={notice.id} role="alert" className="flex items-start gap-2 rounded-xl bg-destructive/10 p-3 text-sm text-destructive-text">
-            <p className="flex-1">{failedMessage(notice)}</p>
+            <div className="flex flex-1 flex-col items-start gap-2">
+              <p>{failedMessage(notice)}</p>
+              <button type="button" onClick={() => retry(notice.id)} disabled={pending} className="rounded-lg bg-destructive/10 px-3 py-1.5 text-sm font-semibold hover:bg-destructive/20 disabled:opacity-60">
+                Try again
+              </button>
+            </div>
             <button type="button" onClick={() => dismiss(notice.id)} disabled={pending} aria-label="Dismiss" className="-m-1 rounded-lg p-1 hover:bg-destructive/10 disabled:opacity-60">
               <X className="size-4" aria-hidden="true" />
             </button>
@@ -103,7 +117,7 @@ export function NameTheTeam({ eventId, label, naming, actions }: { eventId: stri
 
       {named && (
         <p className="text-xs text-muted-foreground">
-          Named {formatDay(named.at)} by {named.by}
+          Notified {formatDay(named.at)} by {named.by}
         </p>
       )}
 
@@ -129,21 +143,24 @@ export function NameTheTeam({ eventId, label, naming, actions }: { eventId: stri
         </div>
       )}
 
-      {canName && (
-        <button
-          type="button"
-          onClick={() => setConfirming(true)}
-          className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-semibold text-primary-foreground"
-        >
-          <Send className="size-4" aria-hidden="true" />
-          Name the team
-        </button>
-      )}
+      <div className="flex gap-2">
+        {canName && (
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            className="flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-semibold text-primary-foreground"
+          >
+            <Send className="size-4" aria-hidden="true" />
+            Notify the team
+          </button>
+        )}
+        <div className={canName ? undefined : "flex-1 [&>button]:w-full"}>{sheet}</div>
+      </div>
 
       {confirming && (
         <BottomSheet
-          eyebrow="Name the team"
-          title={missing.length > 0 ? `Name the team with ${missing.length} ${missing.length === 1 ? "thing" : "things"} missing?` : `Name the ${label}?`}
+          eyebrow="Notify the team"
+          title={missing.length > 0 ? `Notify the team with ${missing.length} ${missing.length === 1 ? "thing" : "things"} missing?` : `Notify the ${label}?`}
           onSubmit={(e) => {
             e.preventDefault();
             send(() => actions.name(eventId), "name");
@@ -165,7 +182,7 @@ export function NameTheTeam({ eventId, label, naming, actions }: { eventId: stri
               className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-base font-semibold text-primary-foreground disabled:opacity-60"
             >
               {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-              Name the team
+              Notify the team
             </button>
           </div>
         </BottomSheet>

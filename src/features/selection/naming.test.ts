@@ -16,6 +16,7 @@ import {
   nameTheTeam,
   pickGuest,
   pickPlayer,
+  retryNotice,
   sendChanges,
   setRoles,
 } from "./index";
@@ -111,7 +112,7 @@ describe("nameTheTeam", () => {
     const eventId = await picked(db);
     expect((await nameTheTeam(db, { eventId, viewer: sam }, now)).ok).toBe(false);
     expect((await nameTheTeam(db, { eventId, viewer: tom }, now)).ok).toBe(true);
-    expect(await nameTheTeam(db, { eventId, viewer: tom }, now)).toEqual({ ok: false, error: "This team is already named." });
+    expect(await nameTheTeam(db, { eventId, viewer: tom }, now)).toEqual({ ok: false, error: "This team has already been notified." });
 
     const cancelled = await makeMatch(db, "2026-10-04T13:00:00Z", "2nd XV");
     await pickPlayer(db, { eventId: cancelled, shirt: 1, userId: "kit", viewer: tom }, now);
@@ -153,6 +154,25 @@ describe("nameTheTeam", () => {
 
     await dismissNotice(db, noticeId, tom, now);
     expect((await getNaming(db, eventId, tom, now))!.notices).toEqual([]);
+  });
+
+  it("retries a failed notice for just the people it missed", async () => {
+    const db = await setup();
+    const eventId = await picked(db);
+    const result = await nameTheTeam(db, { eventId, viewer: tom }, now);
+    const noticeId = result.ok ? result.noticeId! : "";
+    await deliverNotice(db, noticeId, { url: url(eventId), mail: fakeMail(["jo@x.org"]).mail }, now);
+
+    expect(await retryNotice(db, noticeId, sam, now)).toEqual({ ok: false, error: "Only committee can do that." });
+    expect(await retryNotice(db, noticeId, tom, now)).toEqual({ ok: true, noticeId, sending: 1 });
+    expect(await getNotice(db, noticeId, tom, now)).toMatchObject({ status: "sending", total: 2, sent: 1, missed: [] });
+
+    const retry = fakeMail();
+    const delivered = await deliverNotice(db, noticeId, { url: url(eventId), mail: retry.mail }, now);
+    expect(retry.sent.map((m) => m.to)).toEqual(["jo@x.org"]);
+    expect(delivered.reached.map((r) => r.userId)).toEqual(["jo"]);
+    expect(await getNotice(db, noticeId, tom, now)).toMatchObject({ status: "sent", total: 2, sent: 2, missed: [] });
+    expect(await retryNotice(db, noticeId, tom, now)).toEqual({ ok: false, error: "That one isn't waiting to be retried." });
   });
 });
 

@@ -5,6 +5,7 @@ import { listPlayers } from "@/features/players";
 import { displayName, listApprovedUsers, type RugbyPosition } from "@/features/users";
 import { DEFAULT_SHIRTS, fitFor, positionOfShirt, type Candidate, type Fit } from "./shirts";
 import { selectionPitch, selectionShirt } from "./schema";
+import type { Role } from "./sheet";
 
 export { DEFAULT_SHIRTS, fitFor, positionOfShirt, sortForShirt, STARTING_SHIRTS } from "./shirts";
 export type { Candidate, Fit } from "./shirts";
@@ -30,6 +31,8 @@ export type ShirtView = {
   shirt: number;
   position: RugbyPosition | null;
   occupant: Occupant | null;
+  /** Match Day Roles of whoever is on this Shirt, in the order a sheet prints them. */
+  roles: Role[];
   /** Who last changed this Shirt, and when, for the "Tom moved this" flash. */
   changedBy: string | null;
   changedAt: Date | null;
@@ -125,6 +128,7 @@ export async function getBoard(db: Db, eventId: string, viewer: Viewer, now: Dat
         shirt,
         position: positionOfShirt(shirt),
         occupant,
+        roles: (row?.roles ?? []) as Role[],
         changedBy: row ? (names.get(row.updatedById) ?? "Someone") : null,
         changedAt: row?.updatedAt ?? null,
       };

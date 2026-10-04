@@ -4,7 +4,7 @@ import { createTestDb } from "@/test/db";
 import { saveReply } from "@/features/availability";
 import { createEvent, listTeams, type NewEvent } from "@/features/events";
 import { user } from "@/features/users";
-import { addShirt, clearShirt, getBoard, pickGuest, pickPlayer, removeShirt, swapShirts } from "./index";
+import { addShirt, clearShirt, getBoard, pickGuest, pickPlayer, removeShirt, setRoles, swapShirts } from "./index";
 
 const now = new Date("2026-10-01T12:00:00Z");
 const tom = { id: "tom", committee: true };
@@ -160,6 +160,20 @@ describe("pickPlayer", () => {
 
     expect(await pickPlayer(db, { eventId, shirt: 4, userId: "ray", viewer: tom }, now)).toEqual({ ok: false, error: "That player isn't playing." });
     expect(await pickPlayer(db, { eventId, shirt: 40, userId: "jo", viewer: tom }, now)).toEqual({ ok: false, error: "There's no shirt 40." });
+  });
+});
+
+describe("Match Day Roles on the board", () => {
+  it("shows a Shirt's roles, and a new pick starts with none", async () => {
+    const db = await setup();
+    const eventId = await makeMatch(db, "2026-10-03T13:00:00Z");
+    await pickPlayer(db, { eventId, shirt: 4, userId: "jo", viewer: tom }, now);
+    expect(await setRoles(db, { eventId, shirt: 4, roles: ["C", "KD"], viewer: tom }, now)).toEqual({ ok: true });
+    expect(await shirtOf(db, eventId, 4)).toMatchObject({ roles: ["C", "KD"] });
+    expect(await shirtOf(db, eventId, 5)).toMatchObject({ roles: [] });
+
+    await pickPlayer(db, { eventId, shirt: 4, userId: "sam", viewer: tom }, now);
+    expect(await shirtOf(db, eventId, 4)).toMatchObject({ roles: [] });
   });
 });
 

@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { db } from "@/db/client";
 import { sendToUser } from "@/features/push";
-import { addShirt, clearShirt, deliverNotice, dismissNotice, nameTheTeam, pickGuest, pickPlayer, removeShirt, sendChanges, swapShirts } from "@/features/selection";
+import { addShirt, clearShirt, deliverNotice, dismissNotice, nameTheTeam, pickGuest, pickPlayer, removeShirt, retryNotice, sendChanges, setRoles, swapShirts, type Role } from "@/features/selection";
 import { isCommitteeOrAbove } from "@/features/users";
 import { getMailSender } from "@/lib/mail";
 import { getPushSender } from "@/lib/push";
@@ -35,6 +35,10 @@ export async function clear(eventId: string, shirt: number) {
 
 export async function swap(from: Ref, to: Ref) {
   return changed([from.eventId, to.eventId], (viewer) => swapShirts(db, { from, to, viewer }));
+}
+
+export async function roles(eventId: string, shirt: number, next: Role[]) {
+  return changed([eventId], (viewer) => setRoles(db, { eventId, shirt, roles: next, viewer }));
 }
 
 export async function add(eventId: string) {
@@ -73,6 +77,14 @@ export async function nameTeam(eventId: string) {
 export async function sendTeamChanges(eventId: string) {
   const current = await requireApprovedUser();
   const result = await sendChanges(db, { eventId, viewer: { id: current.id, committee: isCommitteeOrAbove(current.role) } });
+  if (result.ok && result.noticeId) await deliverLater(result.noticeId, eventId);
+  sent(eventId);
+  return result;
+}
+
+export async function retryTeamNotice(eventId: string, noticeId: string) {
+  const current = await requireApprovedUser();
+  const result = await retryNotice(db, noticeId, { id: current.id, committee: isCommitteeOrAbove(current.role) });
   if (result.ok && result.noticeId) await deliverLater(result.noticeId, eventId);
   sent(eventId);
   return result;

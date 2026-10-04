@@ -12,7 +12,7 @@ export function TeamCard({ card }: { card: Card }) {
           The team
         </h2>
         <span className="text-sm text-muted-foreground">
-          Named {formatDay(card.named.at)} by {card.named.by}
+          Notified {formatDay(card.named.at)} by {card.named.by}
         </span>
       </div>
       <div className="flex flex-col gap-4 rounded-3xl bg-card px-4 py-4 shadow-card">
@@ -35,16 +35,20 @@ export function TeamCard({ card }: { card: Card }) {
             ))}
           </dl>
         )}
-        {layout.message && <p className="text-sm">{layout.message}</p>}
-        <ol className="flex flex-col divide-y divide-border text-sm">
-          {layout.rows.map((row) => (
-            <li key={row.shirt} className="flex items-baseline gap-3 py-1.5">
-              <span className="w-6 text-center font-heading text-lg leading-none">{row.shirt}</span>
-              <span className="flex-1 font-semibold">{row.name}</span>
-              {row.roles && <span className="text-xs text-muted-foreground">{row.roles}</span>}
-            </li>
-          ))}
-        </ol>
+        {layout.sections.map((section) => (
+          <div key={section.title} className="flex flex-col gap-1">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{section.title}</h3>
+            <ol className="flex flex-col divide-y divide-border text-sm">
+              {section.rows.map((row) => (
+                <li key={row.shirt} className="flex items-baseline gap-3 py-1.5">
+                  <span className="w-6 text-center font-heading text-lg leading-none">{row.shirt}</span>
+                  <span className="flex-1 font-semibold">{row.name}</span>
+                  {row.roles && <span className="text-xs text-muted-foreground">{row.roles}</span>}
+                </li>
+              ))}
+            </ol>
+          </div>
+        ))}
         <p className="text-xs text-muted-foreground">{layout.legend}</p>
         <a
           href={`/events/${card.eventId}/team/pdf`}

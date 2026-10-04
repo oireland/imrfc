@@ -7,7 +7,7 @@ import { formatDay } from "@/lib/format-time";
 import type { MailSender } from "@/lib/mail";
 import { committeeAlert, diffNamed, noticeMessage, type Change, type Slot } from "./naming-rules";
 import { selectionNotice, selectionShirt, selectionSent, teamNaming, type NoticeRecipient } from "./schema";
-import { ROLES, buildSheet, type Role, type SheetFields, type SheetLayout } from "./sheet";
+import { ROLES, buildSheet, type Role, type SheetLayout } from "./sheet";
 import { getTeamSheet, settleFields } from "./team-sheet";
 import { STARTING_SHIRTS } from "./shirts";
 
@@ -72,7 +72,7 @@ function noticeStatus(row: typeof selectionNotice.$inferSelect, names: Map<strin
 
 /** Whether `viewer` can change this Match's team now; the reason if not. */
 async function refuse(db: Db, eventId: string, viewer: Viewer, now: Date): Promise<{ ok: false; error: string } | null> {
-  if (!viewer.committee) return { ok: false, error: "Only committee can name the team." };
+  if (!viewer.committee) return { ok: false, error: "Only committee can notify the team." };
   const event = await getEvent(db, eventId);
   if (!event || event.eventType !== "match") return { ok: false, error: "That match doesn't exist." };
   if (event.cancelled) return { ok: false, error: "This match is cancelled." };
@@ -140,7 +140,7 @@ export async function nameTheTeam(db: Db, input: { eventId: string; viewer: View
   const denied = await refuse(db, input.eventId, input.viewer, now);
   if (denied) return denied;
   const [existing] = await db.select().from(teamNaming).where(eq(teamNaming.eventId, input.eventId));
-  if (existing) return { ok: false, error: "This team is already named." };
+  if (existing) return { ok: false, error: "This team has already been notified." };
   const slots = await boardSlots(db, input.eventId);
   if (slots.length === 0) return { ok: false, error: "Pick the team first." };
 
@@ -158,7 +158,7 @@ export async function sendChanges(db: Db, input: { eventId: string; viewer: View
   const denied = await refuse(db, input.eventId, input.viewer, now);
   if (denied) return denied;
   const [existing] = await db.select().from(teamNaming).where(eq(teamNaming.eventId, input.eventId));
-  if (!existing) return { ok: false, error: "Name the team first." };
+  if (!existing) return { ok: false, error: "Notify the team first." };
 
   const current = await boardSlots(db, input.eventId);
   const { changes } = diffNamed(await sentSlots(db, input.eventId), current);
@@ -198,13 +198,15 @@ export async function deliverNotice(
   const notice = row as typeof selectionNotice.$inferSelect | undefined;
   if (!notice || notice.finishedAt) return { reached: [] };
 
+  // A retry leaves out the Players an earlier go already reached.
+  const before = notice.reachedIds;
   const reached: { userId: string; title: string; body: string }[] = [];
   try {
     const settled = await settleFields(db, notice.eventId);
     const event = settled?.event ?? (await getEvent(db, notice.eventId));
     const team = { label: event?.teams?.[0]?.name ?? event?.title ?? "team", date: event ? formatDay(event.start) : "" };
     const { people } = await namesById(db);
-    for (const recipient of notice.recipients) {
+    for (const recipient of notice.recipients.filter((r) => !before.includes(r.userId))) {
       const person = people.find((p: { id: string }) => p.id === recipient.userId);
       if (!person) continue;
       const message = noticeMessage(recipient, team);
@@ -222,7 +224,7 @@ export async function deliverNotice(
     console.error(`[selection] the ${notice.kind} notice for ${notice.eventId} stopped part way`, error);
   }
 
-  const reachedIds = reached.map((r) => r.userId);
+  const reachedIds = [...before, ...reached.map((r) => r.userId)];
   await db
     .update(selectionNotice)
     .set({ reachedIds, missedIds: notice.recipients.map((r) => r.userId).filter((id) => !reachedIds.includes(id)), finishedAt: now })
@@ -235,6 +237,22 @@ export async function getNotice(db: Db, noticeId: string, viewer: Viewer, now: D
   if (!viewer.committee) return null;
   const [row] = await db.select().from(selectionNotice).where(eq(selectionNotice.id, noticeId));
   return row ? noticeStatus(row, (await namesById(db)).names, now) : null;
+}
+
+/**
+ * Retries a failed notice (Committee): puts it back to sending so `deliverNotice` can run
+ * again for whoever it hasn't reached. A send that was cut off never recorded who it
+ * reached, so a retry emails everyone again.
+ */
+export async function retryNotice(db: Db, noticeId: string, viewer: Viewer, now: Date = new Date()): Promise<SendResult> {
+  if (!viewer.committee) return { ok: false, error: "Only committee can do that." };
+  const [row] = await db.select().from(selectionNotice).where(eq(selectionNotice.id, noticeId));
+  const notice = row as typeof selectionNotice.$inferSelect | undefined;
+  const status = notice && !notice.dismissedAt ? askStatus({ createdAt: notice.createdAt, finishedAt: notice.finishedAt, missed: notice.missedIds.length }, now) : null;
+  if (!notice || status !== "failed") return { ok: false, error: "That one isn't waiting to be retried." };
+
+  await db.update(selectionNotice).set({ finishedAt: null, missedIds: [], createdAt: now }).where(eq(selectionNotice.id, noticeId));
+  return { ok: true, noticeId, sending: notice.recipients.filter((r) => !notice.reachedIds.includes(r.userId)).length };
 }
 
 /** Takes a failed notice off the board (Committee). */
@@ -265,7 +283,6 @@ export async function getTeamCard(db: Db, eventId: string, viewer: Viewer, now: 
   ]);
   if (!naming || !settled) return null;
 
-  const fields = Object.fromEntries(Object.entries(settled.fields).map(([k, f]) => [k, f.value])) as SheetFields;
   return {
     eventId,
     label: settled.event.teams[0]?.name ?? settled.event.title,
@@ -273,7 +290,7 @@ export async function getTeamCard(db: Db, eventId: string, viewer: Viewer, now: 
     named: { at: naming.namedAt, by: names.get(naming.namedById) ?? "Someone" },
     layout: buildSheet({
       date: formatDay(settled.event.start),
-      fields,
+      fields: settled.fields,
       shirts: slots.map((s) => ({ shirt: s.shirt, name: s.userId ? (names.get(s.userId) ?? "Someone") : s.guestName!, roles: ROLES.filter((r) => s.roles.includes(r)) as Role[] })),
     }),
     mine: slots.find((s) => s.userId === viewer.id)?.shirt ?? null,
