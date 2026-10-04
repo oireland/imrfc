@@ -5,7 +5,7 @@ import { createEvent, type NewEvent } from "@/features/events";
 import { user } from "@/features/users";
 import type { MailSender } from "@/lib/mail";
 import { listEventsBetween } from "@/features/events";
-import { announce, deliverAsk, dismissAsk, getAsk, getAvailability, getSeasonRecord, listAvailableUserIds, listMyReplies, listWaitingOnReply, nudge, saveReply } from "./index";
+import { announce, deliverAsk, dismissAsk, retryAsk, getAsk, getAvailability, getSeasonRecord, listAvailableUserIds, listMyReplies, listWaitingOnReply, nudge, saveReply } from "./index";
 import { availabilityReply } from "./schema";
 
 const now = new Date("2026-10-01T12:00:00Z");
@@ -209,6 +209,44 @@ describe("Asks (how an Announce or Nudge's emails went)", () => {
     expect(await dismissAsk(db, askId, sam)).toEqual({ ok: false, error: "Only committee can do that." });
     expect(await dismissAsk(db, askId, tom)).toEqual({ ok: true });
     expect((await getAvailability(db, eventId, tom, now)).asks).toEqual([]);
+  });
+
+  it("retries a failed Ask for just the people it missed, and nudges only those it newly reaches", async () => {
+    const db = await setup();
+    const eventId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
+    let down = true;
+    const sentTo: string[] = [];
+    const mail: MailSender = {
+      send: async (m) => {
+        if (down && m.to === "jo@x.org") throw new Error("SMTP down");
+        sentTo.push(m.to);
+      },
+    };
+    const result = await nudge(db, { eventId, viewer: tom, playerIds: null }, now);
+    const askId = result.ok ? result.askId : "";
+    await deliverAsk(db, askId, { url: url(eventId), mail }, now);
+
+    expect(await retryAsk(db, askId, sam, now)).toEqual({ ok: false, error: "Only committee can do that." });
+    down = false;
+    sentTo.length = 0;
+    expect(await retryAsk(db, askId, tom, now)).toEqual({ ok: true, askId, sending: 1 });
+    expect(await getAsk(db, askId, tom, now)).toMatchObject({ status: "sending", total: 3, sent: 2, missed: [] });
+
+    const delivered = await deliverAsk(db, askId, { url: url(eventId), mail }, now);
+    expect(sentTo).toEqual(["jo@x.org"]);
+    expect(delivered.reachedUserIds).toEqual(["jo"]);
+    expect(await getAsk(db, askId, tom, now)).toMatchObject({ status: "sent", total: 3, sent: 3, missed: [] });
+    expect((await getAvailability(db, eventId, sam, now)).summary.noReply.find((r) => r.userId === "jo")?.nudgedAt).not.toBeNull();
+  });
+
+  it("only retries an Ask that failed", async () => {
+    const db = await setup();
+    const eventId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
+    const result = await nudge(db, { eventId, viewer: tom, playerIds: null }, now);
+    const askId = result.ok ? result.askId : "";
+    expect(await retryAsk(db, askId, tom, now)).toEqual({ ok: false, error: "That one isn't waiting to be retried." });
+    await deliverAsk(db, askId, { url: url(eventId), mail: fakeMail().mail }, now);
+    expect(await retryAsk(db, askId, tom, now)).toEqual({ ok: false, error: "That one isn't waiting to be retried." });
   });
 
   it("only lets Committee look up an Ask", async () => {

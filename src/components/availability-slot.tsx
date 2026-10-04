@@ -10,6 +10,7 @@ import {
   dismissAsk,
   getAvailability,
   nudge,
+  retryAsk,
   saveReply,
   type AskedEvent,
   type ReplyStatus,
@@ -85,6 +86,15 @@ export async function AvailabilitySlot({ eventId, viewer }: { eventId: string; v
     return result;
   }
 
+  async function retryAction(askId: string) {
+    "use server";
+    const result = await retryAsk(db, askId, await currentViewer());
+    const ask = availability.asks.find((a) => a.id === askId);
+    if (result.ok && ask) deliverLater(askId, ask.kind, { eventId, url, events: availability.events });
+    revalidatePath(`/events/${eventId}`);
+    return result;
+  }
+
   const chase =
     committee && availability.summary.noReply.length > 0
       ? chaseMessage({ events: availability.events, names: availability.summary.noReply.map((r) => r.name), url })
@@ -102,6 +112,7 @@ export async function AvailabilitySlot({ eventId, viewer }: { eventId: string; v
       announce={announceAction}
       nudge={nudgeAction}
       dismiss={dismissAction}
+      retry={retryAction}
     />
   );
 }

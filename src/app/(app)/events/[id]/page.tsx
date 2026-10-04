@@ -14,6 +14,7 @@ import { BackLink } from "@/components/back-link";
 import { AvailabilitySlot } from "@/components/availability-slot";
 import { TeamCard } from "@/components/team-card";
 import { ShareButton } from "@/components/share-button";
+import { buttonVariants } from "@/components/ui/button";
 import { formatWhen } from "@/lib/format-time";
 import { mapsSearchUrl } from "@/lib/maps";
 import {
@@ -341,6 +342,10 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
       meetTime: londonParts(eventDetails.matchDetails.meetTime).time,
       travelMeetTime: eventDetails.matchDetails.travelMeetTime ? londonParts(eventDetails.matchDetails.travelMeetTime).time : undefined,
       travelMeetPoint: eventDetails.matchDetails.travelMeetPoint ?? undefined,
+      schedule: eventDetails.matchDetails.schedule ?? undefined,
+      travelAttire: eventDetails.matchDetails.travelAttire ?? undefined,
+      warmUpAttire: eventDetails.matchDetails.warmUpAttire ?? undefined,
+      postMatchActivity: eventDetails.matchDetails.postMatchActivity ?? undefined,
     }),
   };
 
@@ -397,22 +402,29 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
                     ` at ${eventDetails.matchDetails.travelMeetPoint}`}
                 </p>
               )}
+              {eventDetails.matchDetails.schedule && <p>Schedule: {eventDetails.matchDetails.schedule}</p>}
+              {eventDetails.matchDetails.travelAttire && <p>Travel attire: {eventDetails.matchDetails.travelAttire}</p>}
+              {eventDetails.matchDetails.warmUpAttire && <p>Warm up attire: {eventDetails.matchDetails.warmUpAttire}</p>}
+              {eventDetails.matchDetails.postMatchActivity && <p>Post match: {eventDetails.matchDetails.postMatchActivity}</p>}
             </div>
           )}
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-            <ShareButton title={eventDetails.title} />
-            {committee && eventDetails.eventType === "match" && (
-              <Link href={`/events/${id}/selection`} className="rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">
-                Pick the team
-              </Link>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <ShareButton title={eventDetails.title} size="lg" />
+              {committee && eventDetails.eventType === "match" && (
+                <Link href={`/events/${id}/selection`} className={buttonVariants({ size: "lg" })}>
+                  Pick the team
+                </Link>
+              )}
+            </div>
 
             {!eventDetails.cancelled && committee && (
               <form id={`cancel-event-${id}`} action={cancel}>
                 <ConfirmSubmit
                   formId={`cancel-event-${id}`}
                   triggerLabel="Cancel event"
+                  triggerSize="lg"
                   title="Cancel this event?"
                   description="Nobody will need to bring equipment to it. It stays in the calendar, marked as cancelled."
                   confirmLabel="Cancel event"

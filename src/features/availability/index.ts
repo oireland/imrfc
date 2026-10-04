@@ -293,11 +293,13 @@ export async function deliverAsk(
   const ask = await askRow(db, askId);
   if (!ask || ask.finishedAt) return { reachedUserIds: [] };
 
+  // A retry leaves out the Players an earlier go already reached.
+  const before = ask.reachedIds;
   const reached: string[] = [];
   try {
     const availability = await getAvailability(db, ask.eventId, { id: ask.askedById, committee: true }, now);
     const people = await listApprovedUsers(db);
-    for (const u of people.filter((p: { id: string }) => ask.playerIds.includes(p.id))) {
+    for (const u of people.filter((p: { id: string }) => ask.playerIds.includes(p.id) && !before.includes(p.id))) {
       const email = askEmail({
         kind: ask.kind,
         events: availability.events,
@@ -323,7 +325,11 @@ export async function deliverAsk(
 
   await db
     .update(availabilityAsk)
-    .set({ reachedIds: reached, missedIds: ask.playerIds.filter((id) => !reached.includes(id)), finishedAt: now })
+    .set({
+      reachedIds: [...before, ...reached],
+      missedIds: ask.playerIds.filter((id) => !before.includes(id) && !reached.includes(id)),
+      finishedAt: now,
+    })
     .where(eq(availabilityAsk.id, askId));
   return { reachedUserIds: reached };
 }
@@ -360,6 +366,21 @@ export async function dismissAsk(db: Db, askId: string, viewer: Viewer, now: Dat
   if (!viewer.committee) return { ok: false, error: "Only committee can do that." };
   await db.update(availabilityAsk).set({ dismissedAt: now }).where(eq(availabilityAsk.id, askId));
   return { ok: true };
+}
+
+/**
+ * Retries a failed Announce or Nudge (Committee): puts it back to sending so `deliverAsk`
+ * can run again for whoever it hasn't reached. A send that was cut off never recorded who
+ * it reached, so a retry emails everyone again.
+ */
+export async function retryAsk(db: Db, askId: string, viewer: Viewer, now: Date = new Date()): Promise<AskResult> {
+  if (!viewer.committee) return { ok: false, error: "Only committee can do that." };
+  const row = await askRow(db, askId);
+  const status = row && !row.dismissedAt ? askStatus({ createdAt: row.createdAt, finishedAt: row.finishedAt, missed: row.missedIds.length }, now) : null;
+  if (!row || status !== "failed") return { ok: false, error: "That one isn't waiting to be retried." };
+
+  await db.update(availabilityAsk).set({ finishedAt: null, missedIds: [], createdAt: now }).where(eq(availabilityAsk.id, askId));
+  return { ok: true, askId, sending: row.playerIds.filter((id) => !row.reachedIds.includes(id)).length };
 }
 
 async function playerRepliesFor(db: Db, playerId: string, eventIds: string[]): Promise<(Reply & { eventId: string })[]> {
