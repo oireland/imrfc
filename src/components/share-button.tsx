@@ -2,10 +2,11 @@
 
 import { Share2 } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "./ui/button";
+import { Button, type buttonVariants } from "./ui/button";
+import type { VariantProps } from "class-variance-authority";
 
 /** Shares this page: the phone's share sheet where there is one, otherwise copies the link. */
-export function ShareButton({ title }: { title: string }) {
+export function ShareButton({ title, size = "sm" }: { title: string; size?: VariantProps<typeof buttonVariants>["size"] }) {
   async function share() {
     const url = window.location.href.split("?")[0];
     if (navigator.share) {
@@ -25,7 +26,7 @@ export function ShareButton({ title }: { title: string }) {
   }
 
   return (
-    <Button type="button" variant="outline" size="sm" onClick={share}>
+    <Button type="button" variant="outline" size={size} onClick={share}>
       <Share2 aria-hidden="true" />
       Share
     </Button>

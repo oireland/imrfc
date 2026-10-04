@@ -39,6 +39,14 @@ function Chip({ selected, onClick, children }: { selected: boolean; onClick: () 
   );
 }
 
+// Free text for the Team Sheet, kept on the Match.
+const SHEET_TEXT = [
+  ["schedule", "Schedule", "changing rooms 10.15am, warm up 10.30am"],
+  ["travelAttire", "Travel attire", ""],
+  ["warmUpAttire", "Warm up attire", ""],
+  ["postMatchActivity", "Post match", ""],
+] as const;
+
 export type EditEventInitial = {
   date: string; // YYYY-MM-DD, London
   startTime: string; // HH:MM, London
@@ -53,6 +61,10 @@ export type EditEventInitial = {
   meetTime?: string;
   travelMeetTime?: string;
   travelMeetPoint?: string;
+  schedule?: string;
+  travelAttire?: string;
+  warmUpAttire?: string;
+  postMatchActivity?: string;
 };
 
 /**
@@ -90,6 +102,12 @@ export function EditEventSheet({
   const [meetTime, setMeetTime] = useState(initial.meetTime ?? "");
   const [travelMeetTime, setTravelMeetTime] = useState(initial.travelMeetTime ?? "");
   const [travelMeetPoint, setTravelMeetPoint] = useState(initial.travelMeetPoint ?? "");
+  const [sheetText, setSheetText] = useState({
+    schedule: initial.schedule ?? "",
+    travelAttire: initial.travelAttire ?? "",
+    warmUpAttire: initial.warmUpAttire ?? "",
+    postMatchActivity: initial.postMatchActivity ?? "",
+  });
   const [opponent, setOpponent] = useState(initial.opponent ?? "");
   const [homeAway, setHomeAway] = useState<HomeAway>(initial.homeAway ?? "home");
   const [competition, setCompetition] = useState<Competition>(initial.competition ?? "friendly");
@@ -108,7 +126,7 @@ export function EditEventSheet({
         teamIds,
         scope,
         ...(eventType === "match"
-          ? { opponent, homeAway, competition, meetTime: meetTime || undefined, travelMeetTime: travelMeetTime || undefined, travelMeetPoint }
+          ? { opponent, homeAway, competition, meetTime: meetTime || undefined, travelMeetTime: travelMeetTime || undefined, travelMeetPoint, ...sheetText }
           : {}),
       });
       if (!result.ok) {
@@ -260,6 +278,16 @@ export function EditEventSheet({
                 aria-label="Travel meet point"
                 className="rounded-xl bg-muted px-3 py-2 text-sm outline-none placeholder:text-muted-foreground/60 focus-visible:ring-3 focus-visible:ring-ring/50"
               />
+              {SHEET_TEXT.map(([field, label, hint]) => (
+                <input
+                  key={field}
+                  value={sheetText[field]}
+                  onChange={(e) => setSheetText((t) => ({ ...t, [field]: e.target.value }))}
+                  placeholder={hint ? `${label}, e.g. ${hint}` : label}
+                  aria-label={label}
+                  className="rounded-xl bg-muted px-3 py-2 text-sm outline-none placeholder:text-muted-foreground/60 focus-visible:ring-3 focus-visible:ring-ring/50"
+                />
+              ))}
             </>
           )}
           {!isOccurrence && teams.length > 0 && (

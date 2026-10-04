@@ -28,15 +28,17 @@ export type SheetFields = {
   travelAttire: string;
   warmUpAttire: string;
   postMatchActivity: string;
-  message: string;
 };
+
+type SheetRow = { shirt: number; name: string; roles: string };
 
 export type SheetLayout = {
   title: string;
   date: string;
   details: { label: string; value: string }[];
-  message: string;
-  rows: { shirt: number; name: string; roles: string }[];
+  rows: SheetRow[];
+  /** The rows split into Starting (1–15) and Finishers (16 and up); a section nobody is in is left out. */
+  sections: { title: string; rows: SheetRow[] }[];
   legend: string;
 };
 
@@ -57,14 +59,18 @@ export function buildSheet(input: {
   shirts: { shirt: number; name: string; roles: Role[] }[];
 }): SheetLayout {
   const { fields } = input;
+  const rows = [...input.shirts]
+    .sort((a, b) => a.shirt - b.shirt)
+    .map((s) => ({ shirt: s.shirt, name: s.name, roles: rolesText(s.roles) }));
   return {
     title: fields.title,
     date: input.date,
     details: DETAILS.map(([label, field]) => ({ label, value: fields[field].trim() })).filter((d) => d.value),
-    message: fields.message.trim(),
-    rows: [...input.shirts]
-      .sort((a, b) => a.shirt - b.shirt)
-      .map((s) => ({ shirt: s.shirt, name: s.name, roles: rolesText(s.roles) })),
+    rows,
+    sections: [
+      { title: "Starting", rows: rows.filter((r) => r.shirt <= STARTING_SHIRTS) },
+      { title: "Finishers", rows: rows.filter((r) => r.shirt > STARTING_SHIRTS) },
+    ].filter((s) => s.rows.length > 0),
     legend: ROLES.map((r) => `${r} = ${ROLE_NAMES[r]}`).join(" · "),
   };
 }

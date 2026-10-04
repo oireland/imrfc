@@ -10,7 +10,6 @@ const fields: SheetFields = {
   travelAttire: "Club polo",
   warmUpAttire: "",
   postMatchActivity: "Food in the bar",
-  message: "Congratulations on your selection.",
 };
 
 describe("buildSheet", () => {
@@ -30,7 +29,20 @@ describe("buildSheet", () => {
       { shirt: 1, name: "Tom Hale", roles: "C, KD" },
       { shirt: 9, name: "Sam Patel", roles: "" },
     ]);
-    expect(sheet.message).toBe("Congratulations on your selection.");
+  });
+
+  it("splits the rows into Starting (1-15) and Finishers (16 and up), leaving out an empty section", () => {
+    const shirts = [
+      { shirt: 16, name: "Ben Ode", roles: [] },
+      { shirt: 15, name: "Al Ray", roles: [] },
+      { shirt: 24, name: "Cy Lowe", roles: [] },
+    ];
+    const sheet = buildSheet({ date: "Sat 4 Oct", fields, shirts });
+    expect(sheet.sections.map((s) => [s.title, s.rows.map((r) => r.shirt)])).toEqual([
+      ["Starting", [15]],
+      ["Finishers", [16, 24]],
+    ]);
+    expect(buildSheet({ date: "Sat 4 Oct", fields, shirts: shirts.slice(1, 2) }).sections.map((s) => s.title)).toEqual(["Starting"]);
   });
 
   it("leaves out details nobody filled in", () => {

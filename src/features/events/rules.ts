@@ -19,6 +19,10 @@ export type NewMatchDetails = {
   meetTime: Date;
   travelMeetTime?: Date;
   travelMeetPoint?: string;
+  schedule?: string;
+  travelAttire?: string;
+  warmUpAttire?: string;
+  postMatchActivity?: string;
 };
 
 export type NewEvent =

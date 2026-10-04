@@ -96,6 +96,10 @@ async function insertEvent(db: Db, input: NewEvent): Promise<Event> {
       meetTime: input.matchDetails.meetTime,
       travelMeetTime: input.matchDetails.travelMeetTime ?? null,
       travelMeetPoint: input.matchDetails.travelMeetPoint ?? null,
+      schedule: input.matchDetails.schedule?.trim() || null,
+      travelAttire: input.matchDetails.travelAttire?.trim() || null,
+      warmUpAttire: input.matchDetails.warmUpAttire?.trim() || null,
+      postMatchActivity: input.matchDetails.postMatchActivity?.trim() || null,
     });
   }
 
@@ -205,6 +209,10 @@ export async function editEvent(
         meetTime: input.matchDetails.meetTime,
         travelMeetTime: input.matchDetails.travelMeetTime ?? null,
         travelMeetPoint: input.matchDetails.travelMeetPoint ?? null,
+        schedule: input.matchDetails.schedule?.trim() || null,
+        travelAttire: input.matchDetails.travelAttire?.trim() || null,
+        warmUpAttire: input.matchDetails.warmUpAttire?.trim() || null,
+        postMatchActivity: input.matchDetails.postMatchActivity?.trim() || null,
       })
       .where(eq(matchDetails.eventId, id));
   }
