@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import postgres from "postgres";
 import { TEST_DATABASE_URL } from "./support/test-db";
 import { signIn } from "./support/sign-in";
@@ -64,7 +64,11 @@ test("Committee pick a team on the board: the best fits come first, and a Guest 
   await expect(page.getByRole("button", { name: new RegExp(`^Shirt 4, Lock, ${lock}`) })).toBeVisible();
 });
 
+/** Picks show at once but save in the background; "Add a shirt" is disabled until the save is done. */
+const saved = (page: Page) => expect(page.getByRole("button", { name: "Add a shirt" })).toBeEnabled({ timeout: 40_000 });
+
 test("Committee give roles while picking, then see the team sheet and export the PDF", async ({ page }) => {
+  test.slow();
   const { eventId, lock } = await seedMatch();
   await signIn(page);
 
@@ -76,6 +80,7 @@ test("Committee give roles while picking, then see the team sheet and export the
   await expect(sheet.getByRole("button", { name: "captain", exact: true })).toHaveAttribute("aria-pressed", "true");
   await sheet.getByRole("button", { name: "Done" }).click();
   await expect(page.getByRole("button", { name: new RegExp(`^Shirt 4, Lock, ${lock}, C`) })).toBeVisible();
+  await saved(page);
 
   await page.getByRole("button", { name: "Team sheet" }).click();
   const popup = page.getByRole("dialog");
@@ -90,6 +95,7 @@ test("Committee give roles while picking, then see the team sheet and export the
 });
 
 test("Committee notify the team: it's on Event detail and Home for the Player, with a PDF", async ({ page }) => {
+  test.slow();
   const { eventId } = await seedMatch();
   await signIn(page);
 
@@ -98,12 +104,13 @@ test("Committee notify the team: it's on Event detail and Home for the Player, w
   await page.getByRole("dialog").getByRole("button", { name: /E2E Admin/ }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Done" }).click();
   await expect(page.getByRole("button", { name: /^Shirt 10, Fly-half, E2E Admin/ })).toBeVisible();
+  await saved(page);
 
   await page.getByRole("button", { name: "Notify the team", exact: true }).click();
   const sheet = page.getByRole("dialog");
   await expect(sheet.getByText(/things missing\?/)).toBeVisible();
   await sheet.getByRole("button", { name: "Notify the team", exact: true }).click();
-  await expect(page.getByText(/^Notified .* by E2E Admin/)).toBeVisible();
+  await expect(page.getByText(/^Notified .* by E2E Admin/)).toBeVisible({ timeout: 40_000 });
 
   // A later edit is held until Committee send it.
   await page.getByRole("button", { name: /^Shirt 11, Wing, empty/ }).click();

@@ -5,6 +5,6 @@ test("A dead sign-in link says why, instead of silently showing the sign-in page
   const page = await context.newPage();
   await page.goto("/?error=INVALID_TOKEN");
   await expect(page).toHaveURL(/\/sign-in/);
-  await expect(page.getByRole("alert")).toContainText("expired or already been used");
+  await expect(page.getByRole("alert").filter({ hasText: "expired or already been used" })).toBeVisible();
   await context.close();
 });
