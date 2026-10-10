@@ -3,16 +3,24 @@ import Link from "next/link";
 import { db } from "@/db/client";
 import { CanYouMakeIt } from "@/components/can-you-make-it";
 import { ComingUp } from "@/components/coming-up";
+import { AwayHomeCard } from "@/components/away-home-card";
 import { CrestThemePicker } from "@/components/crest-theme-picker";
+import { HealthStack } from "@/components/health-stack";
+import { InjuryHomeCard } from "@/components/injury-home-card";
 import { listWaitingOnReply } from "@/features/availability";
 import { joinNames, listUpcomingDutiesForUser, markUnconfirmed } from "@/features/duties";
 import { listEquipmentHeldBy, listEquipmentUnits } from "@/features/equipment";
+import { listInjuries } from "@/features/injuries";
+import { formatDay, listAway, londonToday } from "@/features/players";
 import { listPlayingFor } from "@/features/selection";
 import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
 import { greeting, londonDay, londonTime } from "@/lib/calendar";
 import { requireApprovedUser } from "@/lib/session";
 import { cn } from "cn";
 import { quickAddEvent, saveMyReply, setTheme } from "./actions";
+import { imBackAction } from "./away-actions";
+import { clearInjuryAction, logByMistakeAction, reportInjuryAction, updateInjuryAction } from "./injury-actions";
+import { injuryItems } from "./injury-items";
 import { loadComingUp } from "./coming-up-data";
 
 /** How many held Equipment Units the greeting names before "& N more". */
@@ -33,7 +41,7 @@ export default async function Home() {
 
   await markUnconfirmed(db);
   const upcomingDuties = listUpcomingDutiesForUser(db, user.id);
-  const [asks, playing, duties, held, comingUp, allEquipment, people] = await Promise.all([
+  const [asks, playing, duties, held, comingUp, allEquipment, people, away, injuries] = await Promise.all([
     listWaitingOnReply(db, user.id),
     listPlayingFor(db, user.id),
     upcomingDuties,
@@ -41,6 +49,8 @@ export default async function Home() {
     loadComingUp(user.id, upcomingDuties),
     listEquipmentUnits(db, { includeRetired: true }),
     listApprovedUsers(db),
+    listAway(db, user, user.id, londonToday()),
+    listInjuries(db, user, user.id, londonToday()),
   ]);
   const equipmentNames = new Map(allEquipment.map((k) => [k.id, k.name]));
   const names = new Map(people.map((p) => [p.id, displayName(p)]));
@@ -50,6 +60,36 @@ export default async function Home() {
     return others.length > 0 ? `with ${joinNames(others)}` : null;
   };
   const firstName = displayName(user).split(" ")[0];
+  // My own health cards, most urgent first; time Away comes last.
+  const injuryActions = {
+    report: reportInjuryAction.bind(null, user.id),
+    update: updateInjuryAction,
+    clear: clearInjuryAction,
+    mistake: logByMistakeAction,
+  };
+  const injuryCards = injuryItems(injuries.open).map((injury) => (
+    <InjuryHomeCard
+      key={injury.id}
+      injury={{
+        id: injury.id,
+        area: injury.area,
+        since: injury.since,
+        status: injury.status as "out" | "training_only" | "playing_through",
+        expectedReturn: injury.expectedReturn,
+        expectedPassed: injury.stillExpecting !== null,
+        needsPhysio: injury.needsPhysio,
+        physioNote: injury.physioNote,
+      }}
+      statusLabel={injury.statusLabel}
+      summary={injury.since}
+      stillExpecting={injury.stillExpecting}
+      actions={injuryActions}
+    />
+  ));
+  const awayCards = away.current.map((period) => (
+    <AwayHomeCard key={period.id} until={formatDay(period.until)} reason={period.reason} imBack={imBackAction.bind(null, period.id)} />
+  ));
+  const healthCards = [...injuryCards, ...awayCards];
 
   return (
     <div className="flex flex-col gap-9">
@@ -88,6 +128,8 @@ export default async function Home() {
         </div>
         <CrestThemePicker theme={user.theme} onChange={setTheme} />
       </header>
+
+      <HealthStack cards={healthCards} />
 
       <CanYouMakeIt asks={asks} now={new Date(comingUp.now)} reply={saveMyReply} />
 

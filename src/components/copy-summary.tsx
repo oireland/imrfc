@@ -4,12 +4,22 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-/** Duty Summary: previews the WhatsApp text and copies it to the clipboard. */
-export function CopySummary({ text }: { text: string }) {
+/** Previews a text message (the Physio Message) and copies it to the clipboard. */
+export function CopySummary({
+  text,
+  title,
+  buttonLabel,
+  copiedMessage,
+}: {
+  text: string;
+  title: string;
+  buttonLabel: string;
+  copiedMessage: string;
+}) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>WhatsApp message</CardTitle>
+        <CardTitle>{title}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
         <pre className="whitespace-pre-wrap text-sm text-muted-foreground">{text}</pre>
@@ -18,10 +28,10 @@ export function CopySummary({ text }: { text: string }) {
           className="self-start"
           onClick={async () => {
             await navigator.clipboard.writeText(text);
-            toast("Copied. Paste it into the club group.");
+            toast(copiedMessage);
           }}
         >
-          Copy WhatsApp message
+          {buttonLabel}
         </Button>
       </CardContent>
     </Card>

@@ -24,7 +24,6 @@ import { duty, dutyUser } from "./schema";
 export { duty } from "./schema";
 export type { Clash } from "./clashes-rules";
 export type { HeadsUp } from "./heads-up-rules";
-export { formatDutySummary } from "./duty-summary-rules";
 export { dutyActions } from "./duty-actions-rules";
 export type { DutyAction } from "./duty-actions-rules";
 export { joinNames } from "./names-rules";

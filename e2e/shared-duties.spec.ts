@@ -24,7 +24,7 @@ test("Two People join a To Duty, split where it comes from and who ends up with 
 
   await signIn(page);
 
-  await page.goto(`/events/${event}`);
+  await page.goto(`/events/${event}?tab=kit`);
   const duties = page.getByRole("region", { name: "Who's bringing what" });
   const sheet = page.getByRole("dialog");
 

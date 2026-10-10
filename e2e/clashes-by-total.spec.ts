@@ -29,10 +29,10 @@ test("Clashes fire by total count, not just by overlap, once an Equipment Unit i
   const clashes = page.getByRole("alert").filter({ hasText: "Clashes" });
 
   // 4 and 4 of 8 is fine: no Clash on either overlapping Event.
-  await page.goto(`/events/${eventA}`);
+  await page.goto(`/events/${eventA}?tab=kit`);
   await expect(page.getByText(equipmentName).first()).toBeVisible();
   await expect(clashes).toHaveCount(0);
-  await page.goto(`/events/${eventB}`);
+  await page.goto(`/events/${eventB}?tab=kit`);
   await expect(page.getByText(equipmentName).first()).toBeVisible();
   await expect(clashes).toHaveCount(0);
 
@@ -42,7 +42,7 @@ test("Clashes fire by total count, not just by overlap, once an Equipment Unit i
   await page.getByLabel(`How many ${equipmentName}?`).selectOption("6");
   await expect(page.getByText(`${equipmentName} ×6`).first()).toBeVisible();
 
-  await page.goto(`/events/${eventA}`);
+  await page.goto(`/events/${eventA}?tab=kit`);
   await expect(clashes).toBeVisible();
   await expect(clashes).toContainText(
     `${titleA} and ${titleB} need 10 ${equipmentName} between them, but the club only has 8.`,

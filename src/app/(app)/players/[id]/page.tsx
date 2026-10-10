@@ -5,30 +5,43 @@ import { BackLink } from "@/components/back-link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { MobileNumberField } from "@/components/mobile-number-field";
+import { AwayCard } from "@/components/away-card";
+import { InjuriesCard, StatusPill } from "@/components/injuries-card";
 import { PositionsPicker } from "@/components/positions-picker";
 import { SubmitButton } from "@/components/submit-button";
 import { getSeasonRecord, type RecordLine, type ReplyCounts } from "@/features/availability";
 import { listEquipmentUnits } from "@/features/equipment";
 import { getMobileNumber, setMobileNumber, whatsappLink } from "@/features/contact";
-import { getPlayer, setPlayerPositions, setPlaying } from "@/features/players";
+import { listInjuries, STATUS_LABEL, worstFitness, type OpenStatus } from "@/features/injuries";
+import { getPlayer, listAway, londonToday, setPlayerPositions, setPlaying } from "@/features/players";
 import { formatWhen } from "@/lib/format-time";
 import { isCommitteeOrAbove, type RugbyPosition } from "@/features/users";
 import { buttonVariants } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/session";
+import { addAwayAction, editAwayAction, imBackAction, removeAwayAction } from "../../away-actions";
+import { awayItems } from "../../away-items";
+import { recentEventOptions } from "../../injury-events";
+import { clearInjuryAction, logByMistakeAction, reportInjuryAction, updateInjuryAction } from "../../injury-actions";
+import { injuryItems } from "../../injury-items";
 
 export default async function PlayerPage({ params }: PageProps<"/players/[id]">) {
   const user = await getCurrentUser();
   if (!user || !isCommitteeOrAbove(user.role)) redirect("/");
 
   const { id } = await params;
-  const [player, equipmentUnits, availability, mobileNumber] = await Promise.all([
+  const today = londonToday();
+  const [player, equipmentUnits, availability, mobileNumber, awayListing, injuries, eventOptions] = await Promise.all([
     getPlayer(db, id),
     listEquipmentUnits(db, { includeRetired: true }),
     getSeasonRecord(db, id),
     getMobileNumber(db, user, id),
+    listAway(db, user, id, today),
+    listInjuries(db, user, id, today),
+    recentEventOptions(),
   ]);
   if (!player) redirect("/players");
 
+  const fitness = worstFitness(injuries.open.map((i) => i.status as OpenStatus));
   const equipmentName = new Map(equipmentUnits.map((k) => [k.id, k.name]));
 
   async function savePositions(preferred: RugbyPosition, other: RugbyPosition[]) {
@@ -69,6 +82,10 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
           <h2 className="font-heading text-[40px] leading-none tracking-tight">{player.name}</h2>
           {!player.playing && <Badge variant="secondary">Not playing</Badge>}
         </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>{player.preferredPosition ?? "No position set"}</span>
+          <StatusPill status={fitness === "fit" ? "cleared" : fitness}>{STATUS_LABEL[fitness]}</StatusPill>
+        </div>
       </div>
 
       <Card>
@@ -88,6 +105,36 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
           </form>
         </CardContent>
       </Card>
+
+      <InjuriesCard
+        title="Injuries"
+        open={injuryItems(injuries.open)}
+        cleared={injuryItems(injuries.history)}
+        today={today}
+        events={eventOptions}
+        emptyText={`${player.name.split(" ")[0]} has nothing hurting.`}
+        showCheckIn
+        actions={{
+          report: reportInjuryAction.bind(null, id),
+          update: updateInjuryAction,
+          clear: clearInjuryAction,
+          mistake: logByMistakeAction,
+        }}
+      />
+
+      <AwayCard
+        title="Time away"
+        {...awayItems(awayListing, id)}
+        today={today}
+        addLabel="Add time away"
+        emptyText={`${player.name.split(" ")[0]} isn't away.`}
+        actions={{
+          add: addAwayAction.bind(null, id),
+          edit: editAwayAction,
+          imBack: imBackAction,
+          remove: removeAwayAction,
+        }}
+      />
 
       <Card>
         <CardHeader>

@@ -13,6 +13,7 @@ import Link from "next/link";
 import { BackLink } from "@/components/back-link";
 import { AvailabilitySlot } from "@/components/availability-slot";
 import { TeamCard } from "@/components/team-card";
+import { EventTabs, type EventTab } from "@/components/event-tabs";
 import { ShareButton } from "@/components/share-button";
 import { buttonVariants } from "@/components/ui/button";
 import { formatDay, formatWhen } from "@/lib/format-time";
@@ -35,7 +36,6 @@ import {
   dutyActions,
   voidDutiesForEvent,
   ensureDuties,
-  formatDutySummary,
   gatherConfirmSources,
   joinNames,
   listPeopleOnEquipment,
@@ -57,8 +57,9 @@ import {
   londonParts,
   type QuickEventInput,
 } from "@/features/events";
-import { deleteAvailabilityForEvent } from "@/features/availability";
-import { deleteSelectionForEvent, getTeamCard } from "@/features/selection";
+import { deleteAvailabilityForEvent, takesReplies } from "@/features/availability";
+import { deleteSelectionForEvent, getTeamCard, listPickedPlayerIds } from "@/features/selection";
+import { formatPhysioList, listPhysioNeeds } from "@/features/injuries";
 import { listStores, type Store } from "@/features/stores";
 import { canDeleteEvent, displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
 import { requireApprovedUser } from "@/lib/session";
@@ -96,6 +97,13 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
   ]);
   if (!eventDetails) notFound();
   const seriesId = eventDetails.seriesId;
+
+  // For the physio: only the Players picked for a Match, and only Committee see Injuries.
+  const pickedIds = committee && eventDetails.eventType === "match" ? await listPickedPlayerIds(db, id) : [];
+  const physioList =
+    pickedIds.length > 0
+      ? formatPhysioList(`${eventDetails.title}, ${formatDay(eventDetails.start)}`, await listPhysioNeeds(db, pickedIds))
+      : null;
 
   async function cancel() {
     "use server";
@@ -304,18 +312,6 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
       headsUps: headsUps.filter((h) => h.equipmentUnitId === kid).map((h) => h.message),
     };
   });
-  const summary = formatDutySummary({
-    title: eventDetails.title,
-    start: eventDetails.start,
-    venueName: eventDetails.venue,
-    items: equipmentUnitIds.map((kid) => ({
-      equipmentName: equipmentNames.get(kid) ?? kid,
-      count: countByUnit.get(kid) ?? 1,
-      quantity: equipmentById.get(kid)?.quantity ?? 1,
-      to: dutyFor(kid, "to").userIds.length > 0 ? joinNames(dutyFor(kid, "to").userIds.map((uid) => personName.get(uid) ?? "Someone")) : null,
-      from: dutyFor(kid, "from").userIds.length > 0 ? joinNames(dutyFor(kid, "from").userIds.map((uid) => personName.get(uid) ?? "Someone")) : null,
-    })),
-  });
   const kit: KitEditing | undefined = canEditList
     ? {
         options: equipmentUnits
@@ -366,6 +362,30 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
       postMatchActivity: details.postMatchActivity ?? undefined,
     }),
   };
+
+  const tabs: EventTab[] = [
+    ...(takesReplies(eventDetails.eventType)
+      ? [{ id: "availability", label: "Availability", content: <AvailabilitySlot eventId={id} viewer={user} /> }]
+      : []),
+    {
+      id: "kit",
+      label: "Kit",
+      count: equipmentUnitIds.length,
+      content: (
+        <EventDuties
+          equipment={dutyEquipment}
+          eventTitle={eventDetails.title}
+          soon={headsUps.some((h) => h.kind === "unfilled_duty")}
+          viewerId={user.id}
+          people={approved.map((p) => ({ id: p.id, name: displayName(p) }))}
+          act={act}
+          kit={kit}
+          listSource={checklistSource}
+        />
+      ),
+    },
+    ...(teamCard ? [{ id: "team", label: "Team sheet", content: <TeamCard card={teamCard} /> }] : []),
+  ];
 
   return (
     <div className="flex flex-col gap-4">
@@ -462,21 +482,12 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
         </CardContent>
       </Card>
 
-      {teamCard && <TeamCard card={teamCard} />}
-      <AvailabilitySlot eventId={id} viewer={user} />
       <ClashList clashes={clashes} />
-      <EventDuties
-        equipment={dutyEquipment}
-        eventTitle={eventDetails.title}
-        soon={headsUps.some((h) => h.kind === "unfilled_duty")}
-        viewerId={user.id}
-        people={approved.map((p) => ({ id: p.id, name: displayName(p) }))}
-        act={act}
-        kit={kit}
-        listSource={checklistSource}
-      />
+      <EventTabs tabs={tabs} />
 
-      <CopySummary text={summary} />
+      {physioList && (
+        <CopySummary text={physioList} title="Physio Message" buttonLabel="Copy physio message" copiedMessage="Copied. Paste it to the physio." />
+      )}
     </div>
   );
 }

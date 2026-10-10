@@ -46,10 +46,19 @@ export type Messaged = { userId: string; messagedById: string; createdAt: Date }
 
 export type Nudge = { userId: string; createdAt: Date };
 
+/** Why a Player isn't chased for an Event: Away, Out, or Training only for a Match. */
+export type NotChasedKind = "away" | "out" | "training_only";
+
+export type NotChased = { kind: NotChasedKind; /** The Reason or Injury detail: shown to Committee only. */ detail: string };
+
+export type NotChasedRow = { userId: string; name: string; kind: NotChasedKind; detail: string };
+
 export type AvailabilitySummary = {
   available: AvailabilityRow[];
   notAvailable: AvailabilityRow[];
   noReply: AvailabilityRow[];
+  /** Committee only: Players with no reply who are Away or Injured, so not chased. */
+  notChased: NotChasedRow[];
 };
 
 /** Each Player's latest reply. */
@@ -75,6 +84,7 @@ export function summarizeAvailability({
   replyBy = null,
   nudges = [],
   messages = [],
+  notChased = new Map(),
 }: {
   players: AvailabilityPlayer[];
   replies: Reply[];
@@ -84,6 +94,8 @@ export function summarizeAvailability({
   replyBy?: Date | null;
   nudges?: Nudge[];
   messages?: Messaged[];
+  /** Players to leave out of No reply, with why. A reply always wins. */
+  notChased?: Map<string, NotChased>;
 }): AvailabilitySummary {
   const names = new Map(players.map((p) => [p.id, p.name]));
   const latest = latestReplies(replies);
@@ -99,7 +111,7 @@ export function summarizeAvailability({
   }
   const messagedBy = (m?: Messaged) =>
     m ? { at: m.createdAt, by: names.get(m.messagedById) ?? nameOf?.(m.messagedById) ?? "Someone" } : null;
-  const summary: AvailabilitySummary = { available: [], notAvailable: [], noReply: [] };
+  const summary: AvailabilitySummary = { available: [], notAvailable: [], noReply: [], notChased: [] };
   const playing = players.filter((p) => p.playing).sort((a, b) => a.name.localeCompare(b.name));
   for (const player of playing) {
     const r = latest.get(player.id);
@@ -113,7 +125,11 @@ export function summarizeAvailability({
       nudgedAt: null,
       messaged: messagedBy(lastMessaged.get(player.id)),
     };
-    if (!r) summary.noReply.push({ ...row, reason: null, nudgedAt: lastNudged.get(player.id) ?? null });
+    const skipped = notChased.get(player.id);
+    if (!r && skipped) {
+      // Seen only by Committee: other Members never learn who is away or injured.
+      if (viewer.committee) summary.notChased.push({ userId: player.id, name: player.name, ...skipped });
+    } else if (!r) summary.noReply.push({ ...row, reason: null, nudgedAt: lastNudged.get(player.id) ?? null });
     else if (r.status === "available") summary.available.push({ ...row, reason: null });
     else summary.notAvailable.push(row);
   }

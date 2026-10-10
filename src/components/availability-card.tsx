@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Check, Copy, Loader2, Megaphone, MessageCircle, Send, X } from "lucide-react";
 import { cn } from "cn";
-import type { AskNotice, Availability, AvailabilityRow, ReplyStatus } from "@/features/availability";
+import type { AskNotice, Availability, AvailabilityRow, NotChasedRow, ReplyStatus } from "@/features/availability";
 import { formatAgo, formatDay, formatWhen } from "@/lib/format-time";
 import { BottomSheet, SheetSaveButton } from "./bottom-sheet";
 import { Button } from "./ui/button";
@@ -153,6 +153,7 @@ export function AvailabilityCard({
         </h2>
         <span className="text-sm text-muted-foreground">
           {summary.available.length} in · {summary.notAvailable.length} out · {summary.noReply.length} haven&apos;t said
+          {summary.notChased.length > 0 && ` · ${notChasedCounts(summary.notChased)}`}
         </span>
       </div>
 
@@ -227,6 +228,8 @@ export function AvailabilityCard({
           )}
         </div>
 
+        {summary.notChased.length > 0 && <NotChasedGroup rows={summary.notChased} />}
+
         {committee && (canAnnounce || canNudge || canMessage || chase) && (
           <div className="flex flex-wrap gap-2 border-t border-border pt-4">
             {canAnnounce && (
@@ -269,6 +272,7 @@ export function AvailabilityCard({
       {asking === "nudge" && (
         <NudgeSheet
           rows={summary.noReply}
+          notChased={summary.notChased}
           now={now}
           pending={pending}
           onClose={() => setAsking(null)}
@@ -632,20 +636,54 @@ function AnnounceSheet({
   );
 }
 
+/** "2 away · 1 injured". */
+function notChasedCounts(rows: NotChasedRow[]): string {
+  const away = rows.filter((r) => r.kind === "away").length;
+  const injured = rows.length - away;
+  return [away > 0 && `${away} away`, injured > 0 && `${injured} injured`].filter(Boolean).join(" · ");
+}
+
+function notChasedLabel(row: NotChasedRow): string {
+  const state = { away: "Away", out: "Out", training_only: "Training only" }[row.kind];
+  return row.detail ? `${state} · ${row.detail}` : state;
+}
+
+/** Committee only: Players with no reply who aren't chased, and why, so a missing name makes sense. */
+function NotChasedGroup({ rows }: { rows: NotChasedRow[] }) {
+  return (
+    <div className="flex flex-col gap-1 rounded-2xl bg-muted px-3 py-3">
+      <p className="text-sm font-medium">Away / Injured · {notChasedCounts(rows)}</p>
+      <p className="text-xs text-muted-foreground">Not chased. If they reply, they move up to In or Out.</p>
+      <ul className="mt-1 flex flex-col gap-0.5">
+        {rows.map((row) => (
+          <li key={row.userId} className="text-sm">
+            <span className="font-medium">{row.name}</span>
+            <span className="text-muted-foreground"> — {notChasedLabel(row)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function NudgeSheet({
   rows,
+  notChased,
   now,
   pending,
   onClose,
   onSend,
 }: {
   rows: AvailabilityRow[];
+  /** Not chased, so unticked; Committee can still tick one by hand. */
+  notChased: NotChasedRow[];
   now: Date;
   pending: boolean;
   onClose: () => void;
   onSend: (playerIds: string[]) => void;
 }) {
   const [chosen, setChosen] = useState<Set<string>>(() => new Set(rows.map((r) => r.userId)));
+  const allTicked = rows.every((r) => chosen.has(r.userId));
   const toggle = (id: string) =>
     setChosen((current) => {
       const next = new Set(current);
@@ -666,13 +704,13 @@ function NudgeSheet({
     >
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between px-1 text-sm">
-          <span className="text-muted-foreground">{chosen.size} of {rows.length} ticked</span>
+          <span className="text-muted-foreground">{chosen.size} ticked</span>
           <button
             type="button"
             className="font-medium underline-offset-4 hover:underline"
-            onClick={() => setChosen(chosen.size === rows.length ? new Set() : new Set(rows.map((r) => r.userId)))}
+            onClick={() => setChosen(allTicked ? new Set() : new Set(rows.map((r) => r.userId)))}
           >
-            {chosen.size === rows.length ? "Untick all" : "Tick all"}
+            {allTicked ? "Untick all" : "Tick all"}
           </button>
         </div>
         <ul className="flex flex-col">
@@ -693,6 +731,29 @@ function NudgeSheet({
             </li>
           ))}
         </ul>
+        {notChased.length > 0 && (
+          <div className="flex flex-col">
+            <p className="px-1 text-xs font-medium text-muted-foreground">Not usually chased</p>
+            <ul className="flex flex-col">
+              {notChased.map((row) => (
+                <li key={row.userId}>
+                  <label className="flex items-center gap-3 rounded-xl px-1 py-2 hover:bg-muted">
+                    <input
+                      type="checkbox"
+                      checked={chosen.has(row.userId)}
+                      onChange={() => toggle(row.userId)}
+                      className="size-5 shrink-0 accent-primary"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{row.name}</span>
+                      <span className="block text-xs text-muted-foreground">{notChasedLabel(row)}</span>
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <SendButton pending={pending} disabled={chosen.size === 0}>
           Nudge {people(chosen.size)}
         </SendButton>

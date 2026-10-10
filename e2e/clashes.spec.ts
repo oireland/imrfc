@@ -18,16 +18,13 @@ test("Unfilled Duties get a heads-up, not a Clash, on the Event and the Equipmen
 
   await signIn(page);
 
-  await page.goto(`/events/${event}`);
+  await page.goto(`/events/${event}?tab=kit`);
   const headsUp = `Nobody is taking ${equipmentName} to or back from Clash training ${run}, and it starts within 48 hours.`;
   // On the Event, the heads-up sits with the equipment it is about.
   const duties = page.getByRole("region", { name: "Who's bringing what" });
   await expect(duties.getByText(headsUp)).toBeVisible();
   await expect(duties.getByRole("button", { name: `Bring ${equipmentName}: nobody yet` })).toContainText("Needs someone");
   await expect(page.getByText("Clashes")).toHaveCount(0);
-  // Duty Summary previews the WhatsApp message with the unassigned Equipment Unit flagged.
-  await expect(page.getByText(`${equipmentName}: ❗unassigned`)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Copy WhatsApp message" })).toBeVisible();
 
   await page.goto(`/equipment/${equipment}`);
   await expect(page.getByRole("region", { name: "Heads up" }).getByText(headsUp)).toBeVisible();

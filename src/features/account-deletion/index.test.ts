@@ -9,6 +9,8 @@ import { claimDuty, ensureDuties } from "@/features/duties";
 import { getFeedToken, renderFeed } from "@/features/calendar-feed";
 import { isSubscribed, subscribe } from "@/features/push";
 import { hasMobileNumber, setMobileNumber } from "@/features/contact";
+import { listInjuries, reportInjury } from "@/features/injuries";
+import { addAway, listAway } from "@/features/players";
 import { user } from "@/features/users";
 import { deleteAccount } from "./index";
 
@@ -109,5 +111,31 @@ describe("deleteAccount", () => {
     await deleteAccount(db, { actor: actor("tom", "member"), userId: "tom" });
 
     expect(await hasMobileNumber(db, "tom")).toBe(false);
+  });
+
+  it("wipes their time Away", async () => {
+    const db = await setup();
+    const tom = actor("tom", "member");
+    await addAway(db, tom, "tom", { from: "2026-11-03", until: "2026-11-20", reason: "Exams" }, "2026-10-10");
+
+    await deleteAccount(db, { actor: tom, userId: "tom" });
+
+    expect(await listAway(db, actor("cat", "committee"), "tom", "2026-10-10")).toEqual({ current: [], future: [], past: [] });
+  });
+
+  it("wipes their Injuries", async () => {
+    const db = await setup();
+    const tom = actor("tom", "member");
+    await reportInjury(
+      db,
+      tom,
+      "tom",
+      { area: "Knee", description: "", happenedOn: "2026-10-01", eventId: null, status: "out", expectedReturn: null, notSure: true, needsPhysio: false, physioNote: "" },
+      "2026-10-10",
+    );
+
+    await deleteAccount(db, { actor: tom, userId: "tom" });
+
+    expect(await listInjuries(db, actor("cat", "committee"), "tom", "2026-10-10")).toEqual({ open: [], history: [] });
   });
 });
