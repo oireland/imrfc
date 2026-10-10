@@ -19,7 +19,7 @@ test("Home shows my Duties, what's coming up and the Equipment I hold", async ({
 
   await signIn(page);
 
-  await page.goto(`/events/${event}`);
+  await page.goto(`/events/${event}?tab=kit`);
   const eventDuties = page.getByRole("region", { name: "Who's bringing what" });
   await eventDuties.getByRole("button", { name: `Bring ${equipmentName}: nobody yet` }).click();
   await page.getByRole("dialog").getByRole("button", { name: "I'll do it" }).click();

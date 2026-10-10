@@ -20,7 +20,7 @@ test("Committee claims and Confirms Duties, and the Equipment Unit follows", asy
 
   await signIn(page);
 
-  await page.goto(`/events/${event}`);
+  await page.goto(`/events/${event}?tab=kit`);
   const duties = page.getByRole("region", { name: "Who's bringing what" });
   await duties.getByRole("button", { name: `Bring ${equipmentName}: nobody yet` }).click();
   await page.getByRole("dialog").getByRole("button", { name: "I'll do it" }).click(); // To Duty; From follows
@@ -34,7 +34,7 @@ test("Committee claims and Confirms Duties, and the Equipment Unit follows", asy
   const held = page.getByRole("region", { name: "With you" }).getByRole("link", { name: equipmentName });
   await expect(held.first()).toBeVisible();
 
-  await page.goto(`/events/${event}`);
+  await page.goto(`/events/${event}?tab=kit`);
   await duties.getByRole("button", { name: `Take back ${equipmentName}: you` }).click(); // Destination Home
   await page.getByRole("dialog").getByRole("button", { name: /mark as done/ }).click();
   await expect(duties).toContainText("2 of 2 done");

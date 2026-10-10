@@ -26,7 +26,7 @@ test("Committee add to, change and take things off an Event's kit list without l
   await sql`insert into duty_user (id, duty_id, user_id) values (${crypto.randomUUID()}, ${bibsDuty}, ${tom})`;
 
   await signIn(page);
-  await page.goto(`/events/${event}`);
+  await page.goto(`/events/${event}?tab=kit`);
   const kit = page.getByRole("region", { name: "Who's bringing what" });
   const sheet = page.getByRole("dialog");
   await expect(kit.getByText(bibsName)).toBeVisible();

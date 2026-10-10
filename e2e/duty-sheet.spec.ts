@@ -23,7 +23,7 @@ test("Committee give a Duty to a teammate and choose where the equipment goes ba
   await page.emulateMedia({ colorScheme: "dark" });
   await signIn(page);
 
-  await page.goto(`/events/${event}`);
+  await page.goto(`/events/${event}?tab=kit`);
   const duties = page.getByRole("region", { name: "Who's bringing what" });
   await expect(duties.getByRole("button", { name: `Bring ${equipmentName}: nobody yet` })).toContainText("Up for grabs");
 

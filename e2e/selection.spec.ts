@@ -121,7 +121,7 @@ test("Committee notify the team: it's on Event detail and Home for the Player, w
   await page.getByRole("button", { name: "Send changes" }).click();
   await expect(page.getByText("1 change not sent yet")).toBeHidden();
 
-  await page.goto(`/events/${eventId}`);
+  await page.goto(`/events/${eventId}?tab=team`);
   const team = page.getByRole("region", { name: "The team" });
   await expect(team).toContainText("You're at 10.");
   await expect(team).toContainText("Dev Ringer");

@@ -13,6 +13,7 @@ import Link from "next/link";
 import { BackLink } from "@/components/back-link";
 import { AvailabilitySlot } from "@/components/availability-slot";
 import { TeamCard } from "@/components/team-card";
+import { EventTabs, type EventTab } from "@/components/event-tabs";
 import { ShareButton } from "@/components/share-button";
 import { buttonVariants } from "@/components/ui/button";
 import { formatDay, formatWhen } from "@/lib/format-time";
@@ -56,7 +57,7 @@ import {
   londonParts,
   type QuickEventInput,
 } from "@/features/events";
-import { deleteAvailabilityForEvent } from "@/features/availability";
+import { deleteAvailabilityForEvent, takesReplies } from "@/features/availability";
 import { deleteSelectionForEvent, getTeamCard, listPickedPlayerIds } from "@/features/selection";
 import { formatPhysioList, listPhysioNeeds } from "@/features/injuries";
 import { listStores, type Store } from "@/features/stores";
@@ -362,6 +363,30 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     }),
   };
 
+  const tabs: EventTab[] = [
+    ...(takesReplies(eventDetails.eventType)
+      ? [{ id: "availability", label: "Availability", content: <AvailabilitySlot eventId={id} viewer={user} /> }]
+      : []),
+    {
+      id: "kit",
+      label: "Kit",
+      count: equipmentUnitIds.length,
+      content: (
+        <EventDuties
+          equipment={dutyEquipment}
+          eventTitle={eventDetails.title}
+          soon={headsUps.some((h) => h.kind === "unfilled_duty")}
+          viewerId={user.id}
+          people={approved.map((p) => ({ id: p.id, name: displayName(p) }))}
+          act={act}
+          kit={kit}
+          listSource={checklistSource}
+        />
+      ),
+    },
+    ...(teamCard ? [{ id: "team", label: "Team sheet", content: <TeamCard card={teamCard} /> }] : []),
+  ];
+
   return (
     <div className="flex flex-col gap-4">
       <BackLink href="/events">Events</BackLink>
@@ -457,19 +482,8 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
         </CardContent>
       </Card>
 
-      {teamCard && <TeamCard card={teamCard} />}
-      <AvailabilitySlot eventId={id} viewer={user} />
       <ClashList clashes={clashes} />
-      <EventDuties
-        equipment={dutyEquipment}
-        eventTitle={eventDetails.title}
-        soon={headsUps.some((h) => h.kind === "unfilled_duty")}
-        viewerId={user.id}
-        people={approved.map((p) => ({ id: p.id, name: displayName(p) }))}
-        act={act}
-        kit={kit}
-        listSource={checklistSource}
-      />
+      <EventTabs tabs={tabs} />
 
       {physioList && (
         <CopySummary text={physioList} title="Physio Message" buttonLabel="Copy physio message" copiedMessage="Copied. Paste it to the physio." />
