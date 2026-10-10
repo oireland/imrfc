@@ -39,6 +39,10 @@ _Avoid_: Squad member, athlete
 **Playing**:
 Whether a User counts as a Player. On unless the User or Committee switches it off.
 
+**Away**:
+A dated period when a Player won't be playing for a non-injury reason (exams, a holiday), with a from date, an until date and a required Reason. Seen only by that Player and Committee. While an Event falls inside it, the Player is not chased for that Event.
+_Avoid_: Unavailable (too close to Not available), leave, absence
+
 **Position**:
 Where a Player plays, from a fixed list of specific positions (Loosehead Prop (1) … Fullback (15)). Each Player has one **Preferred Position** and any number of **Other Positions**.
 _Avoid_: Role (that is a permission level)
@@ -48,15 +52,18 @@ Something a Player has hurt, reported by them or by Committee, with a body area,
 _Avoid_: Knock, niggle
 
 **Injury Status**:
-Where an Injury stands: Out (can't play), Playing through it (can play, still carrying it) or Cleared (over).
+Where an Injury stands: Out (can't train or play), Training only (can train, can't play Matches), Playing through it (can play Matches, still carrying it) or Cleared (over).
 _Avoid_: Status on its own
 
 **Expected Return**:
-The date a Player expects to stop being Out with an Injury. Optional.
+The date a Player expects to be back from an Injury, asked for when it is reported (they can say "Not sure yet"). Optional.
 
 **Fitness**:
-A Player's state on a given date, taken from their worst open Injury: Out, Playing through it, or Fit.
+A Player's state on a given date, taken from their worst open Injury: Out, Training only, Playing through it, or Fit. Away is not part of Fitness.
 _Avoid_: Availability (whether someone can make an Event, for any reason, is a separate concept)
+
+**Needs physio**:
+A tick on a Training only or Playing through it Injury meaning the Player wants help from the physio at games (strapping, a check), with an optional note on what they need. Listed in the Physio Summary.
 
 **Concussion**:
 An Injury flagged as a concussion. It follows the RFU's graduated return, shows an Earliest Match, and only Committee can Clear it.
@@ -81,6 +88,9 @@ The Player can make the Event. May carry a note ("late").
 
 **Not available**:
 The Player can't make the Event. Always has a Reason.
+
+**Not chased**:
+A Player who is Away, Out, or (for a Match) Training only on an Event's date. Announce, Nudge, the WhatsApp sheet, Home and push reminders skip them, and they are listed in an **Away / Injured** group on the Availability card instead of under No reply. They can still reply, and a reply always wins.
 
 **No reply**:
 A Player who hasn't answered yet — the people who need chasing.

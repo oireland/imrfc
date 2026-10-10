@@ -2,6 +2,8 @@ import { eq } from "drizzle-orm";
 import { deleteFeedToken } from "@/features/calendar-feed";
 import { clearMobileNumber } from "@/features/contact";
 import { releaseUpcomingDuties } from "@/features/duties";
+import { clearInjuries } from "@/features/injuries";
+import { clearAway } from "@/features/players";
 import { unsubscribeEverywhere } from "@/features/push";
 import { canDeleteAccount, eraseUser, user, type Role } from "@/features/users";
 
@@ -12,7 +14,7 @@ export type DeleteAccountResult = { ok: true } | { ok: false; error: string };
 
 /**
  * Deletes a User's account for good: their personal details, sign-ins, Feed Token,
- * Mobile number and Push subscriptions go, and they're taken off upcoming Duties. What they did stays in
+ * Mobile number, time Away, Injuries and Push subscriptions go, and they're taken off upcoming Duties. What they did stays in
  * the club's history under "Deleted user"; equipment they hold stays with that name
  * until someone moves it.
  */
@@ -33,6 +35,8 @@ export async function deleteAccount(
   await deleteFeedToken(db, userId);
   await unsubscribeEverywhere(db, userId);
   await clearMobileNumber(db, userId);
+  await clearAway(db, userId);
+  await clearInjuries(db, userId);
   await eraseUser(db, userId);
   return { ok: true };
 }

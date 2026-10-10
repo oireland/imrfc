@@ -2,7 +2,7 @@ import { AxeBuilder } from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import postgres from "postgres";
 import { TEST_DATABASE_URL } from "./support/test-db";
-import { signIn } from "./support/sign-in";
+import { seedUser, signIn } from "./support/sign-in";
 
 async function assertNoHorizontalScroll(page: Page) {
   const overflowing = await page.evaluate(
@@ -90,6 +90,48 @@ test.describe("Design pass: every screen is accessible at phone width, light and
         await assertNoHorizontalScroll(page);
         const report = await axeReport(page, screen);
         if (report) reports.push(report);
+      }
+      expect(reports, `Accessibility violations found:\n${reports.join("\n")}`).toEqual([]);
+    });
+  }
+
+  // Injuries and time away, with colours on every status: Home's stack, Profile, the Players list and page, and the sheets.
+  for (const mode of ["light", "dark", "chosen dark"] as const) {
+    test(`injury and time away screens have no axe violations (${mode})`, async ({ page }) => {
+      test.setTimeout(120_000);
+      const email = await seedUser({ role: "committee" });
+      const [{ id }] = await sql`select id from "user" where email = ${email}`;
+      for (const [area, status] of [["Knee", "out"], ["Ankle", "training_only"], ["Shoulder", "playing_through"]]) {
+        const injuryId = crypto.randomUUID();
+        await sql`insert into injury (id, user_id, area, status, happened_on, expected_return, needs_physio, physio_note, reported_by_id)
+          values (${injuryId}, ${id}, ${area}, ${status}, current_date - 40, current_date - 2, ${status !== "out"}, ${status !== "out" ? "Strapping" : ""}, ${id})`;
+        await sql`insert into injury_change (id, injury_id, kind, to_status, by_id) values (${crypto.randomUUID()}, ${injuryId}, 'reported', ${status}, ${id})`;
+      }
+      await sql`insert into player_away (id, user_id, from_date, until_date, reason, set_by_id)
+        values (${crypto.randomUUID()}, ${id}, current_date - 1, current_date + 5, 'Exams', ${id})`;
+
+      await page.emulateMedia({ colorScheme: mode === "dark" ? "dark" : "light" });
+      await signIn(page, { email });
+
+      const reports: string[] = [];
+      const scan = async (screen: string) => {
+        if (mode === "chosen dark") await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
+        await assertNoHorizontalScroll(page);
+        const report = await axeReport(page, screen);
+        if (report) reports.push(report);
+      };
+      for (const screen of ["/", "/profile", "/players", `/players/${id}`]) {
+        await page.goto(screen);
+        await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
+        if (screen === "/") await page.getByRole("button", { name: /more/ }).click();
+        await scan(screen);
+      }
+
+      await page.goto("/profile");
+      for (const [button, screen] of [["Update", "Update sheet"], ["Report an injury", "Report sheet"], ["Add time away", "Time away sheet"]] as const) {
+        await page.getByRole("button", { name: button }).first().click();
+        await scan(`/profile (${screen})`);
+        await page.getByRole("button", { name: "Close" }).last().click();
       }
       expect(reports, `Accessibility violations found:\n${reports.join("\n")}`).toEqual([]);
     });

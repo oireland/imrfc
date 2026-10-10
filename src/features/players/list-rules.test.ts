@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { listPlayers, type PlayerRow } from "./list-rules";
+import { listPlayers, summarizePlayers, type PlayerRow } from "./list-rules";
 
 const player = (overrides: Partial<PlayerRow>): PlayerRow => ({
   id: overrides.id ?? crypto.randomUUID(),
   name: "Someone",
   preferredPosition: null,
   playing: true,
+  away: false,
+  awayLabel: null,
+  fitness: null,
+  injuryLine: null,
+  checkIn: null,
+  isNew: false,
   ...overrides,
 });
 
@@ -38,5 +44,68 @@ describe("listPlayers", () => {
     const listing = listPlayers(players, "sam");
     expect(listing.playing.map((p) => p.name)).toEqual(["Sam Smith"]);
     expect(listing.notPlaying).toEqual([]);
+  });
+});
+
+describe("listPlayers — Away", () => {
+  const players = [
+    player({ name: "Away Ann", away: true, awayLabel: "Away until 3 Nov" }),
+    player({ name: "Soon Sid", away: false, awayLabel: "Away from 20 Dec" }),
+    player({ name: "Here Hal" }),
+  ];
+
+  it("keeps Away Players in their place in the list", () => {
+    expect(listPlayers(players).playing.map((p) => p.name)).toEqual(["Away Ann", "Here Hal", "Soon Sid"]);
+  });
+
+  it("narrows to Players who are Away now or coming up with the Away filter", () => {
+    expect(listPlayers(players, "", { awayOnly: true }).playing.map((p) => p.name)).toEqual(["Away Ann", "Soon Sid"]);
+  });
+});
+
+describe("summarizePlayers", () => {
+  it("counts who is Away now, leaving out zero parts", () => {
+    expect(summarizePlayers([player({ away: true }), player({ away: true }), player({})])).toBe("2 away");
+    expect(summarizePlayers([player({})])).toBe("");
+  });
+
+  it("ignores Players with Playing off", () => {
+    expect(summarizePlayers([player({ away: true, playing: false })])).toBe("");
+  });
+
+  it("counts Fitness too, worst first", () => {
+    const players = [
+      player({ fitness: "out" }),
+      player({ fitness: "out" }),
+      player({ fitness: "out" }),
+      player({ fitness: "training_only" }),
+      player({ fitness: "playing_through" }),
+      player({ fitness: "playing_through" }),
+      player({ away: true }),
+      player({ away: true }),
+      player({}),
+    ];
+    expect(summarizePlayers(players)).toBe("3 out · 1 training only · 2 playing through it · 2 away");
+  });
+});
+
+describe("listPlayers — Injured", () => {
+  const players = [
+    player({ name: "Hurt Hal", fitness: "out" }),
+    player({ name: "Carrying Cat", fitness: "playing_through" }),
+    player({ name: "Fit Fran" }),
+  ];
+
+  it("narrows to Players with an open Injury with the Injured filter", () => {
+    expect(listPlayers(players, "", { injuredOnly: true }).playing.map((p) => p.name)).toEqual(["Carrying Cat", "Hurt Hal"]);
+  });
+
+  it("combines with the Away filter as either", () => {
+    const withAway = [...players, player({ name: "Away Ann", awayLabel: "Away until 3 Nov", away: true })];
+    expect(listPlayers(withAway, "", { injuredOnly: true, awayOnly: true }).playing.map((p) => p.name)).toEqual([
+      "Away Ann",
+      "Carrying Cat",
+      "Hurt Hal",
+    ]);
   });
 });

@@ -54,6 +54,11 @@
   --color-match: var(--match);
   --color-match-foreground: var(--match-foreground);
   --color-social: var(--social);
+  --color-out-tint: var(--out-tint);
+  --color-train: var(--train);
+  --color-train-tint: var(--train-tint);
+  --color-play: var(--play);
+  --color-play-tint: var(--play-tint);
   --color-social-foreground: var(--social-foreground);
   --shadow-card: var(--card-shadow);
   --radius-sm: calc(var(--radius) * 0.6);
@@ -109,6 +114,12 @@
   --match-foreground: #ffffff;
   --social: #fbeaa3;
   --social-foreground: #5c4a00;
+  /* Fitness: Out is destructive; Training only is amber, Playing through it is navy-tinted. */
+  --out-tint: #f8e1e2;
+  --train: #9a5200;
+  --train-tint: #fbe8d0;
+  --play: #1f2f55;
+  --play-tint: #e1e6f3;
   --radius: 0.875rem;
 }
 
@@ -144,6 +155,11 @@
   --match-foreground: #eef2fb;
   --social: #4a3d0b;
   --social-foreground: #f7dc6f;
+  --out-tint: #3a1517;
+  --train: #f0a55a;
+  --train-tint: #3a2812;
+  --play: #9db2ea;
+  --play-tint: #223052;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -178,6 +194,11 @@
     --match-foreground: #eef2fb;
     --social: #4a3d0b;
     --social-foreground: #f7dc6f;
+    --out-tint: #3a1517;
+    --train: #f0a55a;
+    --train-tint: #3a2812;
+    --play: #9db2ea;
+    --play-tint: #223052;
   }
 }
 

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { createEvent, listTeams, type NewEvent } from "@/features/events";
+import { reportInjury } from "@/features/injuries";
+import { addAway } from "@/features/players";
 import { user } from "@/features/users";
 import type { MailSender } from "@/lib/mail";
 import { listEventsBetween } from "@/features/events";
@@ -469,5 +471,122 @@ describe("markMessaged", () => {
     await markMessaged(db, { eventId, playerId: "jo", viewer: tom }, now);
     await deleteAvailabilityForEvent(db, eventId);
     expect(await db.select().from(availabilityMessaged)).toEqual([]);
+  });
+});
+
+describe("Not chased (Away)", () => {
+  const eventStart = new Date("2026-10-03T18:00:00Z");
+
+  async function withSamAway() {
+    const db = await setup();
+    const eventId = await makeEvent(db, { start: eventStart });
+    await addAway(db, { id: "sam", role: "member" }, "sam", { from: "2026-10-02", until: "2026-10-10", reason: "Exams" }, "2026-10-01");
+    return { db, eventId };
+  }
+
+  it("moves an Away Player from No reply into an Away / Injured group, with the Reason for Committee", async () => {
+    const { db, eventId } = await withSamAway();
+    const availability = await getAvailability(db, eventId, tom, now);
+    expect(availability.summary.noReply.map((r) => r.name)).toEqual(["Jo King", "Tom Hale"]);
+    expect(availability.summary.notChased).toEqual([{ userId: "sam", name: "Sam Patel", kind: "away", detail: "Exams" }]);
+  });
+
+  it("only counts Away on the Event's own date", async () => {
+    const { db } = await withSamAway();
+    const later = await makeEvent(db, { start: new Date("2026-10-17T18:00:00Z") });
+    const availability = await getAvailability(db, later, tom, now);
+    expect(availability.summary.notChased).toEqual([]);
+    expect(availability.summary.noReply.map((r) => r.name)).toContain("Sam Patel");
+  });
+
+  it("shows other Members nothing of it", async () => {
+    const { db, eventId } = await withSamAway();
+    const availability = await getAvailability(db, eventId, { id: "jo", committee: false }, now);
+    expect(availability.summary.notChased).toEqual([]);
+    expect(availability.summary.noReply.map((r) => r.name)).toEqual(["Jo King", "Tom Hale"]);
+  });
+
+  it("lets a reply win", async () => {
+    const { db, eventId } = await withSamAway();
+    await saveReply(db, { eventId, playerId: "sam", viewer: sam, status: "available", note: "", reason: "" }, now);
+    const availability = await getAvailability(db, eventId, tom, now);
+    expect(availability.summary.available.map((r) => r.name)).toEqual(["Sam Patel"]);
+    expect(availability.summary.notChased).toEqual([]);
+  });
+
+  it("skips them in Announce and Nudge", async () => {
+    const { db, eventId } = await withSamAway();
+    const announced = await announce(db, { eventId, viewer: tom, replyBy: null }, now);
+    expect(announced).toEqual({ ok: true, askId: expect.any(String), sending: 2 });
+    const nudged = await nudge(db, { eventId, viewer: tom, playerIds: null }, now);
+    expect(nudged).toEqual({ ok: true, askId: expect.any(String), sending: 2 });
+  });
+
+  it("still lets Committee pick them by hand in a Nudge", async () => {
+    const { db, eventId } = await withSamAway();
+    expect(await nudge(db, { eventId, viewer: tom, playerIds: ["sam"] }, now)).toEqual({ ok: true, askId: expect.any(String), sending: 1 });
+  });
+
+  it("doesn't ask them on Home", async () => {
+    const { db, eventId } = await withSamAway();
+    await announce(db, { eventId, viewer: tom, replyBy: null }, now);
+    expect(await listWaitingOnReply(db, "sam", now)).toEqual([]);
+    expect(await listWaitingOnReply(db, "jo", now)).toHaveLength(1);
+  });
+});
+
+describe("Not chased (Fitness)", () => {
+  const injure = async (db: Awaited<ReturnType<typeof setup>>, userId: string, status: "out" | "training_only" | "playing_through") => {
+    const result = await reportInjury(
+      db,
+      { id: userId, role: "member" },
+      userId,
+      { area: "Knee", description: "", happenedOn: "2026-09-28", eventId: null, status, expectedReturn: null, notSure: true, needsPhysio: false, physioNote: "" },
+      "2026-10-01",
+      now,
+    );
+    if (!result.ok) throw new Error(result.error);
+  };
+
+  it("doesn't chase Out for Training or Matches, naming the Injury for Committee", async () => {
+    const db = await setup();
+    await injure(db, "jo", "out");
+    for (const eventType of ["training", "match"] as const) {
+      const eventId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z"), eventType });
+      const { summary } = await getAvailability(db, eventId, tom, now);
+      expect(summary.noReply.map((r) => r.name)).not.toContain("Jo King");
+      expect(summary.notChased).toEqual([{ userId: "jo", name: "Jo King", kind: "out", detail: "Knee" }]);
+    }
+  });
+
+  it("chases Training only for Training but not for Matches", async () => {
+    const db = await setup();
+    await injure(db, "jo", "training_only");
+    const training = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
+    expect((await getAvailability(db, training, tom, now)).summary.noReply.map((r) => r.name)).toContain("Jo King");
+    const match = await makeEvent(db, { start: new Date("2026-10-04T14:00:00Z"), eventType: "match" });
+    const { summary } = await getAvailability(db, match, tom, now);
+    expect(summary.notChased).toEqual([{ userId: "jo", name: "Jo King", kind: "training_only", detail: "Knee" }]);
+  });
+
+  it("chases Playing through it as normal", async () => {
+    const db = await setup();
+    await injure(db, "jo", "playing_through");
+    const match = await makeEvent(db, { start: new Date("2026-10-04T14:00:00Z"), eventType: "match" });
+    const { summary } = await getAvailability(db, match, tom, now);
+    expect(summary.noReply.map((r) => r.name)).toContain("Jo King");
+    expect(summary.notChased).toEqual([]);
+  });
+
+  it("lets a reply win, and skips them on Home", async () => {
+    const db = await setup();
+    await injure(db, "jo", "out");
+    const eventId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
+    await announce(db, { eventId, viewer: tom, replyBy: null }, now);
+    expect(await listWaitingOnReply(db, "jo", now)).toEqual([]);
+    await saveReply(db, { eventId, playerId: "jo", viewer: { id: "jo", committee: false }, status: "available", note: "", reason: "" }, now);
+    const { summary } = await getAvailability(db, eventId, tom, now);
+    expect(summary.available.map((r) => r.name)).toEqual(["Jo King"]);
+    expect(summary.notChased).toEqual([]);
   });
 });

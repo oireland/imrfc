@@ -10,20 +10,32 @@ import { SubmitButton } from "@/components/submit-button";
 import { NotificationToggle } from "@/components/notification-toggle";
 import { MobileNumberField } from "@/components/mobile-number-field";
 import { ProfileNameField } from "@/components/profile-name-field";
+import { AwayCard } from "@/components/away-card";
+import { InjuriesCard } from "@/components/injuries-card";
 import { PositionsPicker } from "@/components/positions-picker";
 import { displayName, setName, type RugbyPosition } from "@/features/users";
-import { setPlayerPositions, setPlaying } from "@/features/players";
+import { listInjuries } from "@/features/injuries";
+import { listAway, londonToday, setPlayerPositions, setPlaying } from "@/features/players";
 import { getMobileNumber, setMobileNumber } from "@/features/contact";
 import { getFeedToken, resetFeedToken } from "@/features/calendar-feed";
 import { isSubscribed, subscribe, unsubscribe } from "@/features/push";
 import { deleteAccount } from "@/features/account-deletion";
 import { requireApprovedUser } from "@/lib/session";
+import { addAwayAction, editAwayAction, imBackAction, removeAwayAction } from "../away-actions";
+import { awayItems } from "../away-items";
+import { recentEventOptions } from "../injury-events";
+import { clearInjuryAction, logByMistakeAction, reportInjuryAction, updateInjuryAction } from "../injury-actions";
+import { injuryItems } from "../injury-items";
 
 export default async function ProfilePage() {
   const user = await requireApprovedUser();
   const notificationsOn = await isSubscribed(db, user.id);
   const mobileNumber = await getMobileNumber(db, user, user.id);
   const token = await getFeedToken(db, user.id);
+  const today = londonToday();
+  const away = awayItems(await listAway(db, user, user.id, today), user.id);
+  const injuries = await listInjuries(db, user, user.id, today);
+  const eventOptions = await recentEventOptions();
   const host = (await headers()).get("host");
   const protocol = host?.startsWith("localhost") ? "http" : "https";
   const feedUrl = `${protocol}://${host}/api/feed/${token}.ics`;
@@ -127,6 +139,35 @@ export default async function ProfilePage() {
           </form>
         </CardContent>
       </Card>
+
+      <InjuriesCard
+        title="My injuries"
+        open={injuryItems(injuries.open)}
+        cleared={injuryItems(injuries.history)}
+        today={today}
+        events={eventOptions}
+        emptyText="Nothing hurting. If you pick something up, say so here and committee will know."
+        actions={{
+          report: reportInjuryAction.bind(null, user.id),
+          update: updateInjuryAction,
+          clear: clearInjuryAction,
+          mistake: logByMistakeAction,
+        }}
+      />
+
+      <AwayCard
+        title="Time away"
+        {...away}
+        today={today}
+        emptyText="Exams or a holiday? Say when you'll be away and nobody will chase you."
+        actions={{
+          add: addAwayAction.bind(null, user.id),
+          edit: editAwayAction,
+          imBack: imBackAction,
+          remove: removeAwayAction,
+        }}
+      />
+      <p className="px-1 text-sm text-muted-foreground">Injuries and time away you record are seen by committee.</p>
 
       {process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && (
         <Card>

@@ -1,7 +1,8 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { seasonStart } from "@/features/duties";
-import { getEvent, listEventsBetween, londonParts, londonToUtc, type Event } from "@/features/events";
-import { listPlayers } from "@/features/players";
+import { getEvent, listEventsBetween, londonParts, londonToUtc, type Event, type EventType } from "@/features/events";
+import { listFitness, notChasedFor } from "@/features/injuries";
+import { listAwayOn, listPlayers } from "@/features/players";
 import { displayName, listApprovedUsers } from "@/features/users";
 import type { MailSender } from "@/lib/mail";
 import { askEmail, type AskedEvent } from "./announce-rules";
@@ -19,6 +20,7 @@ import {
   type AskStatus,
   type AvailabilitySummary,
   type MyReply,
+  type NotChased,
   type Nudge,
   type Reply,
   type ReplyStatus,
@@ -29,7 +31,7 @@ import {
 export { askStatus, takesReplies } from "./rules";
 export { askPush, chaseMessage, whatsappMessage } from "./announce-rules";
 export type { AskedEvent } from "./announce-rules";
-export type { AskStatus, AvailabilityRow, AvailabilitySummary, MyReply, RecordLine, ReplyCounts, ReplyStatus, SeasonRecord, WaitingAsk } from "./rules";
+export type { AskStatus, AvailabilityRow, AvailabilitySummary, MyReply, NotChasedRow, RecordLine, ReplyCounts, ReplyStatus, SeasonRecord, WaitingAsk } from "./rules";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
@@ -103,6 +105,23 @@ export async function listAvailableUserIds(db: Db, eventIds: string[]): Promise<
   return byEvent;
 }
 
+/**
+ * Players not chased for an Event: Away on its date, Out, or Training only for a Match. Away comes
+ * first when both apply. A reply still wins (see `summarizeAvailability`).
+ */
+async function notChasedOn(db: Db, playerIds: string[], event: { start: Date; eventType: EventType }): Promise<Map<string, NotChased>> {
+  const date = londonParts(event.start).date;
+  const [away, fitness] = await Promise.all([listAwayOn(db, playerIds, date), listFitness(db, date)]);
+  const notChased = new Map<string, NotChased>();
+  for (const [id, f] of fitness) {
+    if (playerIds.includes(id) && event.eventType !== "social" && notChasedFor(f.fitness, event.eventType)) {
+      notChased.set(id, { kind: f.fitness === "out" ? "out" : "training_only", detail: f.detail });
+    }
+  }
+  for (const [id, period] of away) notChased.set(id, { kind: "away", detail: period.reason });
+  return notChased;
+}
+
 async function announcementFor(db: Db, eventIds: string[]) {
   const rows = await db.select().from(availabilityAnnouncement).where(inArray(availabilityAnnouncement.eventId, eventIds));
   return rows.sort((a: { createdAt: Date }, b: { createdAt: Date }) => a.createdAt.getTime() - b.createdAt.getTime())[0] as
@@ -168,7 +187,7 @@ export async function saveReply(
 /** Everything the Availability card on Event detail shows, as `viewer` may see it. */
 export async function getAvailability(db: Db, eventId: string, viewer: Viewer, now: Date = new Date()): Promise<Availability> {
   const event = await getEvent(db, eventId);
-  const empty: AvailabilitySummary = { available: [], notAvailable: [], noReply: [] };
+  const empty: AvailabilitySummary = { available: [], notAvailable: [], noReply: [], notChased: [] };
   if (!event || !takesReplies(event.eventType)) {
     return {
       takesReplies: false,
@@ -205,6 +224,7 @@ export async function getAvailability(db: Db, eventId: string, viewer: Viewer, n
     replyBy: announcement?.replyBy ?? null,
     nudges,
     messages,
+    notChased: await notChasedOn(db, [...players.keys()], event),
   });
 
   const self = players.get(viewer.id);
@@ -224,7 +244,7 @@ export async function getAvailability(db: Db, eventId: string, viewer: Viewer, n
       ? { at: announcement.createdAt, by: names.get(announcement.announcedById) ?? "Someone", replyBy: announcement.replyBy }
       : null,
     canAnnounce: open && viewer.committee && !announcement,
-    canNudge: open && viewer.committee && summary.noReply.length > 0,
+    canNudge: open && viewer.committee && summary.noReply.length + summary.notChased.length > 0,
     canMessage: open && viewer.committee && summary.noReply.length > 0,
     asks: asks.map((row) => askNotice(row, names, now)).filter((ask) => ask.status !== "sent"),
   };
@@ -284,7 +304,9 @@ export async function nudge(
   if (!availability.canNudge) return { ok: false, error: "You can't nudge anyone for this one." };
 
   const noReply = availability.summary.noReply.map((r) => r.userId);
-  const chosen = input.playerIds ? noReply.filter((id) => input.playerIds!.includes(id)) : noReply;
+  // Everyone is nudged except those not chased; Committee can still pick one of those by hand.
+  const pickable = [...noReply, ...availability.summary.notChased.map((r) => r.userId)];
+  const chosen = input.playerIds ? pickable.filter((id) => input.playerIds!.includes(id)) : noReply;
   return recordAsk(db, "nudge", input, chosen, now);
 }
 
@@ -443,7 +465,14 @@ export async function listWaitingOnReply(db: Db, playerId: string, now: Date = n
     db.select().from(availabilityAnnouncement).where(inArray(availabilityAnnouncement.eventId, ids)),
     playerRepliesFor(db, playerId, ids),
   ]);
-  return waitingOnReply({ events, announcements, repliedEventIds: new Set(replies.map((r) => r.eventId)), now });
+  const waiting = waitingOnReply({ events, announcements, repliedEventIds: new Set(replies.map((r) => r.eventId)), now });
+  const skipped = await Promise.all(
+    waiting.map(async (ask) => {
+      const event = events.find((e) => e.id === ask.eventId);
+      return !!event && (await notChasedOn(db, [playerId], event)).has(playerId);
+    }),
+  );
+  return waiting.filter((_, i) => !skipped[i]);
 }
 
 /**

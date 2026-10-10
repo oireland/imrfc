@@ -34,6 +34,49 @@ const reply = (overrides: Partial<Reply>): Reply => ({
   ...overrides,
 });
 
+describe("summarizeAvailability — Not chased", () => {
+  const notChased = new Map([
+    ["sam", { kind: "away" as const, detail: "Exams" }],
+    ["jo", { kind: "out" as const, detail: "Knee" }],
+  ]);
+
+  it("lists Not chased Players with no reply in their own group, not under No reply", () => {
+    const summary = summarizeAvailability({ players, replies: [], viewer: { id: "tom", committee: true }, notChased });
+    expect(summary.noReply.map((r) => r.name)).toEqual(["Tom"]);
+    expect(summary.notChased.map((r) => [r.name, r.kind, r.detail])).toEqual([
+      ["Jo", "out", "Knee"],
+      ["Sam", "away", "Exams"],
+    ]);
+  });
+
+  it("lets a reply win: an Away Player who says Available is Available", () => {
+    const summary = summarizeAvailability({
+      players,
+      replies: [reply({ userId: "sam", status: "available", createdAt: at(1) })],
+      viewer: { id: "tom", committee: true },
+      notChased,
+    });
+    expect(summary.available.map((r) => r.name)).toEqual(["Sam"]);
+    expect(summary.notChased.map((r) => r.name)).toEqual(["Jo"]);
+  });
+
+  it("shows other Members neither the group nor the cause, and still doesn't chase them", () => {
+    const summary = summarizeAvailability({ players, replies: [], viewer: { id: "tom", committee: false }, notChased });
+    expect(summary.notChased).toEqual([]);
+    expect(summary.noReply.map((r) => r.name)).toEqual(["Tom"]);
+  });
+
+  it("leaves out Players with Playing off", () => {
+    const summary = summarizeAvailability({
+      players,
+      replies: [],
+      viewer: { id: "tom", committee: true },
+      notChased: new Map([["ray", { kind: "away" as const, detail: "x" }]]),
+    });
+    expect(summary.notChased).toEqual([]);
+  });
+});
+
 describe("summarizeAvailability", () => {
   it("sorts Players into Available, Not available and No reply, using each one's latest reply", () => {
     const summary = summarizeAvailability({
