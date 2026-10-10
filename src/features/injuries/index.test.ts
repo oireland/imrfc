@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createTestDb } from "@/test/db";
 import { migrate } from "@/test/migrate";
 import { user, type Role } from "@/features/users";
-import { clearInjuries, clearInjury, listFitness, listInjuries, logByMistake, reportInjury, updateInjury } from "./index";
+import { clearInjuries, clearInjury, listFitness, listInjuries, listPhysioNeeds, logByMistake, reportInjury, updateInjury } from "./index";
 import type { ReportInput } from "./rules";
 
 const today = "2026-10-10";
@@ -212,5 +212,32 @@ describe("clearInjuries", () => {
     await reported(db);
     await clearInjuries(db, "hal");
     expect((await listInjuries(db, tom, "hal", today)).open).toEqual([]);
+  });
+});
+
+describe("listPhysioNeeds", () => {
+  it("lists open Injuries that need physio, with where and what", async () => {
+    const db = await setup();
+    await reported(db);
+    expect(await listPhysioNeeds(db)).toEqual([{ name: "Hooker Hal", area: "Thigh", physioNote: "Strapping" }]);
+  });
+
+  it("leaves out Injuries that don't need physio, are Out, Cleared, or logged by mistake", async () => {
+    const db = await setup();
+    await reported(db, { needsPhysio: false, physioNote: "" });
+    await reported(db, { status: "out", needsPhysio: true }, fran, "fran");
+    const cleared = await reported(db, { area: "Knee" }, fran, "fran");
+    await clearInjury(db, fran, cleared.id, now);
+    const slip = await reported(db, { area: "Head" }, fran, "fran");
+    await logByMistake(db, fran, slip.id, now);
+    expect(await listPhysioNeeds(db)).toEqual([]);
+  });
+
+  it("can be narrowed to some Players", async () => {
+    const db = await setup();
+    await reported(db);
+    await reported(db, {}, fran, "fran");
+    expect((await listPhysioNeeds(db, ["fran"])).map((i) => i.name)).toEqual(["Fly-half Fran"]);
+    expect(await listPhysioNeeds(db, [])).toEqual([]);
   });
 });

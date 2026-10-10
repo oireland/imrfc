@@ -63,7 +63,7 @@ A Player's state on a given date, taken from their worst open Injury: Out, Train
 _Avoid_: Availability (whether someone can make an Event, for any reason, is a separate concept)
 
 **Needs physio**:
-A tick on a Training only or Playing through it Injury meaning the Player wants help from the physio at games (strapping, a check), with an optional note on what they need. Listed in the Physio Summary.
+A tick on a Training only or Playing through it Injury meaning the Player wants help from the physio at games (strapping, a check), with an optional note on what they need. Listed in the Physio list.
 
 **Concussion**:
 An Injury flagged as a concussion. It follows the RFU's graduated return, shows an Earliest Match, and only Committee can Clear it.
@@ -74,8 +74,8 @@ The day since which a concussed Player has had no symptoms at rest. Cleared if s
 **Earliest Match**:
 The first date a concussed Player may play a match under the graduated return; there is also an earliest date for contact training. Guidance only; it never clears the Concussion.
 
-**Physio Summary**:
-Text listing the club's current and recently Cleared Injuries, formatted for sending to the physio before a Match.
+**Physio list**:
+Text for the physio listing who needs them, with where it hurts and what they need: the Players picked for a Match, or the whole club from the Players page.
 
 ## Availability
 

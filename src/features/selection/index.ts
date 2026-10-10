@@ -260,6 +260,12 @@ export async function removeShirt(db: Db, input: { eventId: string; viewer: View
   return { ok: true };
 }
 
+/** The Players (not Guests) on a Match's Shirts right now. */
+export async function listPickedPlayerIds(db: Db, eventId: string): Promise<string[]> {
+  const rows: { userId: string | null }[] = await db.select({ userId: selectionShirt.userId }).from(selectionShirt).where(eq(selectionShirt.eventId, eventId));
+  return rows.flatMap((r) => (r.userId ? [r.userId] : []));
+}
+
 /** Removes everything picked, named and sent for a deleted Event. */
 export async function deleteSelectionForEvent(db: Db, eventId: string) {
   await db.delete(selectionShirt).where(eq(selectionShirt.eventId, eventId));

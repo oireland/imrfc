@@ -58,7 +58,8 @@ import {
   type QuickEventInput,
 } from "@/features/events";
 import { deleteAvailabilityForEvent } from "@/features/availability";
-import { deleteSelectionForEvent, getTeamCard } from "@/features/selection";
+import { deleteSelectionForEvent, getTeamCard, listPickedPlayerIds } from "@/features/selection";
+import { formatPhysioList, listPhysioNeeds } from "@/features/injuries";
 import { listStores, type Store } from "@/features/stores";
 import { canDeleteEvent, displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
 import { requireApprovedUser } from "@/lib/session";
@@ -96,6 +97,13 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
   ]);
   if (!eventDetails) notFound();
   const seriesId = eventDetails.seriesId;
+
+  // For the physio: only the Players picked for a Match, and only Committee see Injuries.
+  const pickedIds = committee && eventDetails.eventType === "match" ? await listPickedPlayerIds(db, id) : [];
+  const physioList =
+    pickedIds.length > 0
+      ? formatPhysioList(`${eventDetails.title}, ${formatDay(eventDetails.start)}`, await listPhysioNeeds(db, pickedIds))
+      : null;
 
   async function cancel() {
     "use server";
@@ -477,6 +485,9 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
       />
 
       <CopySummary text={summary} />
+      {physioList && (
+        <CopySummary text={physioList} title="Physio list" buttonLabel="Copy physio list" copiedMessage="Copied. Paste it to the physio." />
+      )}
     </div>
   );
 }

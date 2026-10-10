@@ -4,7 +4,7 @@ import { createTestDb } from "@/test/db";
 import { saveReply } from "@/features/availability";
 import { createEvent, listTeams, type NewEvent } from "@/features/events";
 import { user } from "@/features/users";
-import { addShirt, clearShirt, deleteSelectionForEvent, getBoard, pickGuest, pickPlayer, removeShirt, setRoles, swapShirts } from "./index";
+import { addShirt, clearShirt, deleteSelectionForEvent, getBoard, listPickedPlayerIds, pickGuest, pickPlayer, removeShirt, setRoles, swapShirts } from "./index";
 
 const now = new Date("2026-10-01T12:00:00Z");
 const tom = { id: "tom", committee: true };
@@ -262,5 +262,22 @@ describe("addShirt and removeShirt", () => {
     const db = await setup();
     const eventId = await makeMatch(db, "2026-10-03T13:00:00Z");
     expect(await removeShirt(db, { eventId, viewer: tom }, now)).toEqual({ ok: false, error: "A team always has 23 shirts." });
+  });
+});
+
+describe("listPickedPlayerIds", () => {
+  it("lists the Players on a Match's Shirts, not Guests or empty Shirts", async () => {
+    const db = await setup();
+    const eventId = await makeMatch(db, "2026-10-03T13:00:00Z");
+    await pickPlayer(db, { eventId, shirt: 2, userId: "sam", viewer: tom }, now);
+    await pickPlayer(db, { eventId, shirt: 4, userId: "jo", viewer: tom }, now);
+    await pickGuest(db, { eventId, shirt: 9, name: "Visiting Vic", viewer: tom }, now);
+
+    expect((await listPickedPlayerIds(db, eventId)).sort()).toEqual(["jo", "sam"]);
+  });
+
+  it("is empty before anyone is picked", async () => {
+    const db = await setup();
+    expect(await listPickedPlayerIds(db, await makeMatch(db, "2026-10-03T13:00:00Z"))).toEqual([]);
   });
 });

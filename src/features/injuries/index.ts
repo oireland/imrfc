@@ -1,6 +1,7 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import { displayName, isCommitteeOrAbove, listApprovedUsers, type Role } from "@/features/users";
 import { injury, injuryChange } from "./schema";
+import type { PhysioNeed } from "./physio-list-rules";
 import {
   checkInFlag,
   injuryLine,
@@ -17,6 +18,8 @@ import {
 } from "./rules";
 
 export { BODY_AREAS, OPEN_STATUSES, STATUS_LABEL, notChasedFor, worstFitness } from "./rules";
+export { formatPhysioList } from "./physio-list-rules";
+export type { PhysioNeed } from "./physio-list-rules";
 export type { BodyArea, Fitness, InjuryStatus, OpenStatus, ReportInput, UpdateInput } from "./rules";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -241,6 +244,30 @@ export async function listFitness(db: Db, today: string): Promise<Map<string, Pl
     });
   }
   return fitness;
+}
+
+/**
+ * Who needs the physio: open Injuries with Needs physio ticked (Out never counts). `userIds` narrows it to some
+ * Players (a Match's team); leave it out for the whole club. Committee only, which the caller checks.
+ */
+export async function listPhysioNeeds(db: Db, userIds?: string[]): Promise<PhysioNeed[]> {
+  if (userIds && userIds.length === 0) return [];
+  const rows: Row[] = await db
+    .select()
+    .from(injury)
+    .where(
+      and(
+        isNull(injury.mistakeAt),
+        isNull(injury.clearedAt),
+        eq(injury.needsPhysio, true),
+        ne(injury.status, "out"),
+        userIds ? inArray(injury.userId, userIds) : undefined,
+      ),
+    );
+  if (rows.length === 0) return [];
+  const people = await listApprovedUsers(db);
+  const names = new Map(people.map((p) => [p.id, displayName(p)]));
+  return rows.map((r) => ({ name: names.get(r.userId) ?? "Someone", area: r.area, physioNote: r.physioNote }));
 }
 
 /** Removes a User's Injuries and their history. Not permission-checked: used by account deletion. */

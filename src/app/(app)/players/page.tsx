@@ -4,11 +4,13 @@ import { ChevronRight } from "lucide-react";
 import { db } from "@/db/client";
 import { cn } from "cn";
 import { Badge } from "@/components/ui/badge";
+import { CopySummary } from "@/components/copy-summary";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { listFitness } from "@/features/injuries";
+import { formatPhysioList, listFitness, listPhysioNeeds } from "@/features/injuries";
 import { listPlayers, londonToday } from "@/features/players";
 import type { PlayerRow } from "@/features/players";
+import { formatDay } from "@/lib/format-time";
 import { isCommitteeOrAbove } from "@/features/users";
 import { getCurrentUser } from "@/lib/session";
 
@@ -21,7 +23,11 @@ export default async function PlayersPage({ searchParams }: PageProps<"/players"
   const awayOnly = away === "1";
   const injuredOnly = injured === "1";
   const today = londonToday();
-  const listing = await listPlayers(db, search, { today, awayOnly, injuredOnly, fitness: await listFitness(db, today) });
+  const [listing, physioNeeds] = await Promise.all([
+    listPlayers(db, search, { today, awayOnly, injuredOnly, fitness: await listFitness(db, today) }),
+    listPhysioNeeds(db),
+  ]);
+  const physioList = formatPhysioList(formatDay(new Date()), physioNeeds);
 
   return (
     <div className="flex flex-col gap-4">
@@ -66,6 +72,8 @@ export default async function PlayersPage({ searchParams }: PageProps<"/players"
           </Card>
         </details>
       )}
+
+      <CopySummary text={physioList} title="Physio list" buttonLabel="Copy physio list" copiedMessage="Copied. Paste it to the physio." />
     </div>
   );
 }
