@@ -27,8 +27,8 @@ Imperial Medicals RFC keeps forgetting equipment and keeps asking the same quest
 - New Users start **Pending** and see only a "Waiting for approval" screen.
 - Admins see a pending-count badge and approve or block from the Admin area. No approval emails in v1.
 - Emails in the `ADMIN_EMAILS` env var become Admin automatically on first sign-in.
-- Profile: name and email (from the sign-in provider; name editable), plus a Preferred Position set during onboarding.
-- **Onboarding**: a new User (blank name, or no Preferred Position yet) sees a dismissible modal asking for their name and Preferred Position, with a short guide to what each tab does. "Not now" delays it for that browser tab; it reappears next time the app is opened in a new tab or session until completed.
+- Profile: name and email (from the sign-in provider; name editable), plus a Preferred Position set during onboarding and an optional Mobile number (see [Contact](#contact)).
+- **Onboarding**: a new User (blank name, or no Preferred Position yet) — or a User with Playing on and no Mobile number — sees a dismissible modal asking for their name, Preferred Position and Mobile number, with a short guide to what each tab does. "Not now" delays it for that browser tab; it reappears next time the app is opened in a new tab or session until completed.
 - Following a link while signed out (e.g. an Event shared in the group chat) goes through sign-in — Google or magic link — and lands back on that page. Only same-site paths are accepted. A new User who lands on "Waiting for approval" goes to Home once approved.
 - **Roles** are club-wide and cumulative:
 
@@ -59,7 +59,7 @@ When a User is Blocked:
 ### Deleting an account
 
 Any User can delete their own account from Profile; an Admin can delete anyone's from Admin → Users, except another Admin's. It can't be undone:
-- Their name, email, Positions and sign-in methods are wiped and their sessions end. The User stays in the database as **Deleted user** so the club's history (Moves, past Duties, Availability replies) still reads; they drop out of Users, Players and Availability lists.
+- Their name, email, Positions, Mobile number and sign-in methods are wiped and their sessions end. The User stays in the database as **Deleted user** so the club's history (Moves, past Duties, Availability replies) still reads; they drop out of Users, Players and Availability lists.
 - The email is freed: signing in with it again starts a new Pending account.
 - They are taken off their Duties on future Events; their Feed Token and Push subscriptions are removed.
 - Equipment Units they Hold stay with "Deleted user", flagged on the Equipment view, until someone moves them.
@@ -225,6 +225,24 @@ Lets Players say whether they can make a Training or Match, and lets Committee s
 - Emails when an announced Event changes or is Cancelled.
 - When Injuries arrive, Committee see "Out · hamstring" beside a name in the lists; a reply is never set automatically from Fitness.
 
+## Contact
+
+Lets Committee message a Player personally on WhatsApp — harder to ignore than the group chat. A new `contact` feature that owns each User's **Mobile number** and builds WhatsApp links; `availability` and the Player page use its entry point.
+
+### Mobile number
+
+- Optional, one per User. Entered as `07…` (taken as UK) or a full international `+…` number; validated and stored as E.164 (`+447…`) with `libphonenumber-js`. It can be cleared.
+- Set by the User on **Profile** ("Only Committee see this — it's so they can message you about availability"), by Committee on the **Player page**, and in **Onboarding**: a User with Playing on and no Mobile number sees the onboarding modal until they add one or choose "Not now".
+- Seen only by Committee and the User themselves. Wiped when the account is deleted.
+
+### Message on WhatsApp
+
+- WhatsApp is opened with an official click-to-chat link (`https://wa.me/<number>?text=<message>`), in a new tab, the same on every device. The app never sends anything itself: you press send in WhatsApp, from your own number. No WhatsApp API and no automation of a personal account (the Business API sends from a business number; unofficial automation risks a ban).
+- **Player page** (Committee): the Mobile number and a WhatsApp button that opens the chat with no message.
+- **Availability card** (Committee): **Message on WhatsApp** beside Nudge, any time before the Event starts (hidden when Cancelled; a Match covers every Match that day). It opens a sheet of everyone with No reply (Blocked and Deleted Users never appear); those with no Mobile number are greyed out with "No number".
+- Each row's **WhatsApp** button opens the chat prefilled with e.g. `Hi Sam, can you make Sat 4 Oct (1st XV v Barts)? Let us know on the app: https://app.imrfc.co.uk/events/…` (first name, Event date and title, link). Opening the chat records nothing — the app can't know whether the message was sent.
+- When you come back to the app, the row you opened asks "Sent it?" with a **Sent ✓** button; Sent ✓ stays on every row so a message sent another way can be marked too. Only Sent ✓ records **Messaged** (who and when, per Event), shown as "messaged 2h ago by Tom" beside "nudged" in the No reply tab and the sheet. The record is kept after the Player replies.
+
 ## Selection
 
 Lets Committee pick each Match's team on a shared board, turn it into the club's Team Sheet, and notify the team to the Players. A new `selection` feature that reads each Player's Availability from `availability`'s entry point and Positions from `players`, references Events by id, and contributes a Team card to Event detail. Replaces the selection board and team sheets from the team-selection handover (one local copy per selector, PDF and Word); Word is dropped.
@@ -335,7 +353,7 @@ Every signed-in screen is checked with axe in light, dark (device) and Dark chos
 
 Code is organised **by feature**, not by layer. Each feature owns its domain rules in plain TypeScript, independent of Next.js, which makes them testable in isolation and lets new features attach without editing existing ones. See [ADR 0002](docs/adr/0002-feature-modules.md).
 
-Features: `users` (access, roles, blocking), `locations`, `equipment` (units, whereabouts, moves), `events` (events, series, teams), `duties` (checklists, duties, confirm, clashes, summary), `calendar-feed`, `players` (Playing, Positions), `availability` (replies, Announce, Nudge, chase message), `selection` (Selection board, Team Sheets, Notify the team), `injuries` (Injuries, Fitness, Concussion timeline, Physio Summary).
+Features: `users` (access, roles, blocking), `locations`, `equipment` (units, whereabouts, moves), `events` (events, series, teams), `duties` (checklists, duties, confirm, clashes, summary), `calendar-feed`, `players` (Playing, Positions), `availability` (replies, Announce, Nudge, chase message, Messaged), `contact` (Mobile numbers, WhatsApp links), `selection` (Selection board, Team Sheets, Notify the team), `injuries` (Injuries, Fitness, Concussion timeline, Physio Summary).
 
 ## Out of scope for v1
 
@@ -345,12 +363,13 @@ Features: `users` (access, roles, blocking), `locations`, `equipment` (units, wh
 - Team-filtered Calendar Feeds, team membership.
 - Multiple clubs.
 - Committee-only comments on Players (e.g. punctuality) — dropped.
-- Phone numbers / "Message on WhatsApp" links on the Player page.
 - Injury reminders, filtering the Physio Summary by Team, ticking off GRAS stages.
 
 ## Extensions
 
 **Availability** (see [Availability](#availability)) is the reference extension and the test of the architecture: a new `availability` feature that references Events by id and adds UI to the Event detail page, with no changes to the `events` feature's rules. Keep Event detail composed of slots that features can contribute to.
+
+**Contact** (see [Contact](#contact)) is a small feature with a public entry point for the Mobile number and WhatsApp links; `availability` and `players` call it, and Onboarding asks it whether a number is missing.
 
 **Selection** (see [Selection](#selection)) follows the same pattern: a `selection` feature that asks `availability`'s entry point for each Player's reply and `players` for Positions, and later `injuries` for Fitness (which could then narrow the Physio Summary to a Match's team).
 

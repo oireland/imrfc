@@ -3,7 +3,7 @@ import postgres from "postgres";
 import { TEST_DATABASE_URL } from "./support/test-db";
 import { magicLink } from "./support/sign-in";
 
-test("A new User is asked for their name and position, can put it off, and it comes back in a new tab", async ({
+test("A new User is asked for their name, position and number, can put it off, and it comes back in a new tab", async ({
   page,
   context,
   baseURL,
@@ -46,6 +46,7 @@ test("A new User is asked for their name and position, can put it off, and it co
   const firstName = `Jess${run}`;
   await secondDialog.getByLabel("Your name").fill(`${firstName} Carter`);
   await secondDialog.getByLabel("Your position").selectOption("Scrum-half");
+  await secondDialog.getByLabel("Your mobile number").fill("07912 345678");
   await secondDialog.getByRole("button", { name: "Save" }).click();
   await expect(secondDialog).not.toBeVisible();
   await expect(secondPage.getByRole("heading", { name: new RegExp(firstName) })).toBeVisible();

@@ -56,6 +56,24 @@ export const availabilityNudge = pgTable(
   (t) => [index("availability_nudge_event_id_idx").on(t.eventId)],
 );
 
+// Each time a Committee member said (Sent ✓) they sent a Player a WhatsApp message about an
+// Event. Kept after the Player replies; the latest row per Player is shown.
+export const availabilityMessaged = pgTable(
+  "availability_messaged",
+  {
+    id: text("id").primaryKey(),
+    eventId: text("event_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id),
+    messagedById: text("messaged_by_id")
+      .notNull()
+      .references(() => user.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("availability_messaged_event_id_idx").on(t.eventId)],
+);
+
 // Each Announce or Nudge's emails, sent in the background after Committee press Send:
 // who it's for, who it reached and who it missed once done, and when Committee dismissed
 // a failed one from the card.

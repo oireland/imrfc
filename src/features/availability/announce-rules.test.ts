@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { askPush, chaseMessage, askEmail } from "./announce-rules";
+import { askPush, chaseMessage, askEmail, whatsappMessage } from "./announce-rules";
 
 const barts = { title: "1st XV v Barts", start: new Date("2026-10-03T13:00:00Z") };
 const ucl = { title: "2nd XV v UCL", start: new Date("2026-10-03T15:00:00Z") };
@@ -66,5 +66,17 @@ describe("chaseMessage", () => {
     expect(chaseMessage({ events: [barts], names: ["Sam Patel", "Jo King", "Tom Hale"], url })).toBe(
       ["🏉 Sat 3 Oct — 1st XV v Barts", "Still need a reply from: Sam Patel, Jo King, Tom Hale", `Can you make it? ${url}`].join("\n"),
     );
+  });
+});
+
+describe("whatsappMessage", () => {
+  it("greets by first name, names the Event and links to the app", () => {
+    expect(whatsappMessage({ events: [barts], name: "Sam Patel", url })).toBe(
+      `Hi Sam, can you make Sat 3 Oct (1st XV v Barts)? Let us know on the app: ${url}`,
+    );
+  });
+
+  it("names every Match that day", () => {
+    expect(whatsappMessage({ events: [barts, ucl], name: "Sam", url })).toContain("(1st XV v Barts & 2nd XV v UCL)");
   });
 });

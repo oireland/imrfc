@@ -450,7 +450,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
                     formId={`delete-event-${id}`}
                     triggerLabel="Delete"
                     triggerSize="lg"
-                    className="bg-destructive/40 hover:bg-destructive/50 dark:bg-destructive/40 dark:hover:bg-destructive/50"
+                    className="bg-destructive/25 hover:bg-destructive/35 dark:bg-destructive/25 dark:hover:bg-destructive/35"
                     title="Delete this event?"
                     description="This removes it for good, along with its duties, replies and team picks. It can't be undone. If it just isn't happening, cancel it instead."
                     confirmLabel="Delete event"

@@ -74,3 +74,8 @@ export function askPush({ kind, events }: { kind: "announce" | "nudge"; events: 
 export function chaseMessage({ events, names, url }: { events: AskedEvent[]; names: string[]; url: string }): string {
   return [`🏉 ${heading(events)}`, `Still need a reply from: ${names.join(", ")}`, `Can you make it? ${url}`].join("\n");
 }
+
+/** The personal WhatsApp message Committee send one Player with No reply, prefilled in the chat. */
+export function whatsappMessage({ events, name, url }: { events: AskedEvent[]; name: string; url: string }): string {
+  return `Hi ${name.split(" ")[0]}, can you make ${formatDay(events[0].start)} (${titlesOf(events)})? Let us know on the app: ${url}`;
+}

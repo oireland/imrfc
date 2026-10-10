@@ -22,6 +22,10 @@ _Avoid_: Captain, organiser, equipment manager (as system concepts)
 **Admin**:
 The Role that controls access: approves and blocks Users and changes Roles.
 
+**Mobile number**:
+A User's optional phone number, stored in international form, seen only by Committee and that User. Used for Message on WhatsApp.
+_Avoid_: Phone, contact number, WhatsApp number
+
 **Access State**:
 Whether a User may use the app: Pending (signed up, awaiting approval), Approved, Blocked, or Deleted (account deleted for good: personal details wiped, kept only so history reads as "Deleted user").
 _Avoid_: Status (reserved for Equipment Units), active/inactive
@@ -96,6 +100,14 @@ _Avoid_: Publish, invite
 **Nudge**:
 Committee emailing a reminder to Players with No reply — all of them or chosen ones.
 _Avoid_: Chase, ping, reminder (as the action's name)
+
+**Message on WhatsApp**:
+Committee opening a personal WhatsApp chat with a Player who has No reply, with a message prefilled; the Committee member presses send themselves.
+_Avoid_: Text, DM, ping, send (the app never sends it)
+
+**Messaged**:
+The record that a Committee member said they sent a Player a WhatsApp message about an Event (by tapping Sent ✓), not merely opened the chat.
+_Avoid_: Contacted, chased
 
 ## Selection
 

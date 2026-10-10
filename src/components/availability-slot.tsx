@@ -9,12 +9,15 @@ import {
   deliverAsk,
   dismissAsk,
   getAvailability,
+  markMessaged,
   nudge,
   retryAsk,
   saveReply,
   type AskedEvent,
   type ReplyStatus,
+  whatsappMessage,
 } from "@/features/availability";
+import { listMobileNumbers, whatsappLink } from "@/features/contact";
 import { londonToUtc } from "@/features/events";
 import { sendToUser } from "@/features/push";
 import { isCommitteeOrAbove } from "@/features/users";
@@ -95,6 +98,24 @@ export async function AvailabilitySlot({ eventId, viewer }: { eventId: string; v
     return result;
   }
 
+  async function messagedAction(playerId: string) {
+    "use server";
+    const result = await markMessaged(db, { eventId, playerId, viewer: await currentViewer() });
+    revalidatePath(`/events/${eventId}`);
+    return result;
+  }
+
+  // Each No reply Player's prefilled WhatsApp chat, or null when they have no Mobile number.
+  const whatsapp: Record<string, string | null> = {};
+  if (availability.canMessage) {
+    const noReply = availability.summary.noReply;
+    const numbers = await listMobileNumbers(db, { id: viewer.id, role: viewer.role }, noReply.map((r) => r.userId));
+    for (const row of noReply) {
+      const number = numbers.get(row.userId);
+      whatsapp[row.userId] = number ? whatsappLink(number, whatsappMessage({ events: availability.events, name: row.name, url })) : null;
+    }
+  }
+
   const chase =
     committee && availability.summary.noReply.length > 0
       ? chaseMessage({ events: availability.events, names: availability.summary.noReply.map((r) => r.name), url })
@@ -108,11 +129,13 @@ export async function AvailabilitySlot({ eventId, viewer }: { eventId: string; v
       committee={committee}
       now={now}
       chase={chase}
+      whatsapp={whatsapp}
       reply={reply}
       announce={announceAction}
       nudge={nudgeAction}
       dismiss={dismissAction}
       retry={retryAction}
+      messaged={messagedAction}
     />
   );
 }

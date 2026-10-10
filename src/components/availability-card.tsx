@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, Copy, Loader2, Megaphone, Send, X } from "lucide-react";
+import { Check, Copy, Loader2, Megaphone, MessageCircle, Send, X } from "lucide-react";
 import { cn } from "cn";
 import type { AskNotice, Availability, AvailabilityRow, ReplyStatus } from "@/features/availability";
 import { formatAgo, formatDay, formatWhen } from "@/lib/format-time";
@@ -35,6 +35,8 @@ export function AvailabilityCard({
   nudge,
   dismiss,
   retry,
+  whatsapp,
+  messaged,
 }: {
   availability: Availability;
   viewerId: string;
@@ -48,12 +50,16 @@ export function AvailabilityCard({
   nudge: (playerIds: string[]) => Promise<SendResult>;
   dismiss: (askId: string) => Promise<Result>;
   retry: (askId: string) => Promise<SendResult>;
+  /** Each No reply Player's prefilled WhatsApp chat link, or null when they have no Mobile number. */
+  whatsapp: Record<string, string | null>;
+  /** Records Sent ✓: a Committee member said they sent this Player a WhatsApp message. */
+  messaged: (playerId: string) => Promise<Result>;
 }) {
-  const { summary, myReply, open, canReplyForSelf, canReplyForOthers, announcement, canAnnounce, canNudge, asks } = availability;
+  const { summary, myReply, open, canReplyForSelf, canReplyForOthers, announcement, canAnnounce, canNudge, canMessage, asks } = availability;
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("in");
   const [sheet, setSheet] = useState<{ playerId: string; name: string; initial: Answer } | null>(null);
-  const [asking, setAsking] = useState<"announce" | "nudge" | null>(null);
+  const [asking, setAsking] = useState<"announce" | "nudge" | "whatsapp" | null>(null);
   const [pending, startTransition] = useTransition();
 
   const rows = { in: summary.available, out: summary.notAvailable, none: summary.noReply }[tab];
@@ -221,7 +227,7 @@ export function AvailabilityCard({
           )}
         </div>
 
-        {committee && (canAnnounce || canNudge || chase) && (
+        {committee && (canAnnounce || canNudge || canMessage || chase) && (
           <div className="flex flex-wrap gap-2 border-t border-border pt-4">
             {canAnnounce && (
               <Button type="button" size="sm" onClick={() => setAsking("announce")}>
@@ -233,6 +239,12 @@ export function AvailabilityCard({
               <Button type="button" size="sm" variant="outline" onClick={() => setAsking("nudge")}>
                 <Send aria-hidden="true" />
                 Nudge
+              </Button>
+            )}
+            {canMessage && (
+              <Button type="button" size="sm" variant="outline" onClick={() => setAsking("whatsapp")}>
+                <MessageCircle aria-hidden="true" />
+                Message on WhatsApp
               </Button>
             )}
             {chase && (
@@ -262,6 +274,10 @@ export function AvailabilityCard({
           onClose={() => setAsking(null)}
           onSend={(ids) => send(() => nudge(ids), "nudge")}
         />
+      )}
+
+      {asking === "whatsapp" && (
+        <WhatsAppSheet rows={summary.noReply} links={whatsapp} now={now} onClose={() => setAsking(null)} messaged={messaged} />
       )}
 
       {sheet && (
@@ -446,6 +462,7 @@ function PersonRow({ row, tab, now, you, onTap }: { row: AvailabilityRow; tab: T
     row.setBy && `set by ${row.setBy}`,
     row.late && "replied late",
     row.nudgedAt && `nudged ${formatAgo(row.nudgedAt, now)}`,
+    row.messaged && `messaged ${formatAgo(row.messaged.at, now)} by ${row.messaged.by}`,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -679,6 +696,123 @@ function NudgeSheet({
         <SendButton pending={pending} disabled={chosen.size === 0}>
           Nudge {people(chosen.size)}
         </SendButton>
+      </div>
+    </BottomSheet>
+  );
+}
+
+/**
+ * Everyone with No reply, each with a WhatsApp button that opens a prefilled chat in a new
+ * tab. The app can't tell whether the message was sent, so coming back to it asks "Sent it?"
+ * for the row just opened; Sent ✓ is the only thing that records Messaged.
+ */
+function WhatsAppSheet({
+  rows,
+  links,
+  now,
+  onClose,
+  messaged,
+}: {
+  rows: AvailabilityRow[];
+  links: Record<string, string | null>;
+  now: Date;
+  onClose: () => void;
+  messaged: (playerId: string) => Promise<Result>;
+}) {
+  const [opened, setOpened] = useState<string | null>(null);
+  const [returned, setReturned] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (!opened) return;
+    const back = () => {
+      if (document.visibilityState === "visible") setReturned(true);
+    };
+    document.addEventListener("visibilitychange", back);
+    window.addEventListener("focus", back);
+    return () => {
+      document.removeEventListener("visibilitychange", back);
+      window.removeEventListener("focus", back);
+    };
+  }, [opened]);
+
+  function sent(row: AvailabilityRow) {
+    startTransition(async () => {
+      const result = await messaged(row.userId);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(`Noted that you messaged ${row.name.split(" ")[0]}`);
+      setOpened(null);
+      setReturned(false);
+    });
+  }
+
+  return (
+    <BottomSheet eyebrow="Message on WhatsApp" title="Message people who haven't replied" onClose={onClose} onSubmit={(e) => e.preventDefault()}>
+      <div className="flex flex-col gap-3">
+        <p className="text-sm text-muted-foreground">
+          WhatsApp opens with the message ready. You press send from your own number.
+        </p>
+        {rows.length === 0 ? (
+          <p className="px-1 py-2 text-sm text-muted-foreground">Everyone&apos;s replied.</p>
+        ) : (
+          <ul className="flex flex-col">
+            {rows.map((row) => {
+              const link = links[row.userId];
+              const details = [
+                row.nudgedAt && `nudged ${formatAgo(row.nudgedAt, now)}`,
+                row.messaged && `messaged ${formatAgo(row.messaged.at, now)} by ${row.messaged.by}`,
+              ]
+                .filter(Boolean)
+                .join(" · ");
+              return (
+                <li key={row.userId} className={cn("flex flex-col gap-2 rounded-xl px-1 py-2", !link && "opacity-60")}>
+                  <div className="flex items-center gap-3">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{row.name}</span>
+                      {!link && <span className="block text-xs text-muted-foreground">No number</span>}
+                      {details && <span className="block truncate text-xs text-muted-foreground">{details}</span>}
+                    </span>
+                    {link && (
+                      <>
+                        <a
+                          href={link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => {
+                            setOpened(row.userId);
+                            setReturned(false);
+                          }}
+                          className="flex h-9 items-center gap-1.5 rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground"
+                        >
+                          <MessageCircle className="size-4" aria-hidden="true" />
+                          WhatsApp
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => sent(row)}
+                          disabled={pending}
+                          aria-label={`Sent ✓ to ${row.name}`}
+                          className="flex h-9 items-center gap-1 rounded-xl border border-border px-3 text-sm font-semibold disabled:opacity-60"
+                        >
+                          <Check className="size-4" aria-hidden="true" />
+                          Sent
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  {opened === row.userId && returned && (
+                    <p role="status" className="px-1 text-sm text-muted-foreground">
+                      Sent it? Tap Sent ✓ so the others can see you&apos;ve messaged {row.name.split(" ")[0]}.
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     </BottomSheet>
   );

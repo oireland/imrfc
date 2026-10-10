@@ -33,14 +33,16 @@ export async function magicLink(email: string, after: number): Promise<string> {
 }
 
 /**
- * A fresh, approved, onboarded User for a spec that changes per-User state (like the
+ * A fresh, approved, onboarded User (with a Mobile number) for a spec that changes per-User state (like the
  * theme) that other specs, signed in as the shared Admin, would trip over. Returns its email.
  */
 export async function seedUser({ role = "member" }: { role?: "member" | "committee" | "admin" } = {}): Promise<string> {
   const sql = postgres(TEST_DATABASE_URL);
   const email = `user-${crypto.randomUUID().slice(0, 8)}@example.com`;
+  const id = crypto.randomUUID();
   await sql`insert into "user" (id, name, email, email_verified, role, access_state, preferred_position)
-    values (${crypto.randomUUID()}, 'E2E User', ${email}, true, ${role}, 'approved', 'Wing')`;
+    values (${id}, 'E2E User', ${email}, true, ${role}, 'approved', 'Wing')`;
+  await sql`insert into mobile_number (user_id, number) values (${id}, '+447912345671')`;
   await sql.end();
   return email;
 }

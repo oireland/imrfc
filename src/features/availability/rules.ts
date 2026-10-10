@@ -38,7 +38,11 @@ export type AvailabilityRow = {
   late: boolean;
   /** When a No reply Player was last nudged, or null if never. */
   nudgedAt: Date | null;
+  /** The latest WhatsApp message a Committee member said they sent, shown to Committee only. */
+  messaged: { at: Date; by: string } | null;
 };
+
+export type Messaged = { userId: string; messagedById: string; createdAt: Date };
 
 export type Nudge = { userId: string; createdAt: Date };
 
@@ -70,6 +74,7 @@ export function summarizeAvailability({
   nameOf,
   replyBy = null,
   nudges = [],
+  messages = [],
 }: {
   players: AvailabilityPlayer[];
   replies: Reply[];
@@ -78,6 +83,7 @@ export function summarizeAvailability({
   nameOf?: (userId: string) => string | undefined;
   replyBy?: Date | null;
   nudges?: Nudge[];
+  messages?: Messaged[];
 }): AvailabilitySummary {
   const names = new Map(players.map((p) => [p.id, p.name]));
   const latest = latestReplies(replies);
@@ -86,6 +92,13 @@ export function summarizeAvailability({
     const current = lastNudged.get(n.userId);
     if (!current || n.createdAt > current) lastNudged.set(n.userId, n.createdAt);
   }
+  const lastMessaged = new Map<string, Messaged>();
+  for (const m of viewer.committee ? messages : []) {
+    const current = lastMessaged.get(m.userId);
+    if (!current || m.createdAt > current.createdAt) lastMessaged.set(m.userId, m);
+  }
+  const messagedBy = (m?: Messaged) =>
+    m ? { at: m.createdAt, by: names.get(m.messagedById) ?? nameOf?.(m.messagedById) ?? "Someone" } : null;
   const summary: AvailabilitySummary = { available: [], notAvailable: [], noReply: [] };
   const playing = players.filter((p) => p.playing).sort((a, b) => a.name.localeCompare(b.name));
   for (const player of playing) {
@@ -98,6 +111,7 @@ export function summarizeAvailability({
       setBy: r && r.setById !== player.id ? (names.get(r.setById) ?? nameOf?.(r.setById) ?? "Someone") : null,
       late: !!r && !!replyBy && r.createdAt > replyBy,
       nudgedAt: null,
+      messaged: messagedBy(lastMessaged.get(player.id)),
     };
     if (!r) summary.noReply.push({ ...row, reason: null, nudgedAt: lastNudged.get(player.id) ?? null });
     else if (r.status === "available") summary.available.push({ ...row, reason: null });

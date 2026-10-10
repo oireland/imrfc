@@ -19,11 +19,14 @@ export default async function globalSetup() {
   // by email before creating one). Pre-seeding it already onboarded keeps specs that
   // don't care about onboarding from tripping over the onboarding modal.
   const adminEmail = process.env.E2E_ADMIN_EMAIL ?? "irelandoliver4@gmail.com";
-  await sql`
+  const [seeded] = await sql`
     insert into "user" (id, name, email, email_verified, role, access_state, preferred_position)
     values (${crypto.randomUUID()}, 'E2E Admin', ${adminEmail}, true, 'admin', 'approved', 'Fly-half')
     on conflict (email) do nothing
+    returning id
   `;
+  // A Playing User with no Mobile number gets the onboarding modal too, so the Admin has one.
+  if (seeded) await sql`insert into mobile_number (user_id, number) values (${seeded.id}, '+447912345670')`;
 
   await sql.end();
 }

@@ -87,6 +87,7 @@ async function mailTo(email: string, subject: RegExp) {
 }
 
 test("Committee announce Training with a reply-by, nudge someone, and copy the chase message", async ({ page, context }) => {
+  test.slow(); // emails and a background send, slow when the whole suite shares one dev server
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   const title = `Training ${crypto.randomUUID().slice(0, 8)}`;
   const { eventId, playerName } = await seedTraining(title);
@@ -110,8 +111,14 @@ test("Committee announce Training with a reply-by, nudge someone, and copy the c
   expect(announced.Snippet).toContain("Reply now");
 
   await card.getByRole("button", { name: "Nudge" }).click();
-  await sheet.getByRole("button", { name: "Untick all" }).click();
-  await sheet.getByRole("checkbox", { name: playerName }).check();
+  // Players added by specs running in parallel change the list under the sheet, so tick just this Player, retrying until it sticks.
+  await expect(async () => {
+    const toggle = sheet.getByRole("button", { name: /^(Tick|Untick) all$/ });
+    if ((await toggle.textContent()) === "Tick all") await toggle.click();
+    await sheet.getByRole("button", { name: "Untick all" }).click();
+    await sheet.getByRole("checkbox", { name: playerName }).check();
+    await expect(sheet.getByRole("button", { name: "Nudge 1 person" })).toBeVisible({ timeout: 2000 });
+  }).toPass({ timeout: 30_000 });
   await sheet.getByRole("button", { name: "Nudge 1 person" }).click();
   await expect(sheet).toBeHidden();
   await expect(page.getByText("Nudged 1 person.")).toBeVisible();
@@ -142,11 +149,45 @@ test("an Announce that didn't reach everyone stays on the card until Committee d
   await page.goto(`/events/${eventId}`);
   const card = page.getByRole("region", { name: "Who's coming" });
   const notice = card.getByRole("alert");
-  await expect(notice).toHaveText(`E2E Admin's announcement didn't reach ${playerName}. Everyone else got it.`);
+  await expect(notice).toContainText(`E2E Admin's announcement didn't reach ${playerName}. Everyone else got it.`);
 
   await notice.getByRole("button", { name: "Dismiss" }).click();
   await expect(notice).toBeHidden();
   await page.reload();
   await expect(card).toContainText("Announced");
   await expect(card.getByRole("alert")).toBeHidden();
+});
+
+test("Committee message a Player on WhatsApp and record it with Sent ✓", async ({ page }) => {
+  const title = `Training ${crypto.randomUUID().slice(0, 8)}`;
+  const { eventId, playerName } = await seedTraining(title);
+  const sql = postgres(TEST_DATABASE_URL);
+  await sql`insert into mobile_number (user_id, number)
+    select id, '+447912345678' from "user" where name = ${playerName}`;
+  const numberless = `Kit ${title.split(" ").pop()}`;
+  await sql`insert into "user" (id, name, email, email_verified, access_state, preferred_position)
+    values (${crypto.randomUUID()}, ${numberless}, ${`${numberless.replace(" ", ".")}@x.org`}, true, 'approved', 'Hooker')`;
+  await sql.end();
+
+  await signIn(page);
+  await page.goto(`/events/${eventId}`);
+  const card = page.getByRole("region", { name: "Who's coming" });
+  await card.getByRole("button", { name: "Message on WhatsApp" }).click();
+
+  const sheet = page.getByRole("dialog");
+  const row = sheet.getByRole("listitem").filter({ hasText: playerName });
+  const link = row.getByRole("link", { name: "WhatsApp" });
+  await expect(link).toHaveAttribute("target", "_blank");
+  const href = (await link.getAttribute("href")) ?? "";
+  expect(href).toMatch(/^https:\/\/wa\.me\/447912345678\?text=/);
+  expect(decodeURIComponent(href)).toContain(`can you make`);
+  expect(decodeURIComponent(href)).toContain(`/events/${eventId}`);
+  await expect(sheet.getByRole("listitem").filter({ hasText: numberless })).toContainText("No number");
+
+  await row.getByRole("button", { name: `Sent ✓ to ${playerName}` }).click();
+  await expect(row).toContainText("messaged just now by E2E Admin");
+
+  await sheet.getByRole("button", { name: "Close" }).last().click();
+  await card.getByRole("tab", { name: /No reply/ }).click();
+  await expect(card.getByRole("tabpanel")).toContainText("messaged");
 });

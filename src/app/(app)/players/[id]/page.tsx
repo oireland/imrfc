@@ -4,13 +4,16 @@ import { db } from "@/db/client";
 import { BackLink } from "@/components/back-link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { MobileNumberField } from "@/components/mobile-number-field";
 import { PositionsPicker } from "@/components/positions-picker";
 import { SubmitButton } from "@/components/submit-button";
 import { getSeasonRecord, type RecordLine, type ReplyCounts } from "@/features/availability";
 import { listEquipmentUnits } from "@/features/equipment";
+import { getMobileNumber, setMobileNumber, whatsappLink } from "@/features/contact";
 import { getPlayer, setPlayerPositions, setPlaying } from "@/features/players";
 import { formatWhen } from "@/lib/format-time";
 import { isCommitteeOrAbove, type RugbyPosition } from "@/features/users";
+import { buttonVariants } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/session";
 
 export default async function PlayerPage({ params }: PageProps<"/players/[id]">) {
@@ -18,10 +21,11 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
   if (!user || !isCommitteeOrAbove(user.role)) redirect("/");
 
   const { id } = await params;
-  const [player, equipmentUnits, availability] = await Promise.all([
+  const [player, equipmentUnits, availability, mobileNumber] = await Promise.all([
     getPlayer(db, id),
     listEquipmentUnits(db, { includeRetired: true }),
     getSeasonRecord(db, id),
+    getMobileNumber(db, user, id),
   ]);
   if (!player) redirect("/players");
 
@@ -34,6 +38,15 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
     await setPlayerPositions(db, id, preferred, other);
     revalidatePath(`/players/${id}`);
     revalidatePath("/players");
+  }
+
+  async function saveMobileNumber(input: string) {
+    "use server";
+    const current = await getCurrentUser();
+    if (!current || !isCommitteeOrAbove(current.role)) redirect("/");
+    const result = await setMobileNumber(db, current, id, input);
+    if (result.ok) revalidatePath(`/players/${id}`);
+    return result;
   }
 
   async function togglePlaying(formData: FormData) {
@@ -73,6 +86,33 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
             <input type="hidden" name="playing" value={(!player.playing).toString()} />
             <SubmitButton variant="outline">{player.playing ? "Switch Playing off" : "Switch Playing on"}</SubmitButton>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h3 className="font-heading text-[22px] leading-tight">Mobile number</h3>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          {!mobileNumber && (
+            <p className="text-sm text-muted-foreground">No number yet. Add one so you can message {player.name.split(" ")[0]} on WhatsApp.</p>
+          )}
+          <MobileNumberField
+            id="player-mobile"
+            label={mobileNumber ? "Number" : "Add a number"}
+            initialNumber={mobileNumber}
+            save={saveMobileNumber}
+          />
+          {mobileNumber && (
+            <a
+              href={whatsappLink(mobileNumber)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={buttonVariants({ variant: "outline" }) + " self-start"}
+            >
+              WhatsApp
+            </a>
+          )}
         </CardContent>
       </Card>
 

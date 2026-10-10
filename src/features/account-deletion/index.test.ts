@@ -8,6 +8,7 @@ import { createEvent } from "@/features/events";
 import { claimDuty, ensureDuties } from "@/features/duties";
 import { getFeedToken, renderFeed } from "@/features/calendar-feed";
 import { isSubscribed, subscribe } from "@/features/push";
+import { hasMobileNumber, setMobileNumber } from "@/features/contact";
 import { user } from "@/features/users";
 import { deleteAccount } from "./index";
 
@@ -99,5 +100,14 @@ describe("deleteAccount", () => {
     expect(duties.map((d) => d.userIds)).toEqual([[], []]);
     expect((await renderFeed(db, token)).status).toBe(404);
     expect(await isSubscribed(db, "tom")).toBe(false);
+  });
+
+  it("wipes their Mobile number", async () => {
+    const db = await setup();
+    await setMobileNumber(db, actor("tom", "member"), "tom", "07912 345678");
+
+    await deleteAccount(db, { actor: actor("tom", "member"), userId: "tom" });
+
+    expect(await hasMobileNumber(db, "tom")).toBe(false);
   });
 });
