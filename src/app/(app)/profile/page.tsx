@@ -8,10 +8,12 @@ import { SignOutButton } from "@/components/sign-out-button";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { SubmitButton } from "@/components/submit-button";
 import { NotificationToggle } from "@/components/notification-toggle";
+import { MobileNumberField } from "@/components/mobile-number-field";
 import { ProfileNameField } from "@/components/profile-name-field";
 import { PositionsPicker } from "@/components/positions-picker";
 import { displayName, setName, type RugbyPosition } from "@/features/users";
 import { setPlayerPositions, setPlaying } from "@/features/players";
+import { getMobileNumber, setMobileNumber } from "@/features/contact";
 import { getFeedToken, resetFeedToken } from "@/features/calendar-feed";
 import { isSubscribed, subscribe, unsubscribe } from "@/features/push";
 import { deleteAccount } from "@/features/account-deletion";
@@ -20,6 +22,7 @@ import { requireApprovedUser } from "@/lib/session";
 export default async function ProfilePage() {
   const user = await requireApprovedUser();
   const notificationsOn = await isSubscribed(db, user.id);
+  const mobileNumber = await getMobileNumber(db, user, user.id);
   const token = await getFeedToken(db, user.id);
   const host = (await headers()).get("host");
   const protocol = host?.startsWith("localhost") ? "http" : "https";
@@ -36,6 +39,14 @@ export default async function ProfilePage() {
     "use server";
     const current = await requireApprovedUser();
     const result = await setName(db, current.id, name);
+    if (result.ok) revalidatePath("/", "layout");
+    return result;
+  }
+
+  async function saveMobileNumber(input: string) {
+    "use server";
+    const current = await requireApprovedUser();
+    const result = await setMobileNumber(db, current, current.id, input);
     if (result.ok) revalidatePath("/", "layout");
     return result;
   }
@@ -84,6 +95,18 @@ export default async function ProfilePage() {
       <Card>
         <CardContent>
           <ProfileNameField initialName={user.name} save={saveName} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          <MobileNumberField
+            id="profile-mobile"
+            label="Your mobile number"
+            hint="Only Committee see this — it's so they can message you about availability."
+            initialNumber={mobileNumber}
+            save={saveMobileNumber}
+          />
         </CardContent>
       </Card>
 

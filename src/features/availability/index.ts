@@ -5,7 +5,7 @@ import { listPlayers } from "@/features/players";
 import { displayName, listApprovedUsers } from "@/features/users";
 import type { MailSender } from "@/lib/mail";
 import { askEmail, type AskedEvent } from "./announce-rules";
-import { availabilityAnnouncement, availabilityAsk, availabilityNudge, availabilityReply } from "./schema";
+import { availabilityAnnouncement, availabilityAsk, availabilityMessaged, availabilityNudge, availabilityReply } from "./schema";
 import {
   askStatus,
   mayReply,
@@ -27,7 +27,7 @@ import {
 } from "./rules";
 
 export { askStatus, takesReplies } from "./rules";
-export { askPush, chaseMessage } from "./announce-rules";
+export { askPush, chaseMessage, whatsappMessage } from "./announce-rules";
 export type { AskedEvent } from "./announce-rules";
 export type { AskStatus, AvailabilityRow, AvailabilitySummary, MyReply, RecordLine, ReplyCounts, ReplyStatus, SeasonRecord, WaitingAsk } from "./rules";
 
@@ -49,6 +49,8 @@ export type Availability = {
   announcement: { at: Date; by: string; replyBy: Date | null } | null;
   canAnnounce: boolean;
   canNudge: boolean;
+  /** Committee may open WhatsApp chats and mark them Sent ✓, while the Event is still to come. */
+  canMessage: boolean;
   /** For Committee: Announces and Nudges still sending, or that failed and haven't been dismissed. */
   asks: AskNotice[];
 };
@@ -121,6 +123,14 @@ async function nudgesFor(db: Db, eventIds: string[]): Promise<Nudge[]> {
   return db.select().from(availabilityNudge).where(inArray(availabilityNudge.eventId, eventIds));
 }
 
+async function messagesFor(db: Db, eventIds: string[]) {
+  const rows: (typeof availabilityMessaged.$inferSelect)[] = await db
+    .select()
+    .from(availabilityMessaged)
+    .where(inArray(availabilityMessaged.eventId, eventIds));
+  return rows.map((r) => ({ userId: r.userId, messagedById: r.messagedById, createdAt: r.createdAt }));
+}
+
 /**
  * Saves a reply for `playerId` — their own, or one Committee gives for them. A reply to a
  * Match counts for every Match that day. Earlier replies are kept; the latest counts.
@@ -171,18 +181,20 @@ export async function getAvailability(db: Db, eventId: string, viewer: Viewer, n
       announcement: null,
       canAnnounce: false,
       canNudge: false,
+      canMessage: false,
       asks: [],
     };
   }
 
   const { eventIds, closesAt, events } = await groupFor(db, event);
-  const [replies, players, people, announcement, nudges, asks] = await Promise.all([
+  const [replies, players, people, announcement, nudges, asks, messages] = await Promise.all([
     repliesFor(db, eventIds),
     playersById(db),
     listApprovedUsers(db),
     announcementFor(db, eventIds),
     nudgesFor(db, eventIds),
     viewer.committee ? asksFor(db, eventIds) : [],
+    viewer.committee ? messagesFor(db, eventIds) : [],
   ]);
   const names = new Map<string, string>(people.map((u: Parameters<typeof displayName>[0] & { id: string }) => [u.id, displayName(u)]));
   const summary = summarizeAvailability({
@@ -192,6 +204,7 @@ export async function getAvailability(db: Db, eventId: string, viewer: Viewer, n
     nameOf: (id) => names.get(id),
     replyBy: announcement?.replyBy ?? null,
     nudges,
+    messages,
   });
 
   const self = players.get(viewer.id);
@@ -212,6 +225,7 @@ export async function getAvailability(db: Db, eventId: string, viewer: Viewer, n
       : null,
     canAnnounce: open && viewer.committee && !announcement,
     canNudge: open && viewer.committee && summary.noReply.length > 0,
+    canMessage: open && viewer.committee && summary.noReply.length > 0,
     asks: asks.map((row) => askNotice(row, names, now)).filter((ask) => ask.status !== "sent"),
   };
 }
@@ -272,6 +286,31 @@ export async function nudge(
   const noReply = availability.summary.noReply.map((r) => r.userId);
   const chosen = input.playerIds ? noReply.filter((id) => input.playerIds!.includes(id)) : noReply;
   return recordAsk(db, "nudge", input, chosen, now);
+}
+
+/**
+ * Records that a Committee member said they sent `playerId` a WhatsApp message about the
+ * Event (Sent ✓). The app can't know a message was sent, so this is only their word.
+ */
+export async function markMessaged(
+  db: Db,
+  input: { eventId: string; playerId: string; viewer: Viewer },
+  now: Date = new Date(),
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!input.viewer.committee) return { ok: false, error: "Only committee can do that." };
+  const availability = await getAvailability(db, input.eventId, input.viewer, now);
+  if (!availability.canMessage) return { ok: false, error: "You can't message anyone for this one." };
+  const everyone = [...availability.summary.available, ...availability.summary.notAvailable, ...availability.summary.noReply];
+  if (!everyone.some((r) => r.userId === input.playerId)) return { ok: false, error: "That player doesn't exist." };
+
+  await db.insert(availabilityMessaged).values({
+    id: crypto.randomUUID(),
+    eventId: input.eventId,
+    userId: input.playerId,
+    messagedById: input.viewer.id,
+    createdAt: now,
+  });
+  return { ok: true };
 }
 
 async function askRow(db: Db, askId: string) {
@@ -437,5 +476,6 @@ export async function deleteAvailabilityForEvent(db: Db, eventId: string) {
   await db.delete(availabilityReply).where(eq(availabilityReply.eventId, eventId));
   await db.delete(availabilityAnnouncement).where(eq(availabilityAnnouncement.eventId, eventId));
   await db.delete(availabilityNudge).where(eq(availabilityNudge.eventId, eventId));
+  await db.delete(availabilityMessaged).where(eq(availabilityMessaged.eventId, eventId));
   await db.delete(availabilityAsk).where(eq(availabilityAsk.eventId, eventId));
 }

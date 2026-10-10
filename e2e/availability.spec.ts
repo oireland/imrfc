@@ -150,3 +150,34 @@ test("an Announce that didn't reach everyone stays on the card until Committee d
   await expect(card).toContainText("Announced");
   await expect(card.getByRole("alert")).toBeHidden();
 });
+
+test("Committee message a Player on WhatsApp and record it with Sent ✓", async ({ page }) => {
+  const title = `Training ${crypto.randomUUID().slice(0, 8)}`;
+  const { eventId, playerName } = await seedTraining(title);
+  const sql = postgres(TEST_DATABASE_URL);
+  await sql`insert into mobile_number (user_id, number)
+    select id, '+447912345678' from "user" where name = ${playerName}`;
+  await sql.end();
+
+  await signIn(page);
+  await page.goto(`/events/${eventId}`);
+  const card = page.getByRole("region", { name: "Who's coming" });
+  await card.getByRole("button", { name: "Message on WhatsApp" }).click();
+
+  const sheet = page.getByRole("dialog");
+  const row = sheet.getByRole("listitem").filter({ hasText: playerName });
+  const link = row.getByRole("link", { name: "WhatsApp" });
+  await expect(link).toHaveAttribute("target", "_blank");
+  const href = (await link.getAttribute("href")) ?? "";
+  expect(href).toMatch(/^https:\/\/wa\.me\/447912345678\?text=/);
+  expect(decodeURIComponent(href)).toContain(`can you make`);
+  expect(decodeURIComponent(href)).toContain(`/events/${eventId}`);
+  await expect(sheet.getByRole("listitem").filter({ hasText: "E2E Admin" })).toContainText("No number");
+
+  await row.getByRole("button", { name: `Sent ✓ to ${playerName}` }).click();
+  await expect(row).toContainText("messaged just now by E2E Admin");
+
+  await sheet.getByRole("button", { name: "Close" }).first().click();
+  await card.getByRole("tab", { name: /No reply/ }).click();
+  await expect(card.getByRole("tabpanel")).toContainText("messaged");
+});

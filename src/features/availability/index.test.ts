@@ -5,8 +5,8 @@ import { createEvent, listTeams, type NewEvent } from "@/features/events";
 import { user } from "@/features/users";
 import type { MailSender } from "@/lib/mail";
 import { listEventsBetween } from "@/features/events";
-import { announce, deleteAvailabilityForEvent, deliverAsk, dismissAsk, retryAsk, getAsk, getAvailability, getSeasonRecord, listAvailableUserIds, listMyReplies, listWaitingOnReply, nudge, saveReply } from "./index";
-import { availabilityReply } from "./schema";
+import { announce, deleteAvailabilityForEvent, deliverAsk, dismissAsk, retryAsk, getAsk, getAvailability, getSeasonRecord, listAvailableUserIds, listMyReplies, listWaitingOnReply, markMessaged, nudge, saveReply } from "./index";
+import { availabilityMessaged, availabilityReply } from "./schema";
 
 const now = new Date("2026-10-01T12:00:00Z");
 const tom = { id: "tom", committee: true };
@@ -421,5 +421,53 @@ describe("listAvailableUserIds", () => {
     const byEvent = await listAvailableUserIds(db, [eventId]);
 
     expect(byEvent.get(eventId) ?? new Set()).toEqual(new Set());
+  });
+});
+
+describe("markMessaged", () => {
+  it("records who messaged a Player with No reply, shown to Committee beside the nudge", async () => {
+    const db = await setup();
+    const eventId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
+
+    expect(await markMessaged(db, { eventId, playerId: "jo", viewer: tom }, now)).toEqual({ ok: true });
+
+    const row = (await getAvailability(db, eventId, tom, now)).summary.noReply.find((r) => r.userId === "jo");
+    expect(row?.messaged).toEqual({ at: now, by: "Tom Hale" });
+    const other = (await getAvailability(db, eventId, tom, now)).summary.noReply.find((r) => r.userId === "tom");
+    expect(other?.messaged).toBeNull();
+  });
+
+  it("keeps the record after the Player replies", async () => {
+    const db = await setup();
+    const eventId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
+    await markMessaged(db, { eventId, playerId: "jo", viewer: tom }, now);
+    await saveReply(db, { eventId, playerId: "jo", viewer: { id: "jo", committee: false }, status: "available", note: "", reason: "" }, now);
+
+    const row = (await getAvailability(db, eventId, tom, now)).summary.available.find((r) => r.userId === "jo");
+    expect(row?.messaged).toEqual({ at: now, by: "Tom Hale" });
+  });
+
+  it("is for Committee only, and hidden from everyone else", async () => {
+    const db = await setup();
+    const eventId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
+
+    expect(await markMessaged(db, { eventId, playerId: "jo", viewer: sam }, now)).toEqual({ ok: false, error: "Only committee can do that." });
+    await markMessaged(db, { eventId, playerId: "jo", viewer: tom }, now);
+    const row = (await getAvailability(db, eventId, sam, now)).summary.noReply.find((r) => r.userId === "jo");
+    expect(row?.messaged).toBeNull();
+  });
+
+  it("is refused once the Event has started", async () => {
+    const db = await setup();
+    const eventId = await makeEvent(db, { start: new Date("2026-10-01T10:00:00Z") });
+    expect(await markMessaged(db, { eventId, playerId: "jo", viewer: tom }, now)).toEqual({ ok: false, error: "You can't message anyone for this one." });
+  });
+
+  it("is removed with the Event", async () => {
+    const db = await setup();
+    const eventId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
+    await markMessaged(db, { eventId, playerId: "jo", viewer: tom }, now);
+    await deleteAvailabilityForEvent(db, eventId);
+    expect(await db.select().from(availabilityMessaged)).toEqual([]);
   });
 });

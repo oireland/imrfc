@@ -44,3 +44,23 @@ test("Profile shows Notifications above the calendar, with help for Google and A
   await expect(page.getByRole("link", { name: /Google Calendar/ })).toHaveAttribute("href", /support\.google\.com/);
   await expect(page.getByRole("link", { name: /Apple Calendar/ })).toHaveAttribute("href", /support\.apple\.com/);
 });
+
+test("Profile saves a Mobile number, says so when it's not valid, and can clear it", async ({ page }) => {
+  await signIn(page, { email: await seedUser(), next: "/profile" });
+  const field = page.getByLabel("Your mobile number");
+  await expect(page.getByText("Only Committee see this — it's so they can message you about availability.")).toBeVisible();
+
+  await field.fill("12345");
+  await field.blur();
+  await expect(page.getByText(/doesn't look like a mobile number/)).toBeVisible();
+
+  await field.fill("07912 345678");
+  await field.blur();
+  await expect(page.getByText("Number saved")).toBeVisible();
+  await page.reload();
+  await expect(field).toHaveValue("+447912345678");
+
+  await field.fill("");
+  await field.blur();
+  await expect(page.getByText("Number removed")).toBeVisible();
+});

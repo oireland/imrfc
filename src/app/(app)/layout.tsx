@@ -4,6 +4,7 @@ import { FlashToast } from "@/components/flash-toast";
 import { BottomTabs } from "@/components/bottom-tabs";
 import { OnboardingDialog } from "@/components/onboarding-dialog";
 import { canManageUsers, countPendingUsers, isCommitteeOrAbove } from "@/features/users";
+import { hasMobileNumber } from "@/features/contact";
 import { needsOnboarding } from "@/features/onboarding";
 import { requireApprovedUser } from "@/lib/session";
 
@@ -11,6 +12,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await requireApprovedUser();
   const pendingCount = canManageUsers(user.role) ? await countPendingUsers(db) : 0;
   const showAdmin = isCommitteeOrAbove(user.role);
+  const onboarding = needsOnboarding({ ...user, hasMobileNumber: await hasMobileNumber(db, user.id) });
 
   return (
     <div className="flex flex-col">
@@ -19,7 +21,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         <FlashToast />
       </Suspense>
       <BottomTabs showAdmin={showAdmin} pendingCount={pendingCount} />
-      {needsOnboarding(user) && (
+      {onboarding && (
         <OnboardingDialog name={user.name} preferredPosition={user.preferredPosition} showAdmin={showAdmin} />
       )}
     </div>

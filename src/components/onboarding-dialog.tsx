@@ -104,6 +104,20 @@ export function OnboardingDialog({
               ))}
             </NativeSelect>
           </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="onboarding-mobile">Your mobile number</Label>
+            <Input
+              id="onboarding-mobile"
+              name="mobileNumber"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="07…"
+            />
+            <p className="text-xs text-muted-foreground">
+              Only Committee see this — it&apos;s so they can message you about availability.
+            </p>
+          </div>
           {state && !state.ok && (
             <p role="alert" className="text-sm text-destructive-text">
               {state.error}

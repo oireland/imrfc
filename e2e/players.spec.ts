@@ -53,3 +53,26 @@ test("Committee sets a Player's Positions and switches Playing off, and they mov
   await page.getByText(/Not playing \(\d+\)/).click();
   await expect(page.getByRole("link", { name: new RegExp(name) })).toBeVisible();
 });
+
+test("Committee adds a Player's Mobile number and gets a WhatsApp button that opens the chat", async ({ page }) => {
+  const sql = postgres(TEST_DATABASE_URL);
+  const name = `Quin ${crypto.randomUUID().slice(0, 8)}`;
+  const id = crypto.randomUUID();
+  await sql`insert into "user" (id, name, email, email_verified, access_state, preferred_position)
+    values (${id}, ${name}, ${`${name.replace(" ", ".")}@x.org`}, true, 'approved', 'Hooker')`;
+  await sql.end();
+
+  await signIn(page, { next: `/players/${id}` });
+  await expect(page.getByText(/No number yet/)).toBeVisible();
+  await expect(page.getByRole("link", { name: "WhatsApp" })).toHaveCount(0);
+
+  await page.getByLabel("Add a number").fill("07912 345678");
+  await page.getByLabel("Add a number").blur();
+  await expect(page.getByText("Number saved")).toBeVisible();
+  await page.reload();
+
+  const link = page.getByRole("link", { name: "WhatsApp" });
+  await expect(link).toHaveAttribute("href", "https://wa.me/447912345678");
+  await expect(link).toHaveAttribute("target", "_blank");
+  await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+});
