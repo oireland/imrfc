@@ -3,7 +3,7 @@ import postgres from "postgres";
 import { TEST_DATABASE_URL } from "./support/test-db";
 import { signIn } from "./support/sign-in";
 
-test("Committee copy the physio list for a Match's team, and for the whole club from Players", async ({ page, context }) => {
+test("Committee copy the physio message for a Match's team, and for the whole club from Players", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   const sql = postgres(TEST_DATABASE_URL);
   const tag = crypto.randomUUID().slice(0, 8);
@@ -25,15 +25,15 @@ test("Committee copy the physio list for a Match's team, and for the whole club 
   await sql.end();
 
   await signIn(page, { next: `/events/${eventId}` });
-  const summary = page.getByText("Physio list").locator("xpath=ancestor::*[@data-slot='card'][1]");
+  const summary = page.getByText("Physio Message").locator("xpath=ancestor::*[@data-slot='card'][1]");
   await expect(summary).toContainText(`${picked.name} — ankle: Strapping`);
   await expect(summary).not.toContainText(benched.name);
-  await summary.getByRole("button", { name: "Copy physio list" }).click();
+  await summary.getByRole("button", { name: "Copy physio message" }).click();
   await expect(page.getByText("Copied. Paste it to the physio.")).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toContain(picked.name);
 
   await page.goto("/players");
-  const club = page.getByText("Physio list").locator("xpath=ancestor::*[@data-slot='card'][1]");
+  const club = page.getByText("Physio Message").locator("xpath=ancestor::*[@data-slot='card'][1]");
   await expect(club).toContainText(picked.name);
   await expect(club).toContainText(benched.name);
 });

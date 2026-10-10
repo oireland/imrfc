@@ -4,17 +4,17 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-/** Previews a WhatsApp text (Duty Summary, Physio Summary) and copies it to the clipboard. */
+/** Previews a text message (the Physio Message) and copies it to the clipboard. */
 export function CopySummary({
   text,
-  title = "WhatsApp message",
-  buttonLabel = "Copy WhatsApp message",
-  copiedMessage = "Copied. Paste it into the club group.",
+  title,
+  buttonLabel,
+  copiedMessage,
 }: {
   text: string;
-  title?: string;
-  buttonLabel?: string;
-  copiedMessage?: string;
+  title: string;
+  buttonLabel: string;
+  copiedMessage: string;
 }) {
   return (
     <Card>

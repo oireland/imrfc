@@ -120,18 +120,10 @@ Any User can delete their own account from Profile; an Admin can delete anyone's
   - Nobody is taking an Equipment Unit to, or back from, an Event that starts within 48h.
   - Equipment Unit on a Checklist is Missing/Retired (it was Active when added).
   - Equipment Unit's current Holder isn't the person bringing it to the next Event that needs it ("Sam needs to pass Tackle Shields to Tom before Alumni Day"), and the people bringing it can't get enough from Stores and what they already hold. Nothing is said while nobody is bringing it yet.
-- **Duty Summary**: "Copy WhatsApp message" button on an Event, producing e.g.
-
-  ```
-  🏉 Wed 1 Oct — 1sts & 2nds Training, 19:00, Harlington
-  Ball bag A: Tom → / ← Tom
-  Tackle shields ×4: Sam & Tom → / ← Priya
-  Cones: ❗unassigned
-  ```
 
 ## Players and Injuries
 
-Lets Committee see at a glance who is fit, helps Players keep track of their own Injuries, and gives a match-day Physio list. Built as two features: `players` (Playing, Positions, time Away) and `injuries` (Injuries, Fitness, Concussion timeline, Physio list).
+Lets Committee see at a glance who is fit, helps Players keep track of their own Injuries, and gives a match-day Physio Message. Built as two features: `players` (Playing, Positions, time Away) and `injuries` (Injuries, Fitness, Concussion timeline, Physio Message).
 
 ### Players
 
@@ -140,7 +132,7 @@ Lets Committee see at a glance who is fit, helps Players keep track of their own
 
 ### Time away
 
-For a Player who is fit but won't be playing for a while (exams, a holiday), so Committee don't chase them and the app doesn't bug them. Lives in `players`, not `injuries`: it is not medical and never appears in Fitness or the Physio list.
+For a Player who is fit but won't be playing for a while (exams, a holiday), so Committee don't chase them and the app doesn't bug them. Lives in `players`, not `injuries`: it is not medical and never appears in Fitness or the Physio Message.
 
 - An **Away** period has a **from** date (default today), an **until** date and a **Reason** (required). Both dates are required, so it ends by itself; nobody is stuck Away.
 - A Player adds, edits and ends their own from Profile; Committee can do the same for anyone from the Player page (shown as "set by Tom"). A Player can have several, future ones included.
@@ -155,7 +147,7 @@ For a Player who is fit but won't be playing for a while (exams, a holiday), so 
   - **Training only** — might still come to training, can't play Matches.
   - **Playing through it** — will play, still carrying it.
   - **Cleared** — over.
-- **Needs physio at games** is a tick on Training only and Playing through it (not Out), with an optional note on what they need ("strapping on the right ankle"). It feeds the Physio list.
+- **Needs physio at games** is a tick on Training only and Playing through it (not Out), with an optional note on what they need ("strapping on the right ankle"). It feeds the Physio Message.
 - **Expected Return** is asked for on the report form with a **Not sure yet** chip beside it, so skipping is a visible choice. Once it has passed, the Home card asks "Still expecting 12 Oct?" (no email or push).
 - A Player reports and updates their own Injuries; Committee can report and update anyone's. Every status change records who made it and when.
 - One **Update** sheet (from the Profile card, the Home card or the Player page) holds the whole flow: a Status picker where any status can follow any other (people get worse as well as better), Expected Return with Not sure yet, Needs physio and its note, and an optional progress note shown in the history. **Cleared** and **Logged by mistake** are separate actions at the foot of the sheet.
@@ -178,9 +170,9 @@ Follows the RFU HEADCASE *Graduated Return to Activity & Sport* (GRAS) programme
   - From Day 14 with no Symptom-free Date: "Not improving by day 14? Call NHS 111". From Day 28 still without one: "Still symptoms after 4 weeks? See a GP". Both are also check-in flags for Committee.
 - Only Committee can Clear a Concussion; nothing clears automatically.
 
-### Physio list
+### Physio Message
 
-- A "Copy physio list" button on the Players page and on every Match that has a team picked (Committee only; not on Training or Social), producing a short message for the physio, e.g.
+- A "Copy physio message" button on the Players page and on every Match that has a team picked (Committee only; not on Training or Social), producing a short message for the physio, e.g.
 
   ```
   🩹 Physio list — 1st XV vs Barts, Sat 4 Oct
@@ -189,7 +181,7 @@ Follows the RFU HEADCASE *Graduated Return to Activity & Sport* (GRAS) programme
   ```
 
 - Lists only open Injuries with Needs physio ticked (so never Out, Cleared or logged by mistake), each with where it hurts and the note on what they need. On a Match it is limited to the Players picked on its Selection board (Guests have no Injuries); from the Players page it covers the whole club and is headed with today's date. A Match with nobody picked yet has no button.
-- Shown as a preview with a Copy button, as the Duty Summary is. Text only for now; a PDF could follow.
+- Shown as a preview with a Copy button, in the same card as any copied message. Text only for now; a PDF could follow.
 
 ### Who sees what
 
@@ -341,7 +333,7 @@ push notifications — no paid service, using the Web Push standard (see [ADR 00
 
 - **Bottom tabs**: Members get Home · Events · Equipment · Profile; Committee and Admin get Home · Events · Equipment · Players · Admin · Profile. The What's coming up title on Home also links to Events (with a chevron).
 - **Home**: "Can you make it?" for announced Events I haven't replied to, "You're playing" for a named team I'm in, my Duties (upcoming, soonest first), next few Events, Equipment Units I Hold, a card for each of my open Injuries ("Hamstring — out since 21 Sep · Update", or "Still expecting 12 Oct?" once that has passed), and an Away card while I am Away ("You're away until 3 Nov · I'm back"). These health cards are only ever my own (nobody else's Injuries or Away appear on Home, Committee included; they use the Players tab and push). They sit in one **stack**: collapsed it shows the top card with two card edges behind it and a "+2 more" badge; tapping the top card opens them all, and "Show less" folds them back. Order, most urgent first: an Injury with a passed Expected Return ("Still expecting…?"), then Out, Training only, Playing through it, then the Away card (current period only; a future one stays on Profile until it starts). Cleared and Logged by mistake Injuries leave Home.
-- **Events**: Upcoming (the Calendar / Agenda view with an All · Training · Matches · Socials filter; the Agenda lists every upcoming Event) and Past events, plus CSV import → Event detail (details, the **Team** card once a Match's team is named, maps link, Share, **Availability** for Training and Matches, Clashes, **Who's bringing what**, Duty Summary button). Who's bringing what has one row per Equipment Unit on the Checklist with its Whereabouts, a Bring slot and a Take back slot (who, done or not, gold for yours, "Needs someone" within 48h) and its heads-ups. Tapping a slot opens a sheet with only the actions the viewer may take (claim, mark as done, hand on / give it to someone from a tap-a-name list, where it goes back to, take someone off).
+- **Events**: Upcoming (the Calendar / Agenda view with an All · Training · Matches · Socials filter; the Agenda lists every upcoming Event) and Past events, plus CSV import → Event detail (details, the **Team** card once a Match's team is named, maps link, Share, **Availability** for Training and Matches, Clashes, **Who's bringing what**). Who's bringing what has one row per Equipment Unit on the Checklist with its Whereabouts, a Bring slot and a Take back slot (who, done or not, gold for yours, "Needs someone" within 48h) and its heads-ups. Tapping a slot opens a sheet with only the actions the viewer may take (claim, mark as done, hand on / give it to someone from a tap-a-name list, where it goes back to, take someone off).
 - **Equipment**: grouped by Whereabouts → Equipment Unit detail (Whereabouts, Condition Note, upcoming Duties, Movement Log, "I've got it", then "give it to someone" and "put it away in [Store]" below it).
 - **Admin** (Committee/Admin sections as permitted): Pending Users, Users & Roles, Stores, Equipment Units, Event Types & Default Checklists, Series.
 - **Players** (Committee): a summary line ("3 out · 1 training only · 2 playing through it · 2 away", non-zero parts only), name search that updates as you type (debounced, no Enter needed), a Position filter (Preferred or Other Position), **Injured** and **Away** filter chips, a small **New** dot on anyone with an Injury or Away added or changed in the last 48 hours, Players alphabetical by name by default (position order, by Preferred Position, as an alternative sort) each with their Fitness, main Injury ("Out · ankle (+1)"), check-in flag and, if Away, "Away until 3 Nov" (or "from 20 Dec"; Away Players stay in their place in the list, not under Not playing), then a collapsed **Not playing** section. "Copy for physio" button.
@@ -388,7 +380,7 @@ Every signed-in screen is checked with axe in light, dark (device) and Dark chos
 
 Code is organised **by feature**, not by layer. Each feature owns its domain rules in plain TypeScript, independent of Next.js, which makes them testable in isolation and lets new features attach without editing existing ones. See [ADR 0002](docs/adr/0002-feature-modules.md).
 
-Features: `users` (access, roles, blocking), `locations`, `equipment` (units, whereabouts, moves), `events` (events, series, teams), `duties` (checklists, duties, confirm, clashes, summary), `calendar-feed`, `players` (Playing, Positions, time Away), `availability` (replies, Announce, Nudge, chase message, Messaged), `contact` (Mobile numbers, WhatsApp links), `selection` (Selection board, Team Sheets, Notify the team), `injuries` (Injuries, Fitness, Concussion timeline, Physio list).
+Features: `users` (access, roles, blocking), `locations`, `equipment` (units, whereabouts, moves), `events` (events, series, teams), `duties` (checklists, duties, confirm, clashes, summary), `calendar-feed`, `players` (Playing, Positions, time Away), `availability` (replies, Announce, Nudge, chase message, Messaged), `contact` (Mobile numbers, WhatsApp links), `selection` (Selection board, Team Sheets, Notify the team), `injuries` (Injuries, Fitness, Concussion timeline, Physio Message).
 
 ## Out of scope for v1
 
@@ -406,7 +398,7 @@ Features: `users` (access, roles, blocking), `locations`, `equipment` (units, wh
 
 **Contact** (see [Contact](#contact)) is a small feature with a public entry point for the Mobile number and WhatsApp links; `availability` and `players` call it, and Onboarding asks it whether a number is missing.
 
-**Selection** (see [Selection](#selection)) follows the same pattern: a `selection` feature that asks `availability`'s entry point for each Player's reply and `players` for Positions, and later `injuries` for Fitness (which could then narrow the Physio list to a Match's team).
+**Selection** (see [Selection](#selection)) follows the same pattern: a `selection` feature that asks `availability`'s entry point for each Player's reply and `players` for Positions, and later `injuries` for Fitness (which could then narrow the Physio Message to a Match's team).
 
 Other planned extensions: duty reminders (email/web push — iOS supports push for installed PWAs), fixture import, team-filtered feeds, itemised equipment contents.
 

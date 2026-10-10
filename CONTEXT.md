@@ -63,7 +63,7 @@ A Player's state on a given date, taken from their worst open Injury: Out, Train
 _Avoid_: Availability (whether someone can make an Event, for any reason, is a separate concept)
 
 **Needs physio**:
-A tick on a Training only or Playing through it Injury meaning the Player wants help from the physio at games (strapping, a check), with an optional note on what they need. Listed in the Physio list.
+A tick on a Training only or Playing through it Injury meaning the Player wants help from the physio at games (strapping, a check), with an optional note on what they need. Listed in the Physio Message.
 
 **Concussion**:
 An Injury flagged as a concussion. It follows the RFU's graduated return, shows an Earliest Match, and only Committee can Clear it.
@@ -74,7 +74,7 @@ The day since which a concussed Player has had no symptoms at rest. Cleared if s
 **Earliest Match**:
 The first date a concussed Player may play a match under the graduated return; there is also an earliest date for contact training. Guidance only; it never clears the Concussion.
 
-**Physio list**:
+**Physio Message**:
 Text for the physio listing who needs them, with where it hurts and what they need: the Players picked for a Match, or the whole club from the Players page.
 
 ## Availability
@@ -285,9 +285,6 @@ _Avoid_: Conflict, error
 **Heads-up**:
 A gentler warning about an Event's equipment plan that isn't a Clash: nobody is on a Duty and the Event starts within 48 hours, an Equipment Unit on the Checklist is Missing or Retired, or the Holder needs to pass an Equipment Unit to whoever is bringing it.
 _Avoid_: Clash (for these), alert
-
-**Duty Summary**:
-Text summarising an Event and its Duties, formatted for pasting into the club WhatsApp group.
 
 ## Calendar
 

@@ -35,7 +35,6 @@ import {
   dutyActions,
   voidDutiesForEvent,
   ensureDuties,
-  formatDutySummary,
   gatherConfirmSources,
   joinNames,
   listPeopleOnEquipment,
@@ -312,18 +311,6 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
       headsUps: headsUps.filter((h) => h.equipmentUnitId === kid).map((h) => h.message),
     };
   });
-  const summary = formatDutySummary({
-    title: eventDetails.title,
-    start: eventDetails.start,
-    venueName: eventDetails.venue,
-    items: equipmentUnitIds.map((kid) => ({
-      equipmentName: equipmentNames.get(kid) ?? kid,
-      count: countByUnit.get(kid) ?? 1,
-      quantity: equipmentById.get(kid)?.quantity ?? 1,
-      to: dutyFor(kid, "to").userIds.length > 0 ? joinNames(dutyFor(kid, "to").userIds.map((uid) => personName.get(uid) ?? "Someone")) : null,
-      from: dutyFor(kid, "from").userIds.length > 0 ? joinNames(dutyFor(kid, "from").userIds.map((uid) => personName.get(uid) ?? "Someone")) : null,
-    })),
-  });
   const kit: KitEditing | undefined = canEditList
     ? {
         options: equipmentUnits
@@ -484,9 +471,8 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
         listSource={checklistSource}
       />
 
-      <CopySummary text={summary} />
       {physioList && (
-        <CopySummary text={physioList} title="Physio list" buttonLabel="Copy physio list" copiedMessage="Copied. Paste it to the physio." />
+        <CopySummary text={physioList} title="Physio Message" buttonLabel="Copy physio message" copiedMessage="Copied. Paste it to the physio." />
       )}
     </div>
   );

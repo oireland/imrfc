@@ -73,7 +73,7 @@ export default async function PlayersPage({ searchParams }: PageProps<"/players"
         </details>
       )}
 
-      <CopySummary text={physioList} title="Physio list" buttonLabel="Copy physio list" copiedMessage="Copied. Paste it to the physio." />
+      <CopySummary text={physioList} title="Physio Message" buttonLabel="Copy physio message" copiedMessage="Copied. Paste it to the physio." />
     </div>
   );
 }
