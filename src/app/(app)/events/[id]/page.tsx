@@ -91,7 +91,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     listEquipmentUnits(db),
     listKnownUsers(db),
     listStores(db),
-    listPlanWarnings(db),
+    listPlanWarnings(db, new Date(), { eventId: id }),
     committee ? listVenues(db) : [],
     committee ? listTeams(db) : [],
     getTeamCard(db, id, { id: user.id, committee }),

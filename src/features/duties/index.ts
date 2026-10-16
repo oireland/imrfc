@@ -622,8 +622,14 @@ export async function listDutyRecordForUser(
   };
 }
 
+/**
+ * Narrows the plan to one Equipment Unit, or to the Equipment Units on one Event's Checklist.
+ * Warnings are per Equipment Unit, so a scoped plan gives exactly that part of the full answer.
+ */
+export type PlanScope = { equipmentUnitId: string } | { eventId: string };
+
 /** The equipment plan for every upcoming, uncancelled Event. Read-only: it never creates Duties. */
-async function loadPlan(db: Db): Promise<{ equipment: PlanEquipment[]; events: PlanEvent[] }> {
+async function loadPlan(db: Db, scope?: PlanScope): Promise<{ equipment: PlanEquipment[]; events: PlanEvent[] }> {
   const events = (await listEvents(db, { when: "upcoming" })).filter((e) => !e.cancelled);
   if (events.length === 0) return { equipment: [], events: [] };
   const [equipment, dutyRows] = await Promise.all([
@@ -641,26 +647,35 @@ async function loadPlan(db: Db): Promise<{ equipment: PlanEquipment[]; events: P
         ),
       ) as Promise<(typeof duty.$inferSelect)[]>,
   ]);
-  const [userIdsByDuty, checklistsByEvent, portions] = await Promise.all([
-    loadUserIdsFor(db, dutyRows.map((r) => r.id)),
-    resolveChecklistsForEvents(db, events),
-    listPortionsFor(db, equipment.map((k) => k.id)),
+  const checklistsByEvent = await resolveChecklistsForEvents(db, events);
+  const itemsOf = (eventId: string) => checklistsByEvent.get(eventId)?.items ?? [];
+  const inScope: Set<string> | undefined = !scope
+    ? undefined
+    : "equipmentUnitId" in scope
+      ? new Set([scope.equipmentUnitId])
+      : new Set(itemsOf(scope.eventId).map((i) => i.equipmentUnitId));
+  const wanted = inScope ? equipment.filter((k) => inScope.has(k.id)) : equipment;
+  const [userIdsByDuty, portions] = await Promise.all([
+    loadUserIdsFor(db, dutyRows.filter((d) => !inScope || inScope.has(d.equipmentUnitId)).map((r) => r.id)),
+    listPortionsFor(db, wanted.map((k) => k.id)),
   ]);
-  const planEvents: PlanEvent[] = events.map((e) => ({
+  const planEvents: PlanEvent[] = events
+    .map((e) => ({
     id: e.id,
     title: e.title,
     start: e.start,
     startTbc: e.startTbc,
     end: e.end,
-    items: checklistsByEvent.get(e.id)?.items ?? [],
+    items: itemsOf(e.id).filter((i) => !inScope || inScope.has(i.equipmentUnitId)),
     duties: dutyRows
-      .filter((d) => d.eventId === e.id)
+      .filter((d) => d.eventId === e.id && (!inScope || inScope.has(d.equipmentUnitId)))
       .map((d) => ({ equipmentUnitId: d.equipmentUnitId, direction: d.direction, userIds: userIdsByDuty.get(d.id) ?? [] })),
-  }));
+    }))
+    .filter((e) => !inScope || e.items.length > 0);
   const portionsByUnit = new Map<string, typeof portions>();
   for (const p of portions) portionsByUnit.set(p.equipmentUnitId, [...(portionsByUnit.get(p.equipmentUnitId) ?? []), p]);
   return {
-    equipment: equipment.map((k) => ({
+    equipment: wanted.map((k) => ({
       id: k.id,
       name: k.name,
       status: k.status,
@@ -684,8 +699,12 @@ export async function listHeadsUps(db: Db, now: Date = new Date()): Promise<Head
 }
 
 /** Clashes and heads-ups together, from one load of the equipment plan. */
-export async function listPlanWarnings(db: Db, now: Date = new Date()): Promise<{ clashes: Clash[]; headsUps: HeadsUp[] }> {
-  const [plan, people] = await Promise.all([loadPlan(db), listKnownUsers(db)]);
+export async function listPlanWarnings(
+  db: Db,
+  now: Date = new Date(),
+  scope?: PlanScope,
+): Promise<{ clashes: Clash[]; headsUps: HeadsUp[] }> {
+  const [plan, people] = await Promise.all([loadPlan(db, scope), listKnownUsers(db)]);
   const names = new Map(people.map((p) => [p.id, displayName(p)]));
   return {
     clashes: findClashes(plan),

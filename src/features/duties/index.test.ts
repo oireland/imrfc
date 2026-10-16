@@ -880,6 +880,32 @@ describe("Query efficiency", () => {
     expect(warnings).toEqual({ clashes, headsUps: await listHeadsUps(db) });
   });
 
+  it("scoped to one Equipment Unit or one Event, gives exactly that part of the full warnings", async () => {
+    const { db, equipment, shed } = await setup();
+    const shields = await createEquipmentUnit(db, { name: "Shields", homeId: shed.id });
+    if (!shields.ok) throw new Error(shields.error);
+    await addToChecklist(db, { scope: "event_type", scopeId: "training" }, equipment.id);
+    const first = await addTraining(db, 24);
+    const second = await addTraining(db, 25);
+    await addToChecklist(db, { scope: "event", scopeId: second.id }, shields.equipmentUnit.id);
+
+    const full = await listPlanWarnings(db);
+    expect(full.clashes.length + full.headsUps.length).toBeGreaterThan(0);
+
+    for (const unitId of [equipment.id, shields.equipmentUnit.id]) {
+      expect(await listPlanWarnings(db, new Date(), { equipmentUnitId: unitId })).toEqual({
+        clashes: full.clashes.filter((c) => c.equipmentUnitId === unitId),
+        headsUps: full.headsUps.filter((h) => h.equipmentUnitId === unitId),
+      });
+    }
+    for (const ev of [first, second]) {
+      expect(await listPlanWarnings(db, new Date(), { eventId: ev.id })).toEqual({
+        clashes: full.clashes.filter((c) => c.eventIds.includes(ev.id)),
+        headsUps: full.headsUps.filter((h) => h.eventIds.includes(ev.id)),
+      });
+    }
+  });
+
   it("resolves a user's upcoming duties in the same number of queries however many upcoming Events there are", async () => {
     const { db, equipment } = await setup();
     await addToChecklist(db, { scope: "event_type", scopeId: "training" }, equipment.id);

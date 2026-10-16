@@ -52,7 +52,7 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
     listStores(db, { includeArchived: true }),
     getPortions(db, id),
     listMovementLog(db, id),
-    listPlanWarnings(db),
+    listPlanWarnings(db, new Date(), { equipmentUnitId: id }),
     listKnownUsers(db),
   ]);
   if (!found) notFound();
