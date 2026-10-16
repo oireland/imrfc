@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import {
@@ -9,8 +8,7 @@ import {
   type EquipmentStatus,
   type EquipmentUnit,
 } from "@/features/equipment";
-import { isCommitteeOrAbove } from "@/features/users";
-import { getCurrentUser } from "@/lib/session";
+import { requireCommittee } from "@/lib/session";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,23 +33,26 @@ const STATUS_BADGE_VARIANT: Record<EquipmentStatus, "secondary" | "destructive" 
 };
 
 export default async function EquipmentUnitsPage() {
-  const user = await getCurrentUser();
-  if (!user || !isCommitteeOrAbove(user.role)) redirect("/");
+  await requireCommittee();
 
   const units = await listEquipmentUnits(db, { includeRetired: true });
 
   async function changeStatus(formData: FormData) {
     "use server";
-    await setEquipmentStatus(db, String(formData.get("equipmentUnitId")), formData.get("status") as EquipmentStatus);
+    await requireCommittee();
+    const status = String(formData.get("status"));
+    if (!STATUSES.includes(status as EquipmentStatus)) return;
+    await setEquipmentStatus(db, String(formData.get("equipmentUnitId")), status as EquipmentStatus);
     revalidatePath("/admin/equipment");
   }
 
   async function changeNote(formData: FormData) {
     "use server";
+    const current = await requireCommittee();
     await setConditionNote(
       db,
       String(formData.get("equipmentUnitId")),
-      user!.id,
+      current.id,
       String(formData.get("conditionNote")),
     );
     revalidatePath("/admin/equipment");
@@ -59,6 +60,7 @@ export default async function EquipmentUnitsPage() {
 
   async function remove(formData: FormData) {
     "use server";
+    await requireCommittee();
     await deleteEquipmentUnit(db, String(formData.get("equipmentUnitId")));
     revalidatePath("/admin/equipment");
   }

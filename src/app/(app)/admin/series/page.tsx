@@ -1,10 +1,8 @@
-import { redirect } from "next/navigation";
 import { BackLink } from "@/components/back-link";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { createSeries, extendSeries, listSeries, listVenues } from "@/features/events";
-import { isCommitteeOrAbove } from "@/features/users";
-import { getCurrentUser } from "@/lib/session";
+import { requireCommittee } from "@/lib/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,13 +13,13 @@ import { SubmitButton } from "@/components/submit-button";
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export default async function AdminSeriesPage() {
-  const user = await getCurrentUser();
-  if (!user || !isCommitteeOrAbove(user.role)) redirect("/");
+  await requireCommittee();
 
   const [venues, allSeries] = await Promise.all([listVenues(db), listSeries(db)]);
 
   async function create(formData: FormData) {
     "use server";
+    await requireCommittee();
     await createSeries(db, {
       title: String(formData.get("title")),
       eventType: formData.get("eventType") === "social" ? "social" : "training",
@@ -39,6 +37,7 @@ export default async function AdminSeriesPage() {
 
   async function extend(formData: FormData) {
     "use server";
+    await requireCommittee();
     await extendSeries(db, String(formData.get("seriesId")), String(formData.get("endDate")));
     revalidatePath("/admin/series");
     revalidatePath("/events");

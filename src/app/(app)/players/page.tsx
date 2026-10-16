@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { db } from "@/db/client";
@@ -11,12 +10,10 @@ import { formatPhysioList, listFitness, listPhysioNeeds } from "@/features/injur
 import { listPlayers, londonToday } from "@/features/players";
 import type { PlayerRow } from "@/features/players";
 import { formatDay } from "@/lib/format-time";
-import { isCommitteeOrAbove } from "@/features/users";
-import { getCurrentUser } from "@/lib/session";
+import { requireCommittee } from "@/lib/session";
 
 export default async function PlayersPage({ searchParams }: PageProps<"/players">) {
-  const user = await getCurrentUser();
-  if (!user || !isCommitteeOrAbove(user.role)) redirect("/");
+  await requireCommittee();
 
   const { q, away, injured } = await searchParams;
   const search = typeof q === "string" ? q : "";
