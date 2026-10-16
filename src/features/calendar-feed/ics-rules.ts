@@ -14,7 +14,7 @@ export type FeedEvent = {
 };
 
 const escapeText = (s: string) =>
-  s.replace(/\\/g, "\\\\").replace(/;/g, "\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+  s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
 
 /** The day after a YYYY-MM-DD date, as YYYYMMDD. */
 function nextDay(date: string): string {
