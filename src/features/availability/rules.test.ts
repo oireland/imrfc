@@ -418,3 +418,13 @@ describe("a Match with a TBC kick-off", () => {
     expect(replyGroup(tbc, [timed]).closesAt).toEqual(timed.start);
   });
 });
+
+describe("reply length limits", () => {
+  it("rejects a note or Reason that's far too long", () => {
+    expect(validateReply({ status: "available", note: "a".repeat(1001), reason: "" })).toEqual({
+      ok: false,
+      error: "The note is too long. Keep it to 1000 characters or fewer.",
+    });
+    expect(validateReply({ status: "not_available", note: "", reason: "a".repeat(201) }).ok).toBe(false);
+  });
+});

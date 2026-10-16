@@ -167,3 +167,12 @@ describe("validateUpdate Injury Status", () => {
     expect(validateUpdate(input, today).ok).toBe(false);
   });
 });
+
+describe("injury length limits", () => {
+  it("rejects a description, physio note or progress note that's far too long", () => {
+    expect(validateReport(report({ description: "a".repeat(1001) }), today).ok).toBe(false);
+    expect(validateReport(report({ physioNote: "a".repeat(1001) }), today).ok).toBe(false);
+    const update = { status: "playing_through" as const, expectedReturn: "2026-10-20", notSure: false, needsPhysio: false, physioNote: "", note: "a".repeat(1001) };
+    expect(validateUpdate(update, today)).toEqual({ ok: false, error: "The note is too long. Keep it to 1000 characters or fewer." });
+  });
+});

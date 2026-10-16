@@ -128,3 +128,20 @@ describe("startsAt", () => {
     expect(startsAt({ start: new Date("2026-11-01T00:00:00Z"), startTbc: true })).toEqual(new Date("2026-11-01T23:59:00Z"));
   });
 });
+
+describe("validateEvent length limits", () => {
+  it("rejects a venue, title, opponent or notes that's far too long", () => {
+    expect(validateEvent({ ...training, venue: "a".repeat(201) }).ok).toBe(false);
+    expect(validateEvent({ ...training, notes: "a".repeat(1001) }).ok).toBe(false);
+    expect(validateEvent({ ...training, eventType: "social", title: "a".repeat(101) })).toEqual({
+      ok: false,
+      error: "The title is too long. Keep it to 100 characters or fewer.",
+    });
+    const match: NewEvent = {
+      ...training,
+      eventType: "match",
+      matchDetails: { teamId: "t", opponent: "a".repeat(101), homeAway: "home", competition: "friendly" },
+    };
+    expect(validateEvent(match).ok).toBe(false);
+  });
+});

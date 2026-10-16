@@ -1,3 +1,4 @@
+import { LIMITS, firstTooLong } from "@/lib/text-limits";
 import { londonParts, startsAt, type EventType } from "@/features/events";
 
 export type ReplyStatus = "available" | "not_available";
@@ -8,6 +9,8 @@ export type ReplyInput = { status: ReplyStatus; note: string; reason: string };
 export function validateReply(input: ReplyInput): { ok: true; reply: ReplyInput } | { ok: false; error: string } {
   const note = input.note.trim();
   const reason = input.reason.trim();
+  const tooLong = firstTooLong([["note", note, LIMITS.note], ["reason", reason, LIMITS.line]]);
+  if (tooLong) return { ok: false, error: tooLong };
   if (input.status === "not_available" && !reason) return { ok: false, error: "Say why you can't make it." };
   return input.status === "available"
     ? { ok: true, reply: { status: "available", note, reason: "" } }

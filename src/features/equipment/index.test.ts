@@ -554,3 +554,20 @@ describe("archiveStoreIfUnused", () => {
     expect((await archiveStoreIfUnused(db, other.id)).ok).toBe(false);
   });
 });
+
+describe("setConditionNote length limit", () => {
+  it("refuses a note that's far too long, changing and logging nothing", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const alex = await seedUser(db);
+    const created = await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
+    if (!created.ok) throw new Error("expected Equipment Unit to be created");
+
+    const result = await setConditionNote(db, created.equipmentUnit.id, alex.id, "a".repeat(1001));
+
+    expect(result).toEqual({ ok: false, error: "The note is too long. Keep it to 1000 characters or fewer." });
+    expect((await listEquipmentUnits(db))[0].conditionNote).toBe("");
+    expect(await listMovementLog(db, created.equipmentUnit.id)).toEqual([]);
+  });
+});

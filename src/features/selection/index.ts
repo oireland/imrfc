@@ -1,3 +1,4 @@
+import { LIMITS, firstTooLong } from "@/lib/text-limits";
 import { and, eq, inArray } from "drizzle-orm";
 import { getAvailability } from "@/features/availability";
 import { getEvent, getEvents, listEventsBetween, londonParts, londonToUtc, startsAt, type Event, type EventWithDetails } from "@/features/events";
@@ -198,6 +199,8 @@ export async function pickGuest(db: Db, input: ShirtRef & { name: string; viewer
   if (denied) return denied;
   const name = input.name.trim();
   if (!name) return { ok: false, error: "Type the guest's name." };
+  const tooLong = firstTooLong([["name", name, LIMITS.name]]);
+  if (tooLong) return { ok: false, error: tooLong };
   await fill(db, input, { userId: null, guestName: name }, input.viewer, now);
   return { ok: true };
 }

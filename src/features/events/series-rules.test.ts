@@ -97,3 +97,12 @@ describe("checkOccurrenceCount", () => {
     expect(result).toEqual({ ok: false, error: expect.stringContaining(String(MAX_OCCURRENCES + 5)) });
   });
 });
+
+describe("validateSeries length limits", () => {
+  it("rejects a venue, title or notes that's far too long", () => {
+    const base = { weekdays: [3], startTime: "19:00", endTime: "20:30", venue: "Harlington", startDate: "2026-01-07", endDate: "2026-03-25" };
+    expect(validateSeries({ ...base, venue: "a".repeat(201) }).ok).toBe(false);
+    expect(validateSeries({ ...base, eventType: "social", title: "a".repeat(101) }).ok).toBe(false);
+    expect(validateSeries({ ...base, notes: "a".repeat(1001) }).ok).toBe(false);
+  });
+});

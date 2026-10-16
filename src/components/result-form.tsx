@@ -13,11 +13,14 @@ type Result = { ok: true } | { ok: false; error: string };
 export function ResultForm({
   action,
   successMessage,
+  resetOnSuccess = true,
   className,
   children,
 }: {
   action: (formData: FormData) => Promise<Result>;
   successMessage?: string;
+  /** Clear the fields after a success (right for "add" forms, wrong for ones that edit a value in place). */
+  resetOnSuccess?: boolean;
   className?: string;
   children: (pending: boolean) => React.ReactNode;
 }) {
@@ -37,7 +40,7 @@ export function ResultForm({
             return;
           }
           if (successMessage) toast.success(successMessage);
-          form.reset();
+          if (resetOnSuccess) form.reset();
         });
       }}
     >

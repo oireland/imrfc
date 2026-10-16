@@ -14,6 +14,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { ResultForm } from "@/components/result-form";
 import { SubmitButton } from "@/components/submit-button";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { BackLink } from "@/components/back-link";
@@ -49,13 +50,14 @@ export default async function EquipmentUnitsPage() {
   async function changeNote(formData: FormData) {
     "use server";
     const current = await requireCommittee();
-    await setConditionNote(
+    const result = await setConditionNote(
       db,
       String(formData.get("equipmentUnitId")),
       current.id,
       String(formData.get("conditionNote")),
     );
-    revalidatePath("/admin/equipment");
+    if (result.ok) revalidatePath("/admin/equipment");
+    return result;
   }
 
   async function retire(formData: FormData) {
@@ -101,7 +103,9 @@ export default async function EquipmentUnitsPage() {
                   </SubmitButton>
                 </form>
               </div>
-              <form action={changeNote} className="flex items-center gap-2">
+              <ResultForm action={changeNote} resetOnSuccess={false} className="flex items-center gap-2">
+                {(pending) => (
+                  <>
                 <input type="hidden" name="equipmentUnitId" value={k.id} />
                 <Label htmlFor={`note-${k.id}`} className="sr-only">
                   Condition of {k.name}
@@ -113,10 +117,12 @@ export default async function EquipmentUnitsPage() {
                   placeholder="Condition, e.g. 2 balls need pumping"
                   className="flex-1"
                 />
-                <SubmitButton size="sm" variant="outline">
+                <SubmitButton size="sm" variant="outline" disabled={pending}>
                   Save
                 </SubmitButton>
-              </form>
+                  </>
+                )}
+              </ResultForm>
               {k.status !== "retired" && (
                 <div className="flex justify-end">
                   <form id={`retire-${k.id}`} action={retire}>

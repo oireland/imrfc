@@ -295,3 +295,14 @@ describe("a Match with a TBC kick-off", () => {
     expect((await getBoard(db, eventId, tom, new Date("2026-10-03T23:30:00Z")))!.pitches[0].readOnly).toBe(true);
   });
 });
+
+describe("pickGuest length limit", () => {
+  it("refuses a guest name that's far too long", async () => {
+    const db = await setup();
+    const eventId = await makeMatch(db, "2026-10-03T13:00:00Z");
+    expect(await pickGuest(db, { eventId, shirt: 9, name: "a".repeat(101), viewer: tom }, now)).toEqual({
+      ok: false,
+      error: "The name is too long. Keep it to 100 characters or fewer.",
+    });
+  });
+});

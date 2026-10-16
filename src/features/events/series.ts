@@ -1,3 +1,4 @@
+import { LIMITS, firstTooLong } from "@/lib/text-limits";
 import { and, asc, count, eq, gte } from "drizzle-orm";
 import { event, series } from "./schema";
 import { trainingTitle } from "./rules";
@@ -118,6 +119,13 @@ export async function editOccurrence(
 ): Promise<{ ok: true } | Failure> {
   const [target]: Occurrence[] = await db.select().from(event).where(eq(event.id, eventId));
   if (!target?.seriesId) return { ok: false, error: "That event isn't part of a series." };
+
+  const tooLong = firstTooLong([
+    ["title", changes.title, LIMITS.name],
+    ["venue", changes.venue, LIMITS.line],
+    ["notes", changes.notes, LIMITS.note],
+  ]);
+  if (tooLong) return { ok: false, error: tooLong };
 
   const current = { start: londonParts(target.start).time, end: londonParts(target.end).time };
   const startTime = changes.startTime ?? current.start;

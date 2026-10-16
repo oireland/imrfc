@@ -333,3 +333,19 @@ describe("eraseUser", () => {
     expect(await countPendingUsers(db)).toBe(0);
   });
 });
+
+describe("setName length limit", () => {
+  it("refuses a name that's far too long", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const u = await seedUser(db, { name: "Kept" });
+
+    expect(await setName(db, u.id, "a".repeat(101))).toEqual({
+      ok: false,
+      error: "The name is too long. Keep it to 100 characters or fewer.",
+    });
+
+    const [row] = await db.select().from(user).where(eq(user.id, u.id));
+    expect(row.name).toBe("Kept");
+  });
+});

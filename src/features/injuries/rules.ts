@@ -1,3 +1,4 @@
+import { LIMITS, firstTooLong } from "@/lib/text-limits";
 import { formatDay } from "@/lib/day-string";
 
 export const BODY_AREAS = [
@@ -84,6 +85,11 @@ function checkPhysio(input: { status: OpenStatus; needsPhysio: boolean; physioNo
 const STATUS_ERROR = "Pick whether you're playing through it, training only or out.";
 
 export function validateReport(input: ReportInput, today: string): Checked<Omit<ReportInput, "notSure">> {
+  const tooLong = firstTooLong([
+    ["description", input.description, LIMITS.note],
+    ["physio note", input.physioNote, LIMITS.note],
+  ]);
+  if (tooLong) return { ok: false, error: tooLong };
   if (!BODY_AREAS.includes(input.area)) return { ok: false, error: "Pick where it hurts." };
   if (!OPEN_STATUSES.includes(input.status)) return { ok: false, error: STATUS_ERROR };
   if (!input.happenedOn) return { ok: false, error: "Say when it happened." };
@@ -105,6 +111,11 @@ export function validateReport(input: ReportInput, today: string): Checked<Omit<
 }
 
 export function validateUpdate(input: UpdateInput, today: string): Checked<Omit<UpdateInput, "notSure">> {
+  const tooLong = firstTooLong([
+    ["note", input.note, LIMITS.note],
+    ["physio note", input.physioNote, LIMITS.note],
+  ]);
+  if (tooLong) return { ok: false, error: tooLong };
   if (!OPEN_STATUSES.includes(input.status)) return { ok: false, error: STATUS_ERROR };
   const expected = checkReturn(input, today);
   if (!expected.ok) return expected;

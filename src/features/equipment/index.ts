@@ -1,3 +1,4 @@
+import { LIMITS, firstTooLong } from "@/lib/text-limits";
 import { and, desc, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import { equipmentPortion, equipmentUnit, movementLogEntry } from "./schema";
 import { archiveStore } from "@/features/stores";
@@ -147,7 +148,9 @@ export async function setConditionNote(
   id: string,
   userId: string,
   conditionNote: string,
-) {
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const tooLong = firstTooLong([["note", conditionNote, LIMITS.note]]);
+  if (tooLong) return { ok: false, error: tooLong };
   await db.update(equipmentUnit).set({ conditionNote }).where(eq(equipmentUnit.id, id));
   await db.insert(movementLogEntry).values({
     id: crypto.randomUUID(),
@@ -156,6 +159,7 @@ export async function setConditionNote(
     userId,
     conditionNote,
   });
+  return { ok: true };
 }
 
 function logTarget(target: MoveTarget) {

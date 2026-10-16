@@ -154,3 +154,10 @@ describe("rangeLabel", () => {
     expect(rangeLabel("2026-11-03", "2026-11-03")).toBe("3 Nov");
   });
 });
+
+describe("validateAway length limit", () => {
+  it("rejects a Reason that's far too long", () => {
+    const result = validateAway({ from: "2026-11-03", until: "2026-11-20", reason: "a".repeat(201) }, "2026-10-10");
+    expect(result).toEqual({ ok: false, error: "The reason is too long. Keep it to 200 characters or fewer." });
+  });
+});

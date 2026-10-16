@@ -1,3 +1,4 @@
+import { LIMITS, firstTooLong } from "@/lib/text-limits";
 import { eq } from "drizzle-orm";
 import { store } from "./schema";
 
@@ -20,6 +21,8 @@ export async function createStore(
   input: NewStore,
 ): Promise<{ ok: true; store: Store } | { ok: false; error: string }> {
   if (!input.name.trim()) return { ok: false, error: "Give the store a name." };
+  const tooLong = firstTooLong([["name", input.name, LIMITS.name], ["address", input.address, LIMITS.line]]);
+  if (tooLong) return { ok: false, error: tooLong };
   const [row] = await db
     .insert(store)
     .values({ id: crypto.randomUUID(), name: input.name.trim(), address: input.address })

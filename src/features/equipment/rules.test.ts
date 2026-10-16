@@ -31,3 +31,12 @@ describe("validateEquipmentUnit", () => {
     });
   });
 });
+
+describe("validateEquipmentUnit length limit", () => {
+  it("rejects a name that's far too long", () => {
+    expect(validateEquipmentUnit({ name: "a".repeat(101), homeId: "loc-1" })).toEqual({
+      ok: false,
+      error: "The name is too long. Keep it to 100 characters or fewer.",
+    });
+  });
+});

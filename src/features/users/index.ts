@@ -1,3 +1,4 @@
+import { LIMITS, firstTooLong } from "@/lib/text-limits";
 import { and, count, eq, inArray, ne } from "drizzle-orm";
 import type { Role } from "./access";
 import type { RugbyPosition } from "./positions";
@@ -130,6 +131,8 @@ export async function blockUserAs(db: Db, { actorId, userId }: { actorId: string
 export async function setName(db: Db, userId: string, name: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, error: "Please enter your name." };
+  const tooLong = firstTooLong([["name", trimmed, LIMITS.name]]);
+  if (tooLong) return { ok: false, error: tooLong };
   await db.update(user).set({ name: trimmed }).where(eq(user.id, userId));
   return { ok: true };
 }

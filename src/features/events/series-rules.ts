@@ -1,3 +1,4 @@
+import { LIMITS, firstTooLong } from "@/lib/text-limits";
 // Match isn't a Series Event Type: it needs an opponent and other Match-only details a Series pattern doesn't model.
 export type SeriesEventType = "training" | "social";
 
@@ -88,6 +89,12 @@ export function checkOccurrenceCount(adding: number, existing: number): { ok: tr
 }
 
 export function validateSeries(p: SeriesPattern): { ok: true } | { ok: false; error: string } {
+  const tooLong = firstTooLong([
+    ["title", p.title, LIMITS.name],
+    ["venue", p.venue, LIMITS.line],
+    ["notes", p.notes, LIMITS.note],
+  ]);
+  if (tooLong) return { ok: false, error: tooLong };
   if ((p.eventType ?? "training") === "social" && !(p.title ?? "").trim()) return { ok: false, error: "Give the series a title." };
   if (p.weekdays.length === 0 || !p.weekdays.every((d) => Number.isInteger(d) && d >= 0 && d <= 6)) {
     return { ok: false, error: "Pick at least one day of the week." };

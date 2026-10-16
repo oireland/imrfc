@@ -1,3 +1,4 @@
+import { LIMITS, firstTooLong } from "@/lib/text-limits";
 import { addDays, formatDay } from "@/lib/day-string";
 
 /** A dated period a Player won't be playing for a non-injury reason. Dates are London calendar days, `YYYY-MM-DD`. */
@@ -23,6 +24,8 @@ export function rangeLabel(from: string, until: string): string {
 /** A period to save: both dates (so it ends by itself), a Reason, and not wholly in the past. */
 export function validateAway(input: AwayInput, today: string): { ok: true; value: AwayInput } | { ok: false; error: string } {
   const reason = input.reason.trim();
+  const tooLong = firstTooLong([["reason", reason, LIMITS.line]]);
+  if (tooLong) return { ok: false, error: tooLong };
   if (!input.from) return { ok: false, error: "Pick the day you go away." };
   if (!input.until) return { ok: false, error: "Pick the day you'll be back." };
   if (input.until < input.from) return { ok: false, error: "You can't be back before you go." };
