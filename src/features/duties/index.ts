@@ -650,6 +650,7 @@ async function loadPlan(db: Db): Promise<{ equipment: PlanEquipment[]; events: P
     id: e.id,
     title: e.title,
     start: e.start,
+    startTbc: e.startTbc,
     end: e.end,
     items: checklistsByEvent.get(e.id)?.items ?? [],
     duties: dutyRows

@@ -51,6 +51,18 @@ describe("findHeadsUps", () => {
     ]);
   });
 
+  it("counts a TBC kick-off as the end of match day, so it isn't flagged until that day is within 48 hours", () => {
+    // Match day is 3 Oct (BST): the day starts ~38h away but ends ~62h away.
+    const tbc = event({
+      start: at("2026-10-02T23:00:00Z"),
+      end: at("2026-10-03T23:00:00Z"),
+      startTbc: true,
+      duties: [{ equipmentUnitId: "shields", direction: "from", userIds: ["tom"] }],
+    });
+
+    expect(messages([equipment()], [tbc])).toEqual([]);
+  });
+
   it("says nobody is taking the equipment back from the Event", () => {
     const soon = event({ ...tomorrow, duties: [{ equipmentUnitId: "shields", direction: "to", userIds: ["tom"] }] });
 

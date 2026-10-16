@@ -15,6 +15,8 @@ export type PlanEvent = {
   id: string;
   title: string;
   start: Date;
+  /** True for a Match whose kick-off isn't known yet; `start` is then just its day. */
+  startTbc?: boolean;
   end: Date;
   /** The Event's resolved Checklist: each Equipment Unit it needs, with its effective count. */
   items: { equipmentUnitId: string; count: number }[];
