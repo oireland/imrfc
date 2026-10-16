@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { listDutyRecordForUser } from "@/features/duties";
-import { displayName, isCommitteeOrAbove, listApprovedUsers, setPlaying, setPositions, type Role, type RugbyPosition } from "@/features/users";
+import { displayName, isCommitteeOrAbove, listApprovedUsers, RUGBY_POSITIONS, setPlaying, setPositions, type Role, type RugbyPosition } from "@/features/users";
 import {
   awayLabel,
   awayPushMessage,
@@ -107,8 +107,16 @@ export async function getPlayer(db: Db, id: string): Promise<(Player & { dutyRec
 }
 
 /** Sets a Player's Positions, deduplicated and never repeating the Preferred one. */
-export async function setPlayerPositions(db: Db, userId: string, preferred: RugbyPosition, other: RugbyPosition[]) {
+export async function setPlayerPositions(
+  db: Db,
+  userId: string,
+  preferred: RugbyPosition,
+  other: RugbyPosition[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const valid = (p: unknown) => (RUGBY_POSITIONS as readonly unknown[]).includes(p);
+  if (!valid(preferred) || !other.every(valid)) return { ok: false, error: "Pick positions from the list." };
   await setPositions(db, userId, normalizePositions(preferred, other));
+  return { ok: true };
 }
 
 // ---- Time away ----------------------------------------------------------------------------

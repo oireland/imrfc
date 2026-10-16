@@ -52,6 +52,17 @@ describe("setPlayerPositions", () => {
   });
 });
 
+describe("setPlayerPositions validation", () => {
+  it("rejects positions that aren't on the list and changes nothing", async () => {
+    const db = await setup();
+    const bad = await setPlayerPositions(db, "hal", "Lock", ["Goalkeeper" as never]);
+    expect(bad.ok).toBe(false);
+    const bad2 = await setPlayerPositions(db, "hal", "Striker" as never, []);
+    expect(bad2.ok).toBe(false);
+    expect((await getPlayer(db, "hal"))?.preferredPosition).not.toBe("Lock");
+  });
+});
+
 describe("getPlayer", () => {
   it("includes the Player's duty record", async () => {
     const db = await setup();

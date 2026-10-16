@@ -55,6 +55,11 @@ describe("validateReport", () => {
     expect(result).toEqual({ ok: true, value: expect.objectContaining({ description: "Pulled it", area: "Thigh", expectedReturn: "2026-10-20" }) });
   });
 
+  it("only accepts an open Injury Status", () => {
+    expect(validateReport(report({ status: "cleared" as never }), today).ok).toBe(false);
+    expect(validateReport(report({ status: "banana" as never }), today).ok).toBe(false);
+  });
+
   it("needs a body area", () => {
     expect(validateReport(report({ area: "" as never }), today)).toEqual({ ok: false, error: "Pick where it hurts." });
   });
@@ -153,5 +158,12 @@ describe("statusAlert", () => {
     expect(statusAlert("Jo King", "out")).toBe("Jo King is now Out");
     expect(statusAlert("Jo King", "training_only")).toBe("Jo King is now Training only");
     expect(statusAlert("Jo King", "playing_through")).toBe("Jo King is now Playing through it");
+  });
+});
+
+describe("validateUpdate Injury Status", () => {
+  it("rejects a status that isn't an open one", () => {
+    const input = { status: "cleared" as never, expectedReturn: "2026-10-20", notSure: false, note: "", needsPhysio: false, physioNote: "" };
+    expect(validateUpdate(input, today).ok).toBe(false);
   });
 });

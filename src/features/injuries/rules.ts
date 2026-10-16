@@ -81,8 +81,11 @@ function checkPhysio(input: { status: OpenStatus; needsPhysio: boolean; physioNo
   return { needsPhysio, physioNote: needsPhysio ? input.physioNote.trim() : "" };
 }
 
+const STATUS_ERROR = "Pick whether you're playing through it, training only or out.";
+
 export function validateReport(input: ReportInput, today: string): Checked<Omit<ReportInput, "notSure">> {
   if (!BODY_AREAS.includes(input.area)) return { ok: false, error: "Pick where it hurts." };
+  if (!OPEN_STATUSES.includes(input.status)) return { ok: false, error: STATUS_ERROR };
   if (!input.happenedOn) return { ok: false, error: "Say when it happened." };
   if (input.happenedOn > today) return { ok: false, error: "That hasn't happened yet." };
   const expected = checkReturn(input, today);
@@ -102,6 +105,7 @@ export function validateReport(input: ReportInput, today: string): Checked<Omit<
 }
 
 export function validateUpdate(input: UpdateInput, today: string): Checked<Omit<UpdateInput, "notSure">> {
+  if (!OPEN_STATUSES.includes(input.status)) return { ok: false, error: STATUS_ERROR };
   const expected = checkReturn(input, today);
   if (!expected.ok) return expected;
   return {
