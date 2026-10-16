@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyEvent, eventTitle, validateEvent, type NewEvent } from "./rules";
+import { classifyEvent, eventTitle, startsAt, validateEvent, type NewEvent } from "./rules";
 
 const training: NewEvent = {
   eventType: "training",
@@ -111,5 +111,20 @@ describe("eventTitle", () => {
 
   it("keeps a Social's own title", () => {
     expect(eventTitle({ ...training, eventType: "social", title: " Curry night " })).toBe("Curry night");
+  });
+});
+
+describe("startsAt", () => {
+  it("is the start for an Event with a known time", () => {
+    const start = new Date("2026-10-03T13:00:00Z");
+    expect(startsAt({ start })).toEqual(start);
+    expect(startsAt({ start, startTbc: false })).toEqual(start);
+  });
+
+  it("is the end of the London day for a TBC kick-off, not midnight", () => {
+    // 3 Oct 2026 is BST: London midnight is 23:00Z the day before, 23:59 London is 22:59Z.
+    expect(startsAt({ start: new Date("2026-10-02T23:00:00Z"), startTbc: true })).toEqual(new Date("2026-10-03T22:59:00Z"));
+    // 31 Oct 2026 is GMT.
+    expect(startsAt({ start: new Date("2026-11-01T00:00:00Z"), startTbc: true })).toEqual(new Date("2026-11-01T23:59:00Z"));
   });
 });

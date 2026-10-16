@@ -8,7 +8,8 @@ import { user } from "@/features/users";
 import type { MailSender } from "@/lib/mail";
 import { listEventsBetween } from "@/features/events";
 import { announce, deleteAvailabilityForEvent, deliverAsk, dismissAsk, retryAsk, getAsk, getAvailability, getSeasonRecord, listAvailableUserIds, listMyReplies, listWaitingOnReply, markMessaged, nudge, saveReply } from "./index";
-import { availabilityMessaged, availabilityReply } from "./schema";
+import { deleteEvent } from "@/features/events";
+import { availabilityAnnouncement, availabilityAsk, availabilityMessaged, availabilityReply } from "./schema";
 
 const now = new Date("2026-10-01T12:00:00Z");
 const tom = { id: "tom", committee: true };
@@ -139,7 +140,48 @@ async function announceAndDeliver(db: Awaited<ReturnType<typeof setup>>, input: 
   return deliverAsk(db, result.askId, { url: url(input.eventId), mail }, now);
 }
 
+describe("deleting one Match of a double-header", () => {
+  it("keeps the replies and the announcement that covered its sibling", async () => {
+    const db = await setup();
+    const firsts = await makeEvent(db, { start: new Date("2026-10-03T12:00:00Z"), eventType: "match", title: "Barts" });
+    const seconds = await makeEvent(db, { start: new Date("2026-10-03T14:00:00Z"), eventType: "match", title: "Kings" });
+    await saveReply(db, { eventId: firsts, playerId: "sam", viewer: sam, status: "not_available", note: "", reason: "Exams" }, now);
+    await announce(db, { eventId: firsts, viewer: tom, replyBy: null }, now);
+
+    await deleteAvailabilityForEvent(db, firsts);
+    await deleteEvent(db, firsts);
+
+    const availability = await getAvailability(db, seconds, tom, now);
+    expect(availability.summary.notAvailable.map((r) => [r.name, r.reason])).toEqual([["Sam Patel", "Exams"]]);
+    expect(availability.announcement).not.toBeNull();
+  });
+
+  it("still removes everything for a lone Match", async () => {
+    const db = await setup();
+    const lone = await makeEvent(db, { start: new Date("2026-10-03T12:00:00Z"), eventType: "match" });
+    await saveReply(db, { eventId: lone, playerId: "sam", viewer: sam, status: "available", note: "", reason: "" }, now);
+
+    await deleteAvailabilityForEvent(db, lone);
+
+    expect(await db.select().from(availabilityReply)).toEqual([]);
+  });
+});
+
 describe("announce", () => {
+  it("sends once when two Committee press Announce at the same time", async () => {
+    const db = await setup();
+    const eventId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
+
+    const results = await Promise.all([
+      announce(db, { eventId, viewer: tom, replyBy: null }, now),
+      announce(db, { eventId, viewer: tom, replyBy: null }, now),
+    ]);
+
+    expect(results.filter((r) => r.ok)).toHaveLength(1);
+    expect(await db.select().from(availabilityAnnouncement)).toHaveLength(1);
+    expect(await db.select().from(availabilityAsk)).toHaveLength(1);
+  });
+
   it("emails every Player with No reply, and shows who announced it and the Reply By", async () => {
     const db = await setup();
     const eventId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });

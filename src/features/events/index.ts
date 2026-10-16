@@ -3,7 +3,7 @@ import { event, matchDetails, team } from "./schema";
 import { classifyEvent, eventTitle, validateEvent, type NewEvent } from "./rules";
 
 export { event } from "./schema";
-export { validateEvent, classifyEvent, eventTitle, trainingTitle, matchTitle } from "./rules";
+export { validateEvent, classifyEvent, eventTitle, trainingTitle, matchTitle, startsAt } from "./rules";
 export {
   createSeries,
   editOccurrence,
@@ -50,7 +50,7 @@ export async function createEvent(
   if (!result.ok) return result;
   const title = await titleFor(db, input);
   if (!title.ok) return title;
-  return { ok: true, event: await insertEvent(db, input, title.title) };
+  return { ok: true, event: await db.transaction((tx: Db) => insertEvent(tx, input, title.title)) };
 }
 
 /** The Event's derived title; a Match's needs its Team's name, so an unknown Team is an error. */
@@ -181,6 +181,20 @@ export async function getEvent(db: Db, id: string): Promise<EventWithDetails | u
   return { ...row, matchDetails: details, teams };
 }
 
+/** Several Events with their match details and Teams, in three queries however many there are. Ids with no Event are left out. */
+export async function getEvents(db: Db, ids: string[]): Promise<EventWithDetails[]> {
+  if (ids.length === 0) return [];
+  const rows: Event[] = await db.select().from(event).where(inArray(event.id, [...new Set(ids)]));
+  const matchIds = rows.filter((r) => r.eventType === "match").map((r) => r.id);
+  const details: MatchDetails[] = matchIds.length ? await db.select().from(matchDetails).where(inArray(matchDetails.eventId, matchIds)) : [];
+  const teamIds = [...new Set(details.map((d) => d.teamId))];
+  const teams: Team[] = teamIds.length ? await db.select().from(team).where(inArray(team.id, teamIds)) : [];
+  return rows.map((row) => {
+    const mine = details.find((d) => d.eventId === row.id) ?? null;
+    return { ...row, matchDetails: mine, teams: mine ? teams.filter((t) => t.id === mine.teamId) : [] };
+  });
+}
+
 /**
  * Edits a standalone Event's every field in place. For an Occurrence, use
  * `editOccurrence` instead, which offers "this one" or "this and future".
@@ -190,26 +204,31 @@ export async function editEvent(
   id: string,
   input: NewEvent,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const [stored]: Event[] = await db.select().from(event).where(eq(event.id, id));
+  if (!stored) return { ok: false, error: "That event no longer exists." };
+  if (stored.eventType !== input.eventType) return { ok: false, error: "An event's type can't be changed." };
   const result = validateEvent(input);
   if (!result.ok) return result;
   const title = await titleFor(db, input);
   if (!title.ok) return title;
 
-  await db
-    .update(event)
-    .set({
-      title: title.title,
-      start: input.start,
-      end: input.end,
-      startTbc: !!input.startTbc,
-      venue: input.venue.trim(),
-      notes: input.notes ?? "",
-    })
-    .where(eq(event.id, id));
+  await db.transaction(async (tx: Db) => {
+    await tx
+      .update(event)
+      .set({
+        title: title.title,
+        start: input.start,
+        end: input.end,
+        startTbc: !!input.startTbc,
+        venue: input.venue.trim(),
+        notes: input.notes ?? "",
+      })
+      .where(eq(event.id, id));
 
-  if (input.eventType === "match") {
-    await db.update(matchDetails).set(matchRow(input.matchDetails)).where(eq(matchDetails.eventId, id));
-  }
+    if (input.eventType === "match") {
+      await tx.update(matchDetails).set(matchRow(input.matchDetails)).where(eq(matchDetails.eventId, id));
+    }
+  });
 
   return { ok: true };
 }

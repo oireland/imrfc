@@ -132,6 +132,8 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     redirect("/events");
   }
 
+  // An Event's type is fixed: edits use the stored one, never what the client sends.
+  const storedType = eventDetails.eventType;
   async function edit(input: QuickEventInput & { scope: "this" | "future" }): Promise<{ ok: true } | { ok: false; error: string }> {
     "use server";
     const current = await requireApprovedUser();
@@ -144,7 +146,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
           { title: input.title, startTime: input.startTime, endTime: input.endTime ?? input.startTime, venue: input.venue, notes: input.notes },
           input.scope,
         )
-      : await editEvent(db, id, buildQuickEvent(input));
+      : await editEvent(db, id, buildQuickEvent({ ...input, type: storedType }));
     if (!result.ok) return result;
 
     revalidatePath(`/events/${id}`);

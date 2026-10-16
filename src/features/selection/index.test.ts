@@ -281,3 +281,17 @@ describe("listPickedPlayerIds", () => {
     expect(await listPickedPlayerIds(db, await makeMatch(db, "2026-10-03T13:00:00Z"))).toEqual([]);
   });
 });
+
+describe("a Match with a TBC kick-off", () => {
+  it("stays editable through match day and goes read-only after it", async () => {
+    const db = await setup();
+    const eventId = await makeMatch(db, "2026-10-02T23:00:00Z", "1st XV", {
+      end: new Date("2026-10-03T22:59:00Z"),
+      startTbc: true,
+    });
+    const matchMorning = new Date("2026-10-03T08:00:00Z");
+    expect((await getBoard(db, eventId, tom, matchMorning))!.pitches[0].readOnly).toBe(false);
+    expect((await pickPlayer(db, { eventId, shirt: 2, userId: "sam", viewer: tom }, matchMorning)).ok).toBe(true);
+    expect((await getBoard(db, eventId, tom, new Date("2026-10-03T23:30:00Z")))!.pitches[0].readOnly).toBe(true);
+  });
+});

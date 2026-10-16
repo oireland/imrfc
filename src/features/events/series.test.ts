@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { cancelEvent } from "./index";
+import { failOnInsert } from "@/test/fail-on-insert";
+import { event } from "./schema";
 import {
   createSeries,
   editOccurrence,
   extendSeries,
   listOccurrences,
+  listSeries,
   type NewSeries,
 } from "./series";
 
@@ -90,6 +93,38 @@ describe("createSeries", () => {
     const result = await createSeries(db, { ...pattern, eventType: "social", title: " " });
 
     expect(result).toEqual({ ok: false, error: "Give the series a title." });
+  });
+});
+
+describe("Series limits", () => {
+  it("refuses a Series with too many Occurrences and creates nothing", async () => {
+    const { db, pattern } = await setup();
+
+    const result = await createSeries(db, { ...pattern, weekdays: [0, 1, 2, 3, 4, 5, 6], startDate: "2999-01-01", endDate: "2999-06-01" });
+
+    expect(result.ok).toBe(false);
+    expect(await listSeries(db)).toEqual([]);
+  });
+
+  it("refuses to extend a Series past the limit, leaving it as it was", async () => {
+    const { db, pattern } = await setup();
+    const created = await createSeries(db, { ...pattern, weekdays: [0, 1, 2, 3, 4, 5, 6] });
+    if (!created.ok) throw new Error(created.error);
+
+    const result = await extendSeries(db, created.series.id, "2999-04-30");
+
+    expect(result.ok).toBe(false);
+    expect(await listOccurrences(db, created.series.id)).toHaveLength(22);
+    expect((await listSeries(db))[0].endDate).toBe("2999-01-30");
+  });
+
+  it("saves the Series and its Occurrences together or not at all", async () => {
+    const { db, pattern } = await setup();
+    const failing = failOnInsert(db, event);
+
+    await expect(createSeries(failing, pattern)).rejects.toThrow("boom");
+
+    expect(await listSeries(db)).toEqual([]);
   });
 });
 

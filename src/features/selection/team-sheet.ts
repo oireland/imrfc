@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
-import { getEvent, londonParts } from "@/features/events";
+import { getEvent, londonParts, startsAt } from "@/features/events";
 import { formatDay } from "@/lib/format-time";
-import { getBoard } from "./index";
+import { getBoard, type Board } from "./index";
 import { selectionShirt } from "./schema";
 import {
   ROLES,
@@ -71,9 +71,16 @@ export async function settleFields(db: Db, eventId: string) {
 }
 
 /** A Match's Team Sheet for Committee, drawn from the Event and the board; null for anyone else or a non-Match. */
-export async function getTeamSheet(db: Db, eventId: string, viewer: Viewer, now: Date = new Date()): Promise<TeamSheet | null> {
+export async function getTeamSheet(
+  db: Db,
+  eventId: string,
+  viewer: Viewer,
+  now: Date = new Date(),
+  /** The match day's board, when the caller has already loaded it; saves loading it again. */
+  loaded?: Board,
+): Promise<TeamSheet | null> {
   if (!viewer.committee) return null;
-  const [settled, board] = await Promise.all([settleFields(db, eventId), getBoard(db, eventId, viewer, now)]);
+  const [settled, board] = await Promise.all([settleFields(db, eventId), loaded ?? getBoard(db, eventId, viewer, now)]);
   if (!settled || !board) return null;
   const { event, fields } = settled;
   const pitch = board.pitches.find((p) => p.eventId === eventId)!;
@@ -113,7 +120,7 @@ async function refuse(db: Db, eventId: string, viewer: Viewer, now: Date): Promi
   const event = await getEvent(db, eventId);
   if (!event || event.eventType !== "match") return { ok: false, error: "That match doesn't exist." };
   if (event.cancelled) return { ok: false, error: "This match is cancelled." };
-  if (event.start <= now) return { ok: false, error: "This match has already started." };
+  if (startsAt(event) <= now) return { ok: false, error: "This match has already started." };
   return null;
 }
 

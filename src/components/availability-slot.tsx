@@ -1,5 +1,5 @@
-import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { eventLink } from "@/lib/app-url";
 import { after } from "next/server";
 import { db } from "@/db/client";
 import {
@@ -51,8 +51,7 @@ export async function AvailabilitySlot({ eventId, viewer }: { eventId: string; v
   const availability = await getAvailability(db, eventId, { id: viewer.id, committee }, now);
   if (!availability.takesReplies) return null;
 
-  const host = (await headers()).get("host");
-  const url = `${host?.startsWith("localhost") ? "http" : "https"}://${host}/events/${eventId}`;
+  const url = eventLink(eventId);
 
   async function reply(playerId: string, answer: { status: ReplyStatus; note: string; reason: string }) {
     "use server";
