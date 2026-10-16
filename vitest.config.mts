@@ -5,6 +5,8 @@ export default defineConfig({
   test: {
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     environment: "node",
+    // Each worker boots its own PGlite; on many-core machines the default worker count starves them into timeouts.
+    maxWorkers: 6,
     // The first PGlite boot in each worker takes a few seconds, longer when several workers boot at once.
     testTimeout: 60_000,
   },
