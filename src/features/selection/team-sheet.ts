@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { getEvent, londonParts } from "@/features/events";
+import { getEvent, londonParts, startsAt } from "@/features/events";
 import { formatDay } from "@/lib/format-time";
 import { getBoard } from "./index";
 import { selectionShirt } from "./schema";
@@ -113,7 +113,7 @@ async function refuse(db: Db, eventId: string, viewer: Viewer, now: Date): Promi
   const event = await getEvent(db, eventId);
   if (!event || event.eventType !== "match") return { ok: false, error: "That match doesn't exist." };
   if (event.cancelled) return { ok: false, error: "This match is cancelled." };
-  if (event.start <= now) return { ok: false, error: "This match has already started." };
+  if (startsAt(event) <= now) return { ok: false, error: "This match has already started." };
   return null;
 }
 

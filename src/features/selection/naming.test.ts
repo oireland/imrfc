@@ -291,3 +291,38 @@ describe("alertOnNotAvailable", () => {
     expect(await alertOnNotAvailable(db, { eventId, playerId: "sam" }, new Date("2026-10-03T14:00:00Z"))).toBeNull();
   });
 });
+
+describe("a Match with a TBC kick-off", () => {
+  // Saturday 3 Oct 2026 in London (BST): the day starts at 23:00Z on the 2nd. It's 08:00 on match day.
+  const matchMorning = new Date("2026-10-03T08:00:00Z");
+
+  async function tbcMatch(db: Db) {
+    const made = await createEvent(db, {
+      eventType: "match",
+      start: new Date("2026-10-02T23:00:00Z"),
+      end: new Date("2026-10-03T22:59:00Z"),
+      startTbc: true,
+      venue: "Harlington",
+      matchDetails: { teamId: "1st XV", opponent: "Barts", homeAway: "home", competition: "bucs" },
+    });
+    if (!made.ok) throw new Error(made.error);
+    return made.event.id;
+  }
+
+  it("can still be notified on match day, and is the Player's Match until the day ends", async () => {
+    const db = await setup();
+    const eventId = await tbcMatch(db);
+    await pickPlayer(db, { eventId, shirt: 2, userId: "sam", viewer: tom }, now);
+
+    expect((await nameTheTeam(db, { eventId, viewer: tom }, matchMorning)).ok).toBe(true);
+    expect(await listPlayingFor(db, "sam", matchMorning)).toHaveLength(1);
+    expect(await listPlayingFor(db, "sam", new Date("2026-10-03T23:30:00Z"))).toEqual([]);
+  });
+
+  it("is refused once the day has ended", async () => {
+    const db = await setup();
+    const eventId = await tbcMatch(db);
+    await pickPlayer(db, { eventId, shirt: 2, userId: "sam", viewer: tom }, now);
+    expect((await nameTheTeam(db, { eventId, viewer: tom }, new Date("2026-10-03T23:30:00Z"))).ok).toBe(false);
+  });
+});

@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { askStatus, type AskStatus } from "@/features/availability";
-import { getEvent, londonParts } from "@/features/events";
+import { getEvent, londonParts, startsAt } from "@/features/events";
 import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
 import { emailLayout } from "@/lib/email-layout";
 import { formatDay } from "@/lib/format-time";
@@ -76,7 +76,7 @@ async function refuse(db: Db, eventId: string, viewer: Viewer, now: Date): Promi
   const event = await getEvent(db, eventId);
   if (!event || event.eventType !== "match") return { ok: false, error: "That match doesn't exist." };
   if (event.cancelled) return { ok: false, error: "This match is cancelled." };
-  if (event.start <= now) return { ok: false, error: "This match has already started." };
+  if (startsAt(event) <= now) return { ok: false, error: "This match has already started." };
   return null;
 }
 
@@ -305,7 +305,7 @@ export async function listPlayingFor(db: Db, userId: string, now: Date = new Dat
   const cards: PlayingCard[] = [];
   for (const row of rows) {
     const event = await getEvent(db, row.eventId);
-    if (!event || event.cancelled || event.start <= now) continue;
+    if (!event || event.cancelled || startsAt(event) <= now) continue;
     cards.push({ eventId: row.eventId, label: event.teams[0]?.name ?? event.title, start: event.start, shirt: row.shirt, bench: row.shirt > STARTING_SHIRTS });
   }
   return cards.sort((a, b) => a.start.getTime() - b.start.getTime());
@@ -326,7 +326,7 @@ export async function alertOnNotAvailable(
   const rows: { eventId: string; shirt: number }[] = await db.select().from(selectionSent).where(eq(selectionSent.userId, input.playerId));
   for (const row of rows) {
     const event = await getEvent(db, row.eventId);
-    if (!event || event.cancelled || event.start <= now || londonParts(event.start).date !== day) continue;
+    if (!event || event.cancelled || startsAt(event) <= now || londonParts(event.start).date !== day) continue;
 
     const { people, names } = await namesById(db);
     const userIds = people

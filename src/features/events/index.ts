@@ -3,7 +3,7 @@ import { event, matchDetails, team } from "./schema";
 import { classifyEvent, eventTitle, validateEvent, type NewEvent } from "./rules";
 
 export { event } from "./schema";
-export { validateEvent, classifyEvent, eventTitle, trainingTitle, matchTitle } from "./rules";
+export { validateEvent, classifyEvent, eventTitle, trainingTitle, matchTitle, startsAt } from "./rules";
 export {
   createSeries,
   editOccurrence,

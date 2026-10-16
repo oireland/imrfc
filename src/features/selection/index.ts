@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { getAvailability } from "@/features/availability";
-import { getEvent, listEventsBetween, londonParts, londonToUtc, type Event, type EventWithDetails } from "@/features/events";
+import { getEvent, listEventsBetween, londonParts, londonToUtc, startsAt, type Event, type EventWithDetails } from "@/features/events";
 import { listPlayers } from "@/features/players";
 import { displayName, listApprovedUsers, type RugbyPosition } from "@/features/users";
 import { DEFAULT_SHIRTS, fitFor, positionOfShirt, type Candidate, type Fit } from "./shirts";
@@ -66,7 +66,7 @@ async function matchDay(db: Db, event: Event): Promise<EventWithDetails[]> {
   return (withTeams.filter(Boolean) as EventWithDetails[]).sort((a, b) => a.start.getTime() - b.start.getTime());
 }
 
-const isReadOnly = (e: Event, now: Date) => e.cancelled || e.start <= now;
+const isReadOnly = (e: Event, now: Date) => e.cancelled || startsAt(e) <= now;
 
 async function pitchSizes(db: Db, eventIds: string[]): Promise<Map<string, number>> {
   const rows = await db.select().from(selectionPitch).where(inArray(selectionPitch.eventId, eventIds));
@@ -145,7 +145,7 @@ async function refuse(db: Db, ref: ShirtRef, viewer: Viewer, now: Date): Promise
   const event = await getEvent(db, ref.eventId);
   if (!event || event.eventType !== "match") return { ok: false, error: "That match doesn't exist." };
   if (event.cancelled) return { ok: false, error: "This match is cancelled." };
-  if (event.start <= now) return { ok: false, error: "This match has already started." };
+  if (startsAt(event) <= now) return { ok: false, error: "This match has already started." };
   const count = (await pitchSizes(db, [ref.eventId])).get(ref.eventId) ?? DEFAULT_SHIRTS;
   if (!Number.isInteger(ref.shirt) || ref.shirt < 1 || ref.shirt > count) return { ok: false, error: `There's no shirt ${ref.shirt}.` };
   return null;

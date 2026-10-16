@@ -1,3 +1,5 @@
+import { londonParts, londonToUtc } from "./series-rules";
+
 export type EventType = "training" | "match" | "social";
 export type HomeAway = "home" | "away";
 export type Competition = "bucs" | "lusl" | "friendly" | "other";
@@ -68,4 +70,12 @@ export function eventTitle(input: NewEvent, teamName?: string): string {
 /** An Event is Past once it has ended; otherwise it is Upcoming. */
 export function classifyEvent(event: { end: Date }, now: Date): "upcoming" | "past" {
   return event.end < now ? "past" : "upcoming";
+}
+
+/**
+ * When an Event is treated as having started. A Match whose kick-off is TBC only has a day, so
+ * it counts as starting at the end of that London day rather than at midnight.
+ */
+export function startsAt(e: { start: Date; startTbc?: boolean }): Date {
+  return e.startTbc ? londonToUtc(londonParts(e.start).date, "23:59") : e.start;
 }
