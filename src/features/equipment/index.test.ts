@@ -5,7 +5,6 @@ import { store } from "@/features/stores";
 import { user } from "@/features/users";
 import {
   createEquipmentUnit,
-  deleteEquipmentUnit,
   getPortions,
   listEquipmentHeldBy,
   listEquipmentUnits,
@@ -13,6 +12,7 @@ import {
   lowerQuantity,
   raiseQuantity,
   recordMove,
+  retireEquipmentUnit,
   setConditionNote,
   setEquipmentStatus,
   setQuantity,
@@ -131,32 +131,76 @@ describe("setEquipmentStatus", () => {
   });
 });
 
-describe("deleteEquipmentUnit", () => {
-  it("removes an Equipment Unit and its Portions for good, e.g. one added by mistake", async () => {
-    const db = await createTestDb();
-    await migrate(db);
-    const home = await seedHome(db);
-    const created = await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
-    if (!created.ok) throw new Error("expected Equipment Unit to be created");
-
-    await deleteEquipmentUnit(db, created.equipmentUnit.id);
-
-    expect(await listEquipmentUnits(db, { includeRetired: true })).toEqual([]);
-    expect(await getPortions(db, created.equipmentUnit.id)).toEqual([]);
-  });
-
-  it("also removes its Movement Log entries", async () => {
+describe("retireEquipmentUnit", () => {
+  it("takes an Equipment Unit out of circulation but keeps its Portions and history", async () => {
     const db = await createTestDb();
     await migrate(db);
     const home = await seedHome(db);
     const alex = await seedUser(db);
     const created = await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
     if (!created.ok) throw new Error("expected Equipment Unit to be created");
-    await setConditionNote(db, created.equipmentUnit.id, alex.id, "typo, deleting");
+    await setConditionNote(db, created.equipmentUnit.id, alex.id, "added twice by mistake");
 
-    await deleteEquipmentUnit(db, created.equipmentUnit.id);
+    expect(await retireEquipmentUnit(db, created.equipmentUnit.id)).toEqual({ ok: true });
 
-    expect(await listMovementLog(db, created.equipmentUnit.id)).toEqual([]);
+    expect(await listEquipmentUnits(db)).toEqual([]);
+    expect(await listEquipmentUnits(db, { includeRetired: true })).toMatchObject([{ status: "retired" }]);
+    expect(await getPortions(db, created.equipmentUnit.id)).toMatchObject([{ count: 1, storeId: home.id }]);
+    expect(await listMovementLog(db, created.equipmentUnit.id)).toHaveLength(1);
+  });
+
+  it("says so when the Equipment Unit doesn't exist", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    expect((await retireEquipmentUnit(db, "nope")).ok).toBe(false);
+  });
+});
+
+describe("Moves in a hurry", () => {
+  it("rejects a non-positive or fractional count without changing the Quantity", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const alex = await seedUser(db);
+    const created = await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
+    if (!created.ok) throw new Error("expected Equipment Unit to be created");
+    const id = created.equipmentUnit.id;
+
+    for (const count of [-3, 0, 1.5]) {
+      const result = await recordMove(db, id, alex.id, { type: "holder", holderId: alex.id }, "ad_hoc", {
+        count,
+        from: { type: "store", storeId: home.id },
+      });
+      expect(result.ok).toBe(false);
+    }
+
+    expect((await getPortions(db, id)).reduce((n, p) => n + p.count, 0)).toBe(1);
+    expect(await listMovementLog(db, id)).toEqual([]);
+  });
+
+  it("keeps the counts right when several Moves of one Equipment Unit happen at once", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const alex = await seedUser(db);
+    const people = await Promise.all([seedUser(db), seedUser(db), seedUser(db), seedUser(db)]);
+    const created = await createEquipmentUnit(db, { name: "Cones", homeId: home.id, quantity: 8 });
+    if (!created.ok) throw new Error("expected Equipment Unit to be created");
+    const id = created.equipmentUnit.id;
+
+    const results = await Promise.all(
+      people.map((p) =>
+        recordMove(db, id, alex.id, { type: "holder", holderId: p.id }, "ad_hoc", {
+          count: 2,
+          from: { type: "store", storeId: home.id },
+        }),
+      ),
+    );
+
+    expect(results.every((r) => r.ok)).toBe(true);
+    const portions = await getPortions(db, id);
+    expect(portions.reduce((n, p) => n + p.count, 0)).toBe(8);
+    for (const p of people) expect(portions.find((x) => x.holderId === p.id)?.count).toBe(2);
   });
 });
 

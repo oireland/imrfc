@@ -76,6 +76,12 @@ export function gatherFromDutyUsers(portions: Portion[], { userIds, count }: { u
   return gather([...own, ...fallback], count);
 }
 
+/** What the given People are holding right now, up to `count`, in the given order — nothing from any Store or anyone else. */
+export function gatherHeldBy(portions: Portion[], { userIds, count }: { userIds: string[]; count: number }): Gathered {
+  const available = portions.filter((p) => p.count > 0);
+  return gather(userIds.flatMap((uid) => available.filter((p) => p.whereaboutsType === "holder" && p.holderId === uid)), count);
+}
+
 /**
  * Validates a "who has how many" split: every part names one of the Duty's People, no
  * negative counts, and the parts add up to the Duty's count.

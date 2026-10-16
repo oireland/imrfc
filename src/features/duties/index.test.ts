@@ -1043,3 +1043,156 @@ describe("Taking Equipment off an Event's list", () => {
     expect(again.userIds).toEqual([]);
   });
 });
+
+describe("Equipment integrity", () => {
+  const member = (id: string) => ({ id, role: "member" as const });
+  const total = async (db: Awaited<ReturnType<typeof setup>>["db"], id: string) =>
+    (await getPortions(db, id)).reduce((n, p) => n + p.count, 0);
+
+  async function pastEvent(db: Awaited<ReturnType<typeof setup>>["db"], hoursAgo = 1) {
+    const made = await createEvent(db, {
+      eventType: "training",
+      start: new Date(Date.now() - (hoursAgo + 2) * 3600_000),
+      end: new Date(Date.now() - hoursAgo * 3600_000),
+      venue: "Harlington",
+    });
+    if (!made.ok) throw new Error(made.error);
+    return made.event;
+  }
+
+  async function dutiesFor(db: Awaited<ReturnType<typeof setup>>["db"], eventId: string, equipmentUnitId: string) {
+    const list = await ensureDuties(db, eventId, [equipmentUnitId]);
+    return { to: list.find((d) => d.direction === "to")!, from: list.find((d) => d.direction === "from")! };
+  }
+
+  describe("Confirming never creates or loses equipment", () => {
+    it("a From Duty handed to someone else can't be Confirmed by them while the unit is with the carrier", async () => {
+      const { db, equipment, to, from } = await setup();
+      await claimDuty(db, to.id, "sam");
+      await confirmDuty(db, to.id, member("sam"));
+      await handOnDuty(db, from.id, "sam", "tom");
+
+      const result = await confirmDuty(db, from.id, member("tom"));
+
+      expect(result.ok).toBe(false);
+      expect(await total(db, equipment.id)).toBe(1);
+      expect(await whereaboutsOf(db, equipment.id)).toMatchObject({ whereaboutsType: "holder", holderId: "sam" });
+    });
+
+    it("refuses a Confirm whose chosen sources add up to nothing", async () => {
+      const { db, equipment, to } = await setup();
+      await claimDuty(db, to.id, "tom");
+
+      const result = await confirmDuty(db, to.id, member("tom"), { from: [] });
+
+      expect(result.ok).toBe(false);
+      expect(await total(db, equipment.id)).toBe(1);
+    });
+  });
+
+  describe("a failed Confirm", () => {
+    it("leaves the Duty unconfirmed so it can be retried", async () => {
+      const { db, cupboard, equipment, to, reload } = await setup();
+      await claimDuty(db, to.id, "tom");
+
+      const result = await confirmDuty(db, to.id, member("tom"), { from: [{ place: { type: "store", storeId: cupboard.id }, count: 1 }] });
+
+      expect(result.ok).toBe(false);
+      expect((await reload()).to.confirmedAt).toBeNull();
+      expect(await confirmDuty(db, to.id, member("tom"))).toEqual({ ok: true });
+      expect(await whereaboutsOf(db, equipment.id)).toMatchObject({ holderId: "tom" });
+    });
+  });
+
+  describe("Unconfirmed stays sorted out", () => {
+    async function unconfirmedAfterEvent() {
+      const ctx = await setup();
+      const ev = await pastEvent(ctx.db);
+      const { to } = await dutiesFor(ctx.db, ev.id, ctx.equipment.id);
+      await claimDuty(ctx.db, to.id, "tom");
+      await confirmDuty(ctx.db, to.id, member("tom"));
+      await markUnconfirmed(ctx.db);
+      expect(await whereaboutsOf(ctx.db, ctx.equipment.id)).toMatchObject({ whereaboutsType: "unconfirmed" });
+      return { ...ctx, ev };
+    }
+
+    it("A: stays in the Shed once anyone puts it there", async () => {
+      const { db, shed, equipment } = await unconfirmedAfterEvent();
+      await recordMove(db, equipment.id, "sam", { type: "store", storeId: shed.id });
+
+      await markUnconfirmed(db);
+
+      expect(await whereaboutsOf(db, equipment.id)).toMatchObject({ whereaboutsType: "store", storeId: shed.id });
+    });
+
+    it("B: stays with Tom once he says he's got it", async () => {
+      const { db, equipment } = await unconfirmedAfterEvent();
+      await recordMove(db, equipment.id, "tom", { type: "holder", holderId: "tom" });
+
+      await markUnconfirmed(db);
+
+      expect(await whereaboutsOf(db, equipment.id)).toMatchObject({ whereaboutsType: "holder", holderId: "tom" });
+    });
+
+    it("isn't taken from someone who has since Confirmed bringing it to the next Event", async () => {
+      const { db, shed, equipment } = await unconfirmedAfterEvent();
+      await recordMove(db, equipment.id, "tom", { type: "store", storeId: shed.id });
+      const next = await createEvent(db, {
+        eventType: "training",
+        start: new Date(Date.now() - 1800_000),
+        end: new Date(Date.now() + 3600_000),
+        venue: "Harlington",
+      });
+      if (!next.ok) throw new Error(next.error);
+      const { to } = await dutiesFor(db, next.event.id, equipment.id);
+      await claimDuty(db, to.id, "tom");
+      await confirmDuty(db, to.id, member("tom"));
+
+      await markUnconfirmed(db);
+
+      expect(await whereaboutsOf(db, equipment.id)).toMatchObject({ whereaboutsType: "holder", holderId: "tom" });
+    });
+
+    it("doesn't pull the rest of a counted unit out of the Store on a later run", async () => {
+      const { db, shed } = await setup();
+      const made = await createEquipmentUnit(db, { name: "Shields", homeId: shed.id, quantity: 8 });
+      if (!made.ok) throw new Error(made.error);
+      const ev = await pastEvent(db);
+      await addToChecklist(db, { scope: "event", scopeId: ev.id }, made.equipmentUnit.id);
+      await setChecklistItemCount(db, { scope: "event", scopeId: ev.id }, made.equipmentUnit.id, 4);
+      const { to } = await dutiesFor(db, ev.id, made.equipmentUnit.id);
+      await claimDuty(db, to.id, "tom");
+      await confirmDuty(db, to.id, member("tom"));
+
+      await markUnconfirmed(db);
+      await markUnconfirmed(db);
+
+      expect(await getPortions(db, made.equipmentUnit.id)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ whereaboutsType: "store", storeId: shed.id, count: 4 }),
+          expect.objectContaining({ whereaboutsType: "unconfirmed", count: 4 }),
+        ]),
+      );
+    });
+  });
+
+  describe("People on a Duty", () => {
+    it("handOnDuty refuses someone who doesn't exist or isn't approved", async () => {
+      const { db, to, reload } = await setup();
+      await db.insert(user).values({ id: "bob", name: "bob", email: "bob@x.org", accessState: "blocked" });
+      await claimDuty(db, to.id, "tom");
+
+      expect(await handOnDuty(db, to.id, "tom", "nobody")).toMatchObject({ ok: false });
+      expect(await handOnDuty(db, to.id, "tom", "bob")).toMatchObject({ ok: false });
+      expect((await reload()).to.userIds).toEqual(["tom"]);
+    });
+
+    it("assignDuty refuses a set containing someone unknown or not approved, changing nothing", async () => {
+      const { db, to } = await setup();
+      await claimDuty(db, to.id, "tom");
+
+      expect(await assignDuty(db, to.id, ["sam", "nobody"])).toMatchObject({ ok: false });
+      expect(await db.select().from(dutyUser).where(eq(dutyUser.dutyId, to.id))).toHaveLength(1);
+    });
+  });
+});
