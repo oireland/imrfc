@@ -194,7 +194,7 @@ export function SelectionBoard({
               {pitch.shirts
                 .filter((s) => s.shirt > STARTING_SHIRTS)
                 .map((s) => (
-                  <li key={s.shirt}>
+                  <li key={s.shirt} className="min-w-0">
                     <ShirtRow
                       pitch={pitch}
                       shirt={s}
@@ -376,7 +376,7 @@ function ShirtRow({
         }}
         aria-label={`Shirt ${shirt.shirt}${shirt.position ? `, ${shirt.position}` : ""}${name ? `, ${name}` : ", empty"}${shirt.roles.length > 0 ? `, ${rolesText(shirt.roles)}` : ""}`}
         className={cn(
-          "flex min-h-12 flex-1 items-center gap-3 rounded-2xl px-3 py-2 text-left transition-transform active:scale-[0.99]",
+          "flex min-h-12 min-w-0 flex-1 items-center gap-3 rounded-2xl px-3 py-2 text-left transition-transform active:scale-[0.99]",
           !o && "border border-dashed border-border text-muted-foreground",
           o?.kind === "guest" && "bg-muted",
           o?.kind === "player" && o.availability === "available" && "bg-primary text-primary-foreground",
