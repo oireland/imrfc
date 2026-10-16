@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { seasonStart } from "@/features/duties";
 import { getEvent, listEventsBetween, londonParts, londonToUtc, type Event, type EventType } from "@/features/events";
 import { listFitness, notChasedFor } from "@/features/injuries";
@@ -281,14 +281,21 @@ export async function announce(
   if (!availability.canAnnounce) return { ok: false, error: "You can't announce this one." };
   if (input.replyBy && input.replyBy <= now) return { ok: false, error: "Pick a reply-by time that's still to come." };
 
-  await db.insert(availabilityAnnouncement).values({
-    id: crypto.randomUUID(),
-    eventId: input.eventId,
-    announcedById: input.viewer.id,
-    replyBy: input.replyBy,
-    createdAt: now,
+  // Two Committee pressing Announce together must send once: serialise on the day's group, then
+  // look again for an announcement the other press may have just made.
+  const { eventIds } = await groupFor(db, (await getEvent(db, input.eventId))!);
+  return db.transaction(async (tx: Db) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${[...eventIds].sort()[0]}))`);
+    if (await announcementFor(tx, eventIds)) return { ok: false, error: "This has already been announced." } as const;
+    await tx.insert(availabilityAnnouncement).values({
+      id: crypto.randomUUID(),
+      eventId: input.eventId,
+      announcedById: input.viewer.id,
+      replyBy: input.replyBy,
+      createdAt: now,
+    });
+    return recordAsk(tx, "announce", input, availability.summary.noReply.map((r) => r.userId), now);
   });
-  return recordAsk(db, "announce", input, availability.summary.noReply.map((r) => r.userId), now);
 }
 
 /**
@@ -500,11 +507,30 @@ export async function getSeasonRecord(db: Db, playerId: string, now: Date = new 
   return seasonRecord({ events, replies, announcedEventIds, since, now });
 }
 
-/** Removes every reply, announcement, nudge and ask for a deleted Event. */
+/**
+ * Removes the replies, announcement, nudges and asks of a deleted Event. When it was one of a
+ * day's Matches, its replies, announcement, nudges and messages also covered the others, so
+ * they move to a sibling instead of going.
+ */
 export async function deleteAvailabilityForEvent(db: Db, eventId: string) {
+  const sibling = await siblingMatch(db, eventId);
+  if (sibling) {
+    await db.update(availabilityReply).set({ eventId: sibling }).where(eq(availabilityReply.eventId, eventId));
+    await db.update(availabilityAnnouncement).set({ eventId: sibling }).where(eq(availabilityAnnouncement.eventId, eventId));
+    await db.update(availabilityNudge).set({ eventId: sibling }).where(eq(availabilityNudge.eventId, eventId));
+    await db.update(availabilityMessaged).set({ eventId: sibling }).where(eq(availabilityMessaged.eventId, eventId));
+  }
   await db.delete(availabilityReply).where(eq(availabilityReply.eventId, eventId));
   await db.delete(availabilityAnnouncement).where(eq(availabilityAnnouncement.eventId, eventId));
   await db.delete(availabilityNudge).where(eq(availabilityNudge.eventId, eventId));
   await db.delete(availabilityMessaged).where(eq(availabilityMessaged.eventId, eventId));
   await db.delete(availabilityAsk).where(eq(availabilityAsk.eventId, eventId));
+}
+
+/** Another Match on the same London day as `eventId`, if it is a Match with one. */
+async function siblingMatch(db: Db, eventId: string): Promise<string | null> {
+  const event = await getEvent(db, eventId);
+  if (!event || event.eventType !== "match") return null;
+  const { eventIds } = await groupFor(db, event);
+  return eventIds.find((id) => id !== eventId) ?? null;
 }
