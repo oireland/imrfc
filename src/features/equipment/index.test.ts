@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
-import { store } from "@/features/stores";
+import { listStores, store } from "@/features/stores";
 import { user } from "@/features/users";
 import {
   createEquipmentUnit,
@@ -13,6 +13,7 @@ import {
   raiseQuantity,
   recordMove,
   retireEquipmentUnit,
+  archiveStoreIfUnused,
   setConditionNote,
   setEquipmentStatus,
   setQuantity,
@@ -512,5 +513,44 @@ describe("listEquipmentHeldBy", () => {
     );
     expect(held.map((k) => k.name)).not.toContain("Retired");
     expect(held.map((k) => k.name)).not.toContain("Theirs");
+  });
+});
+
+describe("archiveStoreIfUnused", () => {
+  it("archives a Store nothing is homed or stored at", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const [spare] = await db.insert(store).values({ id: "spare", name: "Spare", address: "x" }).returning();
+    await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
+
+    expect(await archiveStoreIfUnused(db, spare.id)).toEqual({ ok: true });
+
+    expect(await listStores(db)).toMatchObject([{ id: home.id }]);
+  });
+
+  it("refuses a Store that is some Equipment Unit's Home", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
+
+    const result = await archiveStoreIfUnused(db, home.id);
+
+    expect(result.ok).toBe(false);
+    expect(await listStores(db)).toHaveLength(1);
+  });
+
+  it("refuses a Store that still has equipment in it, even if it isn't its Home", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const alex = await seedUser(db);
+    const [other] = await db.insert(store).values({ id: "other", name: "Other", address: "x" }).returning();
+    const created = await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
+    if (!created.ok) throw new Error("setup");
+    await recordMove(db, created.equipmentUnit.id, alex.id, { type: "store", storeId: other.id });
+
+    expect((await archiveStoreIfUnused(db, other.id)).ok).toBe(false);
   });
 });

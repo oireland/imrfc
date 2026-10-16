@@ -2,7 +2,8 @@ import { redirect } from "next/navigation";
 import { BackLink } from "@/components/back-link";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
-import { archiveStore, createStore, listStores, type Store } from "@/features/stores";
+import { createStore, listStores, type Store } from "@/features/stores";
+import { archiveStoreIfUnused } from "@/features/equipment";
 import { isCommitteeOrAbove } from "@/features/users";
 import { getCurrentUser } from "@/lib/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,7 +25,8 @@ export default async function StoresPage() {
 
   async function archive(formData: FormData) {
     "use server";
-    await archiveStore(db, String(formData.get("storeId")));
+    const result = await archiveStoreIfUnused(db, String(formData.get("storeId")));
+    if (!result.ok) redirect(`/stores?error=${encodeURIComponent(result.error)}`);
     revalidatePath("/stores");
   }
 

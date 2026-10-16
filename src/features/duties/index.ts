@@ -30,6 +30,7 @@ export type { DutyAction } from "./duty-actions-rules";
 export { joinNames } from "./names-rules";
 export { seasonStart } from "./duty-record-rules";
 export { gatherConfirmSources, needsSourceChoice } from "./confirm-source-rules";
+export { parseSourceValue, sourceValue } from "./source-value";
 export type { HolderPart, SourcePart } from "./confirm-source-rules";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

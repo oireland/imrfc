@@ -1,5 +1,6 @@
 import { and, desc, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import { equipmentPortion, equipmentUnit, movementLogEntry } from "./schema";
+import { archiveStore } from "@/features/stores";
 import { validateEquipmentUnit, type NewEquipmentUnit } from "./rules";
 import {
   lowerQuantity as lowerQuantityRule,
@@ -116,6 +117,28 @@ export async function retireEquipmentUnit(db: Db, id: string): Promise<{ ok: tru
     .where(eq(equipmentUnit.id, id))
     .returning({ id: equipmentUnit.id });
   if (retired.length === 0) return { ok: false, error: "That equipment no longer exists." };
+  return { ok: true };
+}
+
+/**
+ * Archives a Store unless it is still in use: some in-circulation Equipment Unit has it as its Home
+ * or has a Portion there. (It lives here because Equipment already depends on Stores, not the reverse.)
+ */
+export async function archiveStoreIfUnused(db: Db, storeId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const [homed] = await db
+    .select({ id: equipmentUnit.id })
+    .from(equipmentUnit)
+    .where(and(eq(equipmentUnit.homeId, storeId), ne(equipmentUnit.status, "retired")))
+    .limit(1);
+  if (homed) return { ok: false, error: "That store is some equipment's home. Move it to another home first." };
+  const [holding] = await db
+    .select({ id: equipmentPortion.id })
+    .from(equipmentPortion)
+    .innerJoin(equipmentUnit, eq(equipmentUnit.id, equipmentPortion.equipmentUnitId))
+    .where(and(eq(equipmentPortion.storeId, storeId), ne(equipmentUnit.status, "retired")))
+    .limit(1);
+  if (holding) return { ok: false, error: "There's still equipment in that store. Move it out first." };
+  await archiveStore(db, storeId);
   return { ok: true };
 }
 
