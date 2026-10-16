@@ -1,3 +1,4 @@
+import type { Db } from "@/db/types";
 import { LIMITS, firstTooLong } from "@/lib/text-limits";
 import { and, count, eq, inArray, ne } from "drizzle-orm";
 import type { Role } from "./access";
@@ -13,8 +14,6 @@ export type { RugbyPosition } from "./positions";
 // Other features' schema.ts files reference this table for foreign keys.
 export { user } from "./schema";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 
 export type PendingUser = typeof user.$inferSelect;
 export type AppUser = PendingUser;

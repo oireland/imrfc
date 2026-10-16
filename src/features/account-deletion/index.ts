@@ -1,3 +1,4 @@
+import type { Db } from "@/db/types";
 import { eq } from "drizzle-orm";
 import { deleteFeedToken } from "@/features/calendar-feed";
 import { clearMobileNumber } from "@/features/contact";
@@ -7,8 +8,6 @@ import { clearAway } from "@/features/players";
 import { unsubscribeEverywhere } from "@/features/push";
 import { canDeleteAccount, eraseUser, user, type Role } from "@/features/users";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 
 export type DeleteAccountResult =
   | { ok: true }

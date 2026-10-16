@@ -1,3 +1,4 @@
+import type { Db } from "@/db/types";
 import { and, eq, inArray, isNotNull, isNull, lt } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { resolveEventChecklist, resolveEventChecklists, type ResolvedEventChecklist } from "@/features/checklists";
@@ -33,8 +34,6 @@ export { gatherConfirmSources, needsSourceChoice } from "./confirm-source-rules"
 export { parseSourceValue, sourceValue } from "./source-value";
 export type { HolderPart, SourcePart } from "./confirm-source-rules";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 
 export type DutyDestination = { type: "home" } | { type: "store"; storeId: string } | { type: "holder" };
 export type Duty = Omit<typeof duty.$inferSelect, "destinationType" | "destinationStoreId"> & {

@@ -1,3 +1,4 @@
+import type { Db } from "@/db/types";
 import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import { displayName, isCommitteeOrAbove, listKnownUsers, type Role } from "@/features/users";
 import { injury, injuryChange } from "./schema";
@@ -22,8 +23,6 @@ export { formatPhysioList } from "./physio-list-rules";
 export type { PhysioNeed } from "./physio-list-rules";
 export type { BodyArea, Fitness, InjuryStatus, OpenStatus, ReportInput, UpdateInput } from "./rules";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 
 type Actor = { id: string; role: Role };
 type Row = typeof injury.$inferSelect;

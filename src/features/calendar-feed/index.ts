@@ -1,3 +1,4 @@
+import type { Db } from "@/db/types";
 import { eq } from "drizzle-orm";
 import { joinNames, listUpcomingDutiesForUser } from "@/features/duties";
 import { listEvents } from "@/features/events";
@@ -8,8 +9,6 @@ import { feedToken } from "./schema";
 
 export { feedToken } from "./schema";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 
 export type FeedResult = { status: 200; body: string } | { status: 404 | 410 };
 

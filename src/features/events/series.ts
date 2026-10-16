@@ -1,3 +1,4 @@
+import type { Db } from "@/db/types";
 import { LIMITS, firstTooLong } from "@/lib/text-limits";
 import { and, asc, count, eq, gte } from "drizzle-orm";
 import { event, series } from "./schema";
@@ -18,8 +19,6 @@ export type OccurrenceChanges = Partial<
   Pick<SeriesPattern, "title" | "venue" | "notes" | "startTime" | "endTime">
 >;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 type Failure = { ok: false; error: string };
 
 async function insertOccurrences(db: Db, s: Series, dates: string[]) {

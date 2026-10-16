@@ -1,3 +1,4 @@
+import type { Db } from "@/db/types";
 import { eq, and } from "drizzle-orm";
 import { listDutyUserIdsByEvent } from "@/features/duties";
 import { listAvailableUserIds } from "@/features/availability";
@@ -6,8 +7,6 @@ import { PushSubscriptionGoneError, type PushSender, type PushSubscriptionKeys }
 import { morningOfMessage, morningOfRecipients } from "./rules";
 import { pushSubscription } from "./schema";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 
 /** Records a device's subscription; re-subscribing the same endpoint replaces its keys. */
 export async function subscribe(db: Db, input: { userId: string; subscription: PushSubscriptionKeys }) {

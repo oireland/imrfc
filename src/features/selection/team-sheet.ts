@@ -1,3 +1,4 @@
+import type { Db } from "@/db/types";
 import { and, eq } from "drizzle-orm";
 import { getEvent, londonParts, startsAt } from "@/features/events";
 import { formatDay } from "@/lib/format-time";
@@ -14,8 +15,6 @@ import {
   type SheetPerson,
 } from "./sheet";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 type Viewer = { id: string; committee: boolean };
 type Result = { ok: true } | { ok: false; error: string };
 

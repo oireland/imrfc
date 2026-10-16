@@ -1,3 +1,4 @@
+import type { Db } from "@/db/types";
 import { LIMITS, firstTooLong } from "@/lib/text-limits";
 import { eq } from "drizzle-orm";
 import { store } from "./schema";
@@ -5,8 +6,6 @@ import { store } from "./schema";
 // Other features' schema.ts files reference this table for foreign keys.
 export { store } from "./schema";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 
 export type Store = typeof store.$inferSelect;
 export type NewStore = { name: string; address: string };

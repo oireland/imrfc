@@ -1,3 +1,4 @@
+import type { Db } from "@/db/types";
 import { LIMITS, firstTooLong } from "@/lib/text-limits";
 import { and, eq, inArray } from "drizzle-orm";
 import { getAvailability } from "@/features/availability";
@@ -15,8 +16,6 @@ export * from "./naming";
 export { ROLES, ROLE_NAMES, SINGLE_ROLES, buildSheet, missingFromSheet, rolesText } from "./sheet";
 export type { Role, SheetFields, SheetLayout } from "./sheet";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 
 type Viewer = { id: string; committee: boolean };
 type Result = { ok: true } | { ok: false; error: string };

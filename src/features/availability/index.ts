@@ -1,3 +1,4 @@
+import type { Db } from "@/db/types";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { seasonStart } from "@/features/duties";
 import { getEvent, listEventsBetween, londonParts, londonToUtc, type Event, type EventType } from "@/features/events";
@@ -33,8 +34,6 @@ export { askPush, chaseMessage, whatsappMessage } from "./announce-rules";
 export type { AskedEvent } from "./announce-rules";
 export type { AskStatus, AvailabilityRow, AvailabilitySummary, MyReply, NotChasedRow, RecordLine, ReplyCounts, ReplyStatus, SeasonRecord, WaitingAsk } from "./rules";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 
 type Viewer = { id: string; committee: boolean };
 

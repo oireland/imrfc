@@ -1,3 +1,4 @@
+import type { Db } from "@/db/types";
 import { and, eq, inArray, or } from "drizzle-orm";
 import { getEquipmentUnit, listEquipmentUnitsByIds } from "@/features/equipment";
 import { checklist, checklistItem } from "./schema";
@@ -7,8 +8,6 @@ export { resolveChecklist, effectiveCount } from "./rules";
 export type { ChecklistLine, ResolvedChecklist } from "./rules";
 export { checklist, checklistItem } from "./schema";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 
 /** A level's Checklist. `inherits` says what the level falls back to while it has none, so its first
  * change can start from that list instead of from nothing. An Event falls back to its Series' list

@@ -1,3 +1,4 @@
+import type { Db } from "@/db/types";
 import { LIMITS, firstTooLong } from "@/lib/text-limits";
 import { and, desc, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import { equipmentPortion, equipmentUnit, movementLogEntry } from "./schema";
@@ -23,8 +24,6 @@ export type { EquipmentRow, QuickMove, WhereaboutsGroup, WhereaboutsNames } from
 export { singlePlace, totalQuantity } from "./portions";
 export type { Place, Portion } from "./portions";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 
 export type EquipmentUnit = typeof equipmentUnit.$inferSelect;
 export type EquipmentStatus = EquipmentUnit["status"];

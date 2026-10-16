@@ -1,3 +1,4 @@
+import type { Db } from "@/db/types";
 import { eq, inArray } from "drizzle-orm";
 import { isCommitteeOrAbove, type Role } from "@/features/users";
 import { parseMobileNumber } from "./rules";
@@ -8,8 +9,6 @@ export type { ParsedMobileNumber } from "./rules";
 // Other features' schema.ts files may reference this table.
 export { mobileNumber } from "./schema";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 
 /** Whoever is asking: only Committee (and Admins) and the User themselves may see a Mobile number. */
 export type Viewer = { id: string; role: Role };

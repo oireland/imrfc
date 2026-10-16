@@ -1,3 +1,4 @@
+import type { Db } from "@/db/types";
 import { eq } from "drizzle-orm";
 import { askStatus, type AskStatus } from "@/features/availability";
 import { getEvent, getEvents, londonParts, startsAt } from "@/features/events";
@@ -12,8 +13,6 @@ import { ROLES, buildSheet, type Role, type SheetLayout } from "./sheet";
 import { getTeamSheet, settleFields } from "./team-sheet";
 import { STARTING_SHIRTS } from "./shirts";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 type Viewer = { id: string; committee: boolean };
 type Result = { ok: true } | { ok: false; error: string };
 type SendResult = { ok: true; noticeId: string | null; sending: number } | { ok: false; error: string };

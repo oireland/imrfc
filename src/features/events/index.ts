@@ -1,3 +1,4 @@
+import type { Db } from "@/db/types";
 import { and, asc, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import { event, matchDetails, team } from "./schema";
 import { classifyEvent, eventTitle, validateEvent, type NewEvent } from "./rules";
@@ -26,8 +27,6 @@ export {
 } from "./csv-import";
 export type { EventType, HomeAway, Competition, NewEvent, NewMatchDetails } from "./rules";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 
 export type Event = typeof event.$inferSelect;
 export type MatchDetails = typeof matchDetails.$inferSelect;

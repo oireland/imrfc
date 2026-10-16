@@ -1,3 +1,4 @@
+import type { Db } from "@/db/types";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { listDutyRecordForUser } from "@/features/duties";
 import { displayName, isCommitteeOrAbove, listKnownUsers, RUGBY_POSITIONS, setPlaying, setPositions, type Role, type RugbyPosition } from "@/features/users";
@@ -23,8 +24,6 @@ export { summarizePlayers };
 export { addDays, awayLabel, formatDay, londonToday, periodState, rangeLabel } from "./away-rules";
 export type { AwayInput, AwayPeriod, AwayState } from "./away-rules";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 
 export type Player = {
   id: string;
