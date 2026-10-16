@@ -3,7 +3,7 @@ import { seasonStart } from "@/features/duties";
 import { getEvent, listEventsBetween, londonParts, londonToUtc, type Event, type EventType } from "@/features/events";
 import { listFitness, notChasedFor } from "@/features/injuries";
 import { listAwayOn, listPlayers } from "@/features/players";
-import { displayName, listApprovedUsers } from "@/features/users";
+import { displayName, listApprovedUsers, listKnownUsers } from "@/features/users";
 import type { MailSender } from "@/lib/mail";
 import { askEmail, type AskedEvent } from "./announce-rules";
 import { availabilityAnnouncement, availabilityAsk, availabilityMessaged, availabilityNudge, availabilityReply } from "./schema";
@@ -87,8 +87,8 @@ async function repliesFor(db: Db, eventIds: string[]): Promise<Reply[]> {
 /** Players by id, leaving out Blocked Users. */
 async function playersById(db: Db) {
   const [listing, people] = await Promise.all([listPlayers(db), listApprovedUsers(db)]);
-  const blocked = new Set(people.filter((u: { accessState: string }) => u.accessState === "blocked").map((u: { id: string }) => u.id));
-  return new Map([...listing.playing, ...listing.notPlaying].filter((p) => !blocked.has(p.id)).map((p) => [p.id, p]));
+  const approved = new Set(people.map((u: { id: string }) => u.id));
+  return new Map([...listing.playing, ...listing.notPlaying].filter((p) => approved.has(p.id)).map((p) => [p.id, p]));
 }
 
 /** Players who replied Available to each of `eventIds`, grouped by Event, per-event only (no day-grouping). */
@@ -209,7 +209,7 @@ export async function getAvailability(db: Db, eventId: string, viewer: Viewer, n
   const [replies, players, people, announcement, nudges, asks, messages] = await Promise.all([
     repliesFor(db, eventIds),
     playersById(db),
-    listApprovedUsers(db),
+    listKnownUsers(db),
     announcementFor(db, eventIds),
     nudgesFor(db, eventIds),
     viewer.committee ? asksFor(db, eventIds) : [],
@@ -255,7 +255,7 @@ type AskResult = { ok: true; askId: string; sending: number } | { ok: false; err
 /** Who is being emailed: Approved Users among `playerIds`. */
 async function reachable(db: Db, playerIds: string[]): Promise<string[]> {
   const people = await listApprovedUsers(db);
-  return people.filter((p: { id: string; accessState: string }) => playerIds.includes(p.id) && p.accessState === "approved").map((p: { id: string }) => p.id);
+  return people.filter((p: { id: string }) => playerIds.includes(p.id)).map((p: { id: string }) => p.id);
 }
 
 /** Records an Announce or Nudge whose emails are still to send (see `deliverAsk`). */
@@ -411,7 +411,7 @@ function askNotice(row: typeof availabilityAsk.$inferSelect, names: Map<string, 
 }
 
 async function namesById(db: Db): Promise<Map<string, string>> {
-  const people = await listApprovedUsers(db);
+  const people = await listKnownUsers(db);
   return new Map(people.map((u: Parameters<typeof displayName>[0] & { id: string }) => [u.id, displayName(u)]));
 }
 

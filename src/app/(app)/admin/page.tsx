@@ -1,11 +1,10 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { db } from "@/db/client";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { canManageUsers, countPendingUsers, isCommitteeOrAbove } from "@/features/users";
-import { getCurrentUser } from "@/lib/session";
+import { canManageUsers, countPendingUsers } from "@/features/users";
+import { requireCommittee } from "@/lib/session";
 
 const LINKS = [
   { href: "/stores", label: "Stores" },
@@ -16,8 +15,7 @@ const LINKS = [
 ] as const;
 
 export default async function AdminPage() {
-  const user = await getCurrentUser();
-  if (!user || !isCommitteeOrAbove(user.role)) redirect("/");
+  const user = await requireCommittee();
 
   const pendingCount = canManageUsers(user.role) ? await countPendingUsers(db) : 0;
 

@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 /** Vercel Cron hits this once a day (see vercel.json) to send the morning-of reminders, and to
  * mark equipment Unconfirmed after Events nobody visited the app since. */
 export async function GET(request: Request) {
-  if (request.headers.get("Authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || request.headers.get("Authorization") !== `Bearer ${secret}`) {
     return new Response(null, { status: 401 });
   }
   await markUnconfirmed(db);

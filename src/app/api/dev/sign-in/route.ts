@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/db/client";
 import { user } from "@/features/users/schema";
 import { devSignInEnabled } from "@/lib/dev-sign-in";
+import { safeNextPath } from "@/lib/next-path";
 
 /**
  * Dev and e2e only: `/api/dev/sign-in?email=…&next=/events` signs in as an existing User
@@ -19,8 +20,8 @@ export async function GET(request: NextRequest) {
   const { devAuth } = await import("@/lib/dev-auth");
   const { cookies } = await (await devAuth.$context).test.login({ userId: found.id });
 
-  const next = request.nextUrl.searchParams.get("next") ?? "/";
-  const response = NextResponse.redirect(new URL(next.startsWith("/") ? next : "/", request.url));
+  const next = safeNextPath(request.nextUrl.searchParams.get("next"));
+  const response = NextResponse.redirect(new URL(next, request.url));
   for (const c of cookies) {
     response.cookies.set(c.name, c.value, { path: c.path, httpOnly: c.httpOnly, secure: c.secure, sameSite: "lax" });
   }

@@ -102,7 +102,7 @@ export default async function ProfilePage() {
     "use server";
     const current = await requireApprovedUser();
     const result = await deleteAccount(db, { actor: current, userId: current.id });
-    if (!result.ok) redirect(`/profile?error=${encodeURIComponent(result.error)}`);
+    if (!result.ok) redirect(`/profile?error=${result.code}`);
     redirect("/sign-in?deleted=1");
   }
 

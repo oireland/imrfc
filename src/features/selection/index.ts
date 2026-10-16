@@ -2,7 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { getAvailability } from "@/features/availability";
 import { getEvent, listEventsBetween, londonParts, londonToUtc, type Event, type EventWithDetails } from "@/features/events";
 import { listPlayers } from "@/features/players";
-import { displayName, listApprovedUsers, type RugbyPosition } from "@/features/users";
+import { displayName, listKnownUsers, type RugbyPosition } from "@/features/users";
 import { DEFAULT_SHIRTS, fitFor, positionOfShirt, type Candidate, type Fit } from "./shirts";
 import { selectionNotice, selectionPitch, selectionSent, selectionShirt, teamNaming } from "./schema";
 import type { Role } from "./sheet";
@@ -84,7 +84,7 @@ export async function getBoard(db: Db, eventId: string, viewer: Viewer, now: Dat
   const [rows, sizes, people, listing, availability] = await Promise.all([
     db.select().from(selectionShirt).where(inArray(selectionShirt.eventId, ids)),
     pitchSizes(db, ids),
-    listApprovedUsers(db),
+    listKnownUsers(db),
     listPlayers(db),
     getAvailability(db, eventId, viewer, now),
   ]);

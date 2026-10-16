@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { canManageUsers, isCommitteeOrAbove } from "@/features/users";
 import type { AccessState, RugbyPosition, Role, ThemePreference } from "@/features/users";
 import { auth } from "./auth";
 
@@ -41,5 +42,22 @@ export async function requireApprovedUser(): Promise<CurrentUser> {
   if (!user) redirect("/sign-in");
   if (user.accessState === "pending") redirect("/waiting-for-approval");
   if (user.accessState === "blocked") redirect("/blocked");
+  return user;
+}
+
+/**
+ * For pages and Server Actions only Committee and Admins may use. Call it inside every such
+ * action: a page's own check doesn't protect the actions defined in it, which are POST endpoints.
+ */
+export async function requireCommittee(): Promise<CurrentUser> {
+  const user = await requireApprovedUser();
+  if (!isCommitteeOrAbove(user.role)) redirect("/");
+  return user;
+}
+
+/** As `requireCommittee`, for Admins only. */
+export async function requireAdmin(): Promise<CurrentUser> {
+  const user = await requireApprovedUser();
+  if (!canManageUsers(user.role)) redirect("/");
   return user;
 }
