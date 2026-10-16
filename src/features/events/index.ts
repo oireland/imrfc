@@ -38,8 +38,13 @@ const SEED_TEAMS = ["1st XV", "2nd XV"] as const;
 
 /** Ensures the seeded Teams exist; safe to call repeatedly. */
 export async function listTeams(db: Db): Promise<Team[]> {
-  await db.insert(team).values(SEED_TEAMS.map((name) => ({ id: name, name }))).onConflictDoNothing();
-  return db.select().from(team).orderBy(asc(team.name));
+  const load = (): Promise<Team[]> => db.select().from(team).orderBy(asc(team.name));
+  const existing = await load();
+  // Usually they're all there already, so viewing a page stays read-only.
+  const missing = SEED_TEAMS.filter((name) => !existing.some((t) => t.name === name));
+  if (missing.length === 0) return existing;
+  await db.insert(team).values(missing.map((name) => ({ id: name, name }))).onConflictDoNothing();
+  return load();
 }
 
 export async function createEvent(

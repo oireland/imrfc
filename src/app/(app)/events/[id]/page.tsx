@@ -1,3 +1,4 @@
+import { teamsForRequest } from "../../request-cache";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
@@ -53,7 +54,6 @@ import {
   editOccurrence,
   getEvent,
   listEventTitles,
-  listTeams,
   listVenues,
   londonParts,
   type QuickEventInput,
@@ -93,7 +93,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     listStores(db),
     listPlanWarnings(db, new Date(), { eventId: id }),
     committee ? listVenues(db) : [],
-    committee ? listTeams(db) : [],
+    committee ? teamsForRequest() : [],
     getTeamCard(db, id, { id: user.id, committee }),
   ]);
   if (!eventDetails) notFound();

@@ -819,6 +819,40 @@ describe("Query efficiency", () => {
     expect(manySelects() - selectsWithOneDuty).toBeLessThanOrEqual(8);
   });
 
+  /** Counts insert/update/delete calls on the db from here on. */
+  function countWrites(db: object): () => number {
+    let count = 0;
+    for (const method of ["insert", "update", "delete"] as const) {
+      const target = db as Record<string, (...args: unknown[]) => unknown>;
+      const original = target[method].bind(db);
+      target[method] = (...args: unknown[]) => {
+        count++;
+        return original(...args);
+      };
+    }
+    return () => count;
+  }
+
+  it("markUnconfirmed writes nothing when there's nothing to mark, and nothing the second time", async () => {
+    const { db } = await setup();
+    const idle = countWrites(db);
+    await markUnconfirmed(db);
+    expect(idle()).toBe(0);
+
+    const busy = await makeEndedPickedUpDutiesDb(2);
+    await markUnconfirmed(busy);
+    const again = countWrites(busy);
+    await markUnconfirmed(busy);
+    expect(again()).toBe(0);
+  });
+
+  it("ensureDuties writes nothing when the Duties already exist", async () => {
+    const { db, equipment } = await setup();
+    const again = countWrites(db);
+    await ensureDuties(db, "e1", [equipment.id]);
+    expect(again()).toBe(0);
+  });
+
   async function makeUpcomingClaimedDutiesDb(count: number, claimant: string) {
     const { db, shed } = await setup();
     const ev = await createEvent(db, {

@@ -2,7 +2,8 @@ import { db } from "@/db/client";
 import type { CalendarEvent } from "@/components/coming-up";
 import { listMyReplies } from "@/features/availability";
 import { listUpcomingDutiesForUser } from "@/features/duties";
-import { listEventsBetween, listTeams, listVenues } from "@/features/events";
+import { teamsForRequest } from "./request-cache";
+import { listEventsBetween, listVenues } from "@/features/events";
 import { londonDay } from "@/lib/calendar";
 
 /**
@@ -18,7 +19,7 @@ export async function loadComingUp(userId: string, upcomingDuties?: Promise<{ ev
   const [events, venues, teams, duties] = await Promise.all([
     listEventsBetween(db, from, to),
     listVenues(db),
-    listTeams(db),
+    teamsForRequest(),
     upcomingDuties ?? listUpcomingDutiesForUser(db, userId),
   ]);
   const mine = new Set(duties.map(({ event }) => event.id));

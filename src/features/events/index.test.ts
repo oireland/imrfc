@@ -20,6 +20,20 @@ import {
   type NewEvent,
 } from "./index";
 
+/** Counts insert/update/delete calls made on a test db from now on. */
+function countWrites(db: object): () => number {
+  let count = 0;
+  for (const method of ["insert", "update", "delete"] as const) {
+    const target = db as Record<string, (...args: unknown[]) => unknown>;
+    const original = target[method].bind(db);
+    target[method] = (...args: unknown[]) => {
+      count++;
+      return original(...args);
+    };
+  }
+  return () => count;
+}
+
 describe("listTeams", () => {
   it("seeds and returns 1st XV and 2nd XV", async () => {
     const db = await createTestDb();
@@ -38,6 +52,17 @@ describe("listTeams", () => {
     const teams = await listTeams(db);
 
     expect(teams).toHaveLength(2);
+  });
+
+  it("writes nothing once the Teams exist, so viewing a page is read-only", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    await listTeams(db);
+
+    const writes = countWrites(db);
+    await listTeams(db);
+
+    expect(writes()).toBe(0);
   });
 });
 

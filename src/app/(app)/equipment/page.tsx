@@ -17,7 +17,7 @@ import {
   type EquipmentUnit,
   type WhereaboutsGroup,
 } from "@/features/equipment";
-import { markUnconfirmed } from "@/features/duties";
+import { markUnconfirmedOnce } from "../request-cache";
 import { listEventTitles } from "@/features/events";
 import { displayName, isCommitteeOrAbove, listKnownUsers } from "@/features/users";
 import { listStores, type Store } from "@/features/stores";
@@ -27,7 +27,7 @@ import { addEquipmentUnit } from "./actions";
 export default async function EquipmentViewPage() {
   const user = await requireApprovedUser();
 
-  await markUnconfirmed(db);
+  await markUnconfirmedOnce();
   const [allUnits, stores, people] = await Promise.all([
     listEquipmentUnits(db, { includeRetired: true }),
     listStores(db, { includeArchived: true }),
