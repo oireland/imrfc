@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
+import { failOnInsert } from "@/test/fail-on-insert";
+import { event, matchDetails } from "./schema";
 import {
   cancelEvent,
   createEvent,
@@ -39,6 +41,23 @@ describe("listTeams", () => {
 });
 
 describe("createEvent", () => {
+  it("saves a Match and its details together or not at all", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    await listTeams(db);
+    const match: NewEvent = {
+      eventType: "match",
+      start: new Date("2999-01-07T14:00:00Z"),
+      end: new Date("2999-01-07T16:00:00Z"),
+      venue: "Harlington",
+      matchDetails: { teamId: "1st XV", opponent: "Barts", homeAway: "home", competition: "bucs" },
+    };
+
+    await expect(createEvent(failOnInsert(db, matchDetails), match)).rejects.toThrow("boom");
+
+    expect(await db.select().from(event)).toEqual([]);
+  });
+
   it("creates a Training Event", async () => {
     const db = await createTestDb();
     await migrate(db);
@@ -153,6 +172,29 @@ describe("createEvent", () => {
 });
 
 describe("editEvent", () => {
+  it("won't change an Event's type", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const created = await createEvent(db, {
+      eventType: "training",
+      start: new Date("2999-01-01T19:00:00Z"),
+      end: new Date("2999-01-01T21:00:00Z"),
+      venue: "Harlington",
+    });
+    if (!created.ok) throw new Error("expected Event to be created");
+
+    const result = await editEvent(db, created.event.id, {
+      eventType: "social",
+      title: "Sneaky",
+      start: new Date("2999-01-01T19:00:00Z"),
+      end: new Date("2999-01-01T21:00:00Z"),
+      venue: "Harlington",
+    });
+
+    expect(result).toEqual({ ok: false, error: "An event's type can't be changed." });
+    expect((await getEvent(db, created.event.id))!.title).toBe("Training @ Harlington");
+  });
+
   it("edits a standalone Social's title, time, venue and notes", async () => {
     const db = await createTestDb();
     await migrate(db);

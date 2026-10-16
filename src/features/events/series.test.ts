@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { cancelEvent } from "./index";
+import { failOnInsert } from "@/test/fail-on-insert";
 import { event } from "./schema";
 import {
   createSeries,
@@ -119,25 +120,7 @@ describe("Series limits", () => {
 
   it("saves the Series and its Occurrences together or not at all", async () => {
     const { db, pattern } = await setup();
-    const failing = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key !== "transaction") return Reflect.get(target, key, receiver);
-        return (fn: (tx: unknown) => Promise<unknown>) =>
-          target.transaction((tx: { insert: (t: unknown) => unknown }) =>
-            fn(
-              new Proxy(tx, {
-                get: (t, k, r) =>
-                  k === "insert"
-                    ? (table: unknown) => {
-                        if (table === event) throw new Error("boom");
-                        return t.insert(table);
-                      }
-                    : Reflect.get(t, k, r),
-              }),
-            ),
-          );
-      },
-    });
+    const failing = failOnInsert(db, event);
 
     await expect(createSeries(failing, pattern)).rejects.toThrow("boom");
 

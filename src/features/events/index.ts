@@ -50,7 +50,7 @@ export async function createEvent(
   if (!result.ok) return result;
   const title = await titleFor(db, input);
   if (!title.ok) return title;
-  return { ok: true, event: await insertEvent(db, input, title.title) };
+  return { ok: true, event: await db.transaction((tx: Db) => insertEvent(tx, input, title.title)) };
 }
 
 /** The Event's derived title; a Match's needs its Team's name, so an unknown Team is an error. */
@@ -190,26 +190,31 @@ export async function editEvent(
   id: string,
   input: NewEvent,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const [stored]: Event[] = await db.select().from(event).where(eq(event.id, id));
+  if (!stored) return { ok: false, error: "That event no longer exists." };
+  if (stored.eventType !== input.eventType) return { ok: false, error: "An event's type can't be changed." };
   const result = validateEvent(input);
   if (!result.ok) return result;
   const title = await titleFor(db, input);
   if (!title.ok) return title;
 
-  await db
-    .update(event)
-    .set({
-      title: title.title,
-      start: input.start,
-      end: input.end,
-      startTbc: !!input.startTbc,
-      venue: input.venue.trim(),
-      notes: input.notes ?? "",
-    })
-    .where(eq(event.id, id));
+  await db.transaction(async (tx: Db) => {
+    await tx
+      .update(event)
+      .set({
+        title: title.title,
+        start: input.start,
+        end: input.end,
+        startTbc: !!input.startTbc,
+        venue: input.venue.trim(),
+        notes: input.notes ?? "",
+      })
+      .where(eq(event.id, id));
 
-  if (input.eventType === "match") {
-    await db.update(matchDetails).set(matchRow(input.matchDetails)).where(eq(matchDetails.eventId, id));
-  }
+    if (input.eventType === "match") {
+      await tx.update(matchDetails).set(matchRow(input.matchDetails)).where(eq(matchDetails.eventId, id));
+    }
+  });
 
   return { ok: true };
 }

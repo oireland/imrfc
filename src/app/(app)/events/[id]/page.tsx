@@ -139,7 +139,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
           { title: input.title, startTime: input.startTime, endTime: input.endTime ?? input.startTime, venue: input.venue, notes: input.notes },
           input.scope,
         )
-      : await editEvent(db, id, buildQuickEvent(input));
+      : await editEvent(db, id, buildQuickEvent({ ...input, type: eventDetails.eventType }));
     if (!result.ok) return result;
 
     revalidatePath(`/events/${id}`);
