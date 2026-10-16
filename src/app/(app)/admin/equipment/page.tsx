@@ -104,8 +104,6 @@ export default async function EquipmentUnitsPage() {
                 </form>
               </div>
               <ResultForm action={changeNote} resetOnSuccess={false} className="flex items-center gap-2">
-                {(pending) => (
-                  <>
                 <input type="hidden" name="equipmentUnitId" value={k.id} />
                 <Label htmlFor={`note-${k.id}`} className="sr-only">
                   Condition of {k.name}
@@ -117,11 +115,9 @@ export default async function EquipmentUnitsPage() {
                   placeholder="Condition, e.g. 2 balls need pumping"
                   className="flex-1"
                 />
-                <SubmitButton size="sm" variant="outline" disabled={pending}>
+                <SubmitButton size="sm" variant="outline">
                   Save
                 </SubmitButton>
-                  </>
-                )}
               </ResultForm>
               {k.status !== "retired" && (
                 <div className="flex justify-end">

@@ -4,6 +4,7 @@ import type * as React from "react";
 import { useFormStatus } from "react-dom";
 import { Loader2 } from "lucide-react";
 import { Button, type buttonVariants } from "@/components/ui/button";
+import { useResultFormPending } from "@/components/result-form";
 import type { VariantProps } from "class-variance-authority";
 
 type SubmitButtonProps = React.ComponentProps<"button"> &
@@ -13,7 +14,7 @@ type SubmitButtonProps = React.ComponentProps<"button"> &
 
 /**
  * A shadcn Button that disables itself and shows a spinner while its
- * enclosing form is submitting (via useFormStatus). Passes through
+ * enclosing form is submitting (via useFormStatus, or a ResultForm's pending state). Passes through
  * variant/size/name/value/children/aria props, so it works as a
  * server-action button with `name="action" value="claim"`.
  */
@@ -25,7 +26,9 @@ export function SubmitButton({
   disabled,
   ...props
 }: SubmitButtonProps) {
-  const { pending } = useFormStatus();
+  const formStatus = useFormStatus();
+  const resultFormPending = useResultFormPending();
+  const pending = formStatus.pending || resultFormPending;
 
   return (
     <Button type="submit" variant={variant} size={size} disabled={pending || disabled} {...props}>

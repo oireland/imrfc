@@ -61,7 +61,6 @@ export default async function AdminSeriesPage() {
         </CardHeader>
         <CardContent>
           <ResultForm action={create} successMessage="Series created" className="flex flex-col gap-3">
-            {(pending) => (<>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="series-title">Title (Socials only)</Label>
               <Input id="series-title" name="title" placeholder="Training is called “Training @ Venue”" />
@@ -107,8 +106,7 @@ export default async function AdminSeriesPage() {
               <Label htmlFor="series-notes">Notes</Label>
               <Textarea id="series-notes" name="notes" />
             </div>
-            <SubmitButton disabled={pending}>Create series</SubmitButton>
-            </>)}
+            <SubmitButton>Create series</SubmitButton>
           </ResultForm>
         </CardContent>
       </Card>
@@ -130,17 +128,15 @@ export default async function AdminSeriesPage() {
                     {s.startDate} to {s.endDate}
                   </p>
                   <ResultForm action={extend} successMessage="Series extended" className="flex items-end gap-2">
-                    {(pending) => (<>
-                    <input type="hidden" name="seriesId" value={s.id} />
+                            <input type="hidden" name="seriesId" value={s.id} />
                     <div className="flex flex-col gap-1.5">
                       <Label htmlFor={extendFormId}>Extend to</Label>
                       <Input id={extendFormId} type="date" name="endDate" required />
                     </div>
-                    <SubmitButton size="sm" variant="outline" disabled={pending}>
+                    <SubmitButton size="sm" variant="outline">
                       Extend
                     </SubmitButton>
-                    </>)}
-                  </ResultForm>
+                          </ResultForm>
                 </div>
               );
             })}
