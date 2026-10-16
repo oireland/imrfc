@@ -51,7 +51,7 @@ describe("buildCalendar", () => {
     const l = lines(
       buildCalendar([{ ...training, title: "A, B; C\\D", description: "You're bringing: Balls\nand cones" }], now),
     );
-    expect(l).toContain("SUMMARY:A\\, B\; C\\\\D");
+    expect(l).toContain("SUMMARY:A\\, B\\; C\\\\D");
     expect(l).toContain("DESCRIPTION:You're bringing: Balls\\nand cones");
   });
 
