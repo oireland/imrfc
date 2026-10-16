@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
-import { store } from "@/features/stores";
+import { listStores, store } from "@/features/stores";
 import { user } from "@/features/users";
 import {
   createEquipmentUnit,
-  deleteEquipmentUnit,
   getPortions,
   listEquipmentHeldBy,
   listEquipmentUnits,
@@ -13,6 +12,8 @@ import {
   lowerQuantity,
   raiseQuantity,
   recordMove,
+  retireEquipmentUnit,
+  archiveStoreIfUnused,
   setConditionNote,
   setEquipmentStatus,
   setQuantity,
@@ -131,32 +132,76 @@ describe("setEquipmentStatus", () => {
   });
 });
 
-describe("deleteEquipmentUnit", () => {
-  it("removes an Equipment Unit and its Portions for good, e.g. one added by mistake", async () => {
-    const db = await createTestDb();
-    await migrate(db);
-    const home = await seedHome(db);
-    const created = await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
-    if (!created.ok) throw new Error("expected Equipment Unit to be created");
-
-    await deleteEquipmentUnit(db, created.equipmentUnit.id);
-
-    expect(await listEquipmentUnits(db, { includeRetired: true })).toEqual([]);
-    expect(await getPortions(db, created.equipmentUnit.id)).toEqual([]);
-  });
-
-  it("also removes its Movement Log entries", async () => {
+describe("retireEquipmentUnit", () => {
+  it("takes an Equipment Unit out of circulation but keeps its Portions and history", async () => {
     const db = await createTestDb();
     await migrate(db);
     const home = await seedHome(db);
     const alex = await seedUser(db);
     const created = await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
     if (!created.ok) throw new Error("expected Equipment Unit to be created");
-    await setConditionNote(db, created.equipmentUnit.id, alex.id, "typo, deleting");
+    await setConditionNote(db, created.equipmentUnit.id, alex.id, "added twice by mistake");
 
-    await deleteEquipmentUnit(db, created.equipmentUnit.id);
+    expect(await retireEquipmentUnit(db, created.equipmentUnit.id)).toEqual({ ok: true });
 
-    expect(await listMovementLog(db, created.equipmentUnit.id)).toEqual([]);
+    expect(await listEquipmentUnits(db)).toEqual([]);
+    expect(await listEquipmentUnits(db, { includeRetired: true })).toMatchObject([{ status: "retired" }]);
+    expect(await getPortions(db, created.equipmentUnit.id)).toMatchObject([{ count: 1, storeId: home.id }]);
+    expect(await listMovementLog(db, created.equipmentUnit.id)).toHaveLength(1);
+  });
+
+  it("says so when the Equipment Unit doesn't exist", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    expect((await retireEquipmentUnit(db, "nope")).ok).toBe(false);
+  });
+});
+
+describe("Moves in a hurry", () => {
+  it("rejects a non-positive or fractional count without changing the Quantity", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const alex = await seedUser(db);
+    const created = await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
+    if (!created.ok) throw new Error("expected Equipment Unit to be created");
+    const id = created.equipmentUnit.id;
+
+    for (const count of [-3, 0, 1.5]) {
+      const result = await recordMove(db, id, alex.id, { type: "holder", holderId: alex.id }, "ad_hoc", {
+        count,
+        from: { type: "store", storeId: home.id },
+      });
+      expect(result.ok).toBe(false);
+    }
+
+    expect((await getPortions(db, id)).reduce((n, p) => n + p.count, 0)).toBe(1);
+    expect(await listMovementLog(db, id)).toEqual([]);
+  });
+
+  it("keeps the counts right when several Moves of one Equipment Unit happen at once", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const alex = await seedUser(db);
+    const people = await Promise.all([seedUser(db), seedUser(db), seedUser(db), seedUser(db)]);
+    const created = await createEquipmentUnit(db, { name: "Cones", homeId: home.id, quantity: 8 });
+    if (!created.ok) throw new Error("expected Equipment Unit to be created");
+    const id = created.equipmentUnit.id;
+
+    const results = await Promise.all(
+      people.map((p) =>
+        recordMove(db, id, alex.id, { type: "holder", holderId: p.id }, "ad_hoc", {
+          count: 2,
+          from: { type: "store", storeId: home.id },
+        }),
+      ),
+    );
+
+    expect(results.every((r) => r.ok)).toBe(true);
+    const portions = await getPortions(db, id);
+    expect(portions.reduce((n, p) => n + p.count, 0)).toBe(8);
+    for (const p of people) expect(portions.find((x) => x.holderId === p.id)?.count).toBe(2);
   });
 });
 
@@ -468,5 +513,61 @@ describe("listEquipmentHeldBy", () => {
     );
     expect(held.map((k) => k.name)).not.toContain("Retired");
     expect(held.map((k) => k.name)).not.toContain("Theirs");
+  });
+});
+
+describe("archiveStoreIfUnused", () => {
+  it("archives a Store nothing is homed or stored at", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const [spare] = await db.insert(store).values({ id: "spare", name: "Spare", address: "x" }).returning();
+    await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
+
+    expect(await archiveStoreIfUnused(db, spare.id)).toEqual({ ok: true });
+
+    expect(await listStores(db)).toMatchObject([{ id: home.id }]);
+  });
+
+  it("refuses a Store that is some Equipment Unit's Home", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
+
+    const result = await archiveStoreIfUnused(db, home.id);
+
+    expect(result.ok).toBe(false);
+    expect(await listStores(db)).toHaveLength(1);
+  });
+
+  it("refuses a Store that still has equipment in it, even if it isn't its Home", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const alex = await seedUser(db);
+    const [other] = await db.insert(store).values({ id: "other", name: "Other", address: "x" }).returning();
+    const created = await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
+    if (!created.ok) throw new Error("setup");
+    await recordMove(db, created.equipmentUnit.id, alex.id, { type: "store", storeId: other.id });
+
+    expect((await archiveStoreIfUnused(db, other.id)).ok).toBe(false);
+  });
+});
+
+describe("setConditionNote length limit", () => {
+  it("refuses a note that's far too long, changing and logging nothing", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const alex = await seedUser(db);
+    const created = await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
+    if (!created.ok) throw new Error("expected Equipment Unit to be created");
+
+    const result = await setConditionNote(db, created.equipmentUnit.id, alex.id, "a".repeat(1001));
+
+    expect(result).toEqual({ ok: false, error: "The note is too long. Keep it to 1000 characters or fewer." });
+    expect((await listEquipmentUnits(db))[0].conditionNote).toBe("");
+    expect(await listMovementLog(db, created.equipmentUnit.id)).toEqual([]);
   });
 });

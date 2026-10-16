@@ -20,7 +20,7 @@ export function PositionsPicker({
 }: {
   initialPreferred: RugbyPosition | null;
   initialOther: RugbyPosition[];
-  save: (preferred: RugbyPosition, other: RugbyPosition[]) => Promise<void>;
+  save: (preferred: RugbyPosition, other: RugbyPosition[]) => Promise<{ ok: true } | { ok: false; error: string }>;
 }) {
   const [preferred, setPreferred] = useState<RugbyPosition | "">(initialPreferred ?? "");
   const [other, setOther] = useState<RugbyPosition[]>(initialOther.filter((p) => p !== initialPreferred));
@@ -34,7 +34,11 @@ export function PositionsPicker({
     setOther(cleanedOther);
     if (!nextPreferred) return;
     startTransition(async () => {
-      await save(nextPreferred, cleanedOther);
+      const result = await save(nextPreferred, cleanedOther);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
       toast.success("Positions saved", { id: "positions-saved" });
     });
   }

@@ -1,4 +1,5 @@
-import { londonParts, type EventType } from "@/features/events";
+import { LIMITS, firstTooLong } from "@/lib/text-limits";
+import { londonParts, startsAt, type EventType } from "@/features/events";
 
 export type ReplyStatus = "available" | "not_available";
 
@@ -8,6 +9,8 @@ export type ReplyInput = { status: ReplyStatus; note: string; reason: string };
 export function validateReply(input: ReplyInput): { ok: true; reply: ReplyInput } | { ok: false; error: string } {
   const note = input.note.trim();
   const reason = input.reason.trim();
+  const tooLong = firstTooLong([["note", note, LIMITS.note], ["reason", reason, LIMITS.line]]);
+  if (tooLong) return { ok: false, error: tooLong };
   if (input.status === "not_available" && !reason) return { ok: false, error: "Say why you can't make it." };
   return input.status === "available"
     ? { ok: true, reply: { status: "available", note, reason: "" } }
@@ -136,7 +139,9 @@ export function summarizeAvailability({
   return summary;
 }
 
-export type GroupEvent = { id: string; eventType: EventType; start: Date; cancelled: boolean };
+export type GroupEvent = { id: string; eventType: EventType; start: Date; cancelled: boolean; startTbc?: boolean };
+
+const byStart = (a: GroupEvent, b: GroupEvent) => startsAt(a).getTime() - startsAt(b).getTime();
 
 /** Whether Players reply to this kind of Event at all. */
 export function takesReplies(eventType: EventType): boolean {
@@ -149,13 +154,13 @@ export function takesReplies(eventType: EventType): boolean {
  * start that's still going ahead.
  */
 export function replyGroup(target: GroupEvent, sameDay: GroupEvent[]): { eventIds: string[]; closesAt: Date } {
-  if (target.eventType !== "match") return { eventIds: [target.id], closesAt: target.start };
+  if (target.eventType !== "match") return { eventIds: [target.id], closesAt: startsAt(target) };
   const day = londonParts(target.start).date;
   const group = [target, ...sameDay.filter((e) => e.id !== target.id)]
     .filter((e) => e.eventType === "match" && londonParts(e.start).date === day)
-    .sort((a, b) => a.start.getTime() - b.start.getTime());
+    .sort(byStart);
   const goingAhead = group.filter((e) => !e.cancelled);
-  return { eventIds: group.map((e) => e.id), closesAt: (goingAhead[0] ?? target).start };
+  return { eventIds: group.map((e) => e.id), closesAt: startsAt(goingAhead[0] ?? target) };
 }
 
 /**
@@ -194,7 +199,7 @@ function replyGroups<E extends GroupEvent>(events: E[]): E[][] {
     const key = e.eventType === "match" ? `match:${londonParts(e.start).date}` : e.id;
     groups.set(key, [...(groups.get(key) ?? []), e]);
   }
-  return [...groups.values()].map((group) => group.sort((a, b) => a.start.getTime() - b.start.getTime()));
+  return [...groups.values()].map((group) => group.sort(byStart));
 }
 
 /**
@@ -217,7 +222,7 @@ export function waitingOnReply({
   for (const group of replyGroups(events)) {
     const goingAhead = group.filter((e) => !e.cancelled);
     const announced = announcements.find((a) => group.some((e) => e.id === a.eventId));
-    if (!announced || goingAhead.length === 0 || now >= goingAhead[0].start) continue;
+    if (!announced || goingAhead.length === 0 || now >= startsAt(goingAhead[0])) continue;
     if (group.some((e) => repliedEventIds.has(e.id))) continue;
     asks.push({
       eventId: goingAhead[0].id,
@@ -264,7 +269,7 @@ export function seasonRecord({
     announced: { available: 0, notAvailable: 0, noReply: 0 },
   });
   const record: SeasonRecord = { matches: line(), training: line() };
-  for (const group of replyGroups(events.filter((e) => !e.cancelled && e.start >= since && e.start < now))) {
+  for (const group of replyGroups(events.filter((e) => !e.cancelled && e.start >= since && startsAt(e) < now))) {
     const latest = latestInGroup(group, replies);
     const key = !latest ? "noReply" : latest.status === "available" ? "available" : "notAvailable";
     const counts = group[0].eventType === "match" ? record.matches : record.training;
@@ -296,7 +301,8 @@ export function myReplies({
   const result: Record<string, MyReply> = {};
   for (const group of replyGroups(events)) {
     const latest = latestInGroup(group, replies);
-    const closesAt = group.find((e) => !e.cancelled)?.start;
+    const first = group.find((e) => !e.cancelled);
+    const closesAt = first && startsAt(first);
     for (const e of group) {
       result[e.id] = { status: latest?.status ?? null, open: playing && !e.cancelled && !!closesAt && now < closesAt };
     }

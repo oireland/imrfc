@@ -23,7 +23,7 @@ import {
   type Portion,
 } from "@/features/equipment";
 import { listEventTitles } from "@/features/events";
-import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
+import { displayName, isCommitteeOrAbove, listApprovedUsers, listKnownUsers } from "@/features/users";
 import { listStores, type Store } from "@/features/stores";
 import { requireApprovedUser } from "@/lib/session";
 
@@ -49,11 +49,11 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
 
   const [found, stores, portions, log, warnings, people] = await Promise.all([
     getEquipmentUnit(db, id),
-    listStores(db),
+    listStores(db, { includeArchived: true }),
     getPortions(db, id),
     listMovementLog(db, id),
-    listPlanWarnings(db),
-    listApprovedUsers(db),
+    listPlanWarnings(db, new Date(), { equipmentUnitId: id }),
+    listKnownUsers(db),
   ]);
   if (!found) notFound();
   const unit = found;
@@ -117,7 +117,7 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
     const holderId = String(formData.get("holderId"));
     const from = parsePlace(String(formData.get("from")));
     const count = Number(formData.get("count"));
-    const recipient = (await listApprovedUsers(db)).find((p) => p.id === holderId && p.accessState === "approved");
+    const recipient = (await listApprovedUsers(db)).find((p) => p.id === holderId);
     if (!recipient || !count) return;
     await recordMove(db, id, userId, { type: "holder", holderId }, "ad_hoc", { count, from });
     revalidatePath(`/equipment/${id}`);
@@ -213,7 +213,7 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
           </label>
           <div className="flex gap-2">
             <NativeSelect id={`put-in-store-${portion.id}`} name="storeId" className="flex-1" defaultValue={unit.homeId}>
-              {stores.map((s: Store) => (
+              {stores.filter((s: Store) => !s.archived).map((s: Store) => (
                 <NativeSelectOption key={s.id} value={s.id}>
                   {s.name}
                 </NativeSelectOption>

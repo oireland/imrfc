@@ -11,6 +11,7 @@ export function SignInForm({ next }: { next: string }) {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (sent) {
     return <p className="text-sm text-muted-foreground">Check your email for a sign-in link.</p>;
@@ -38,8 +39,16 @@ export function SignInForm({ next }: { next: string }) {
         onSubmit={async (event) => {
           event.preventDefault();
           setPending(true);
-          await authClient.signIn.magicLink({ email, callbackURL: next });
-          setSent(true);
+          setError(null);
+          try {
+            const { error: failure } = await authClient.signIn.magicLink({ email, callbackURL: next });
+            if (failure) throw new Error(failure.message);
+            setSent(true);
+          } catch {
+            setError("We couldn't send that link. Check the address and try again in a moment.");
+          } finally {
+            setPending(false);
+          }
         }}
       >
         <div className="flex flex-col gap-1.5">
@@ -53,6 +62,11 @@ export function SignInForm({ next }: { next: string }) {
             onChange={(event) => setEmail(event.target.value)}
           />
         </div>
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
         <Button type="submit" className="w-full" disabled={pending}>
           Email me a sign-in link
         </Button>

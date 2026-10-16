@@ -17,9 +17,9 @@ import {
   type EquipmentUnit,
   type WhereaboutsGroup,
 } from "@/features/equipment";
-import { markUnconfirmed } from "@/features/duties";
+import { markUnconfirmedOnce } from "../request-cache";
 import { listEventTitles } from "@/features/events";
-import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
+import { displayName, isCommitteeOrAbove, listKnownUsers } from "@/features/users";
 import { listStores, type Store } from "@/features/stores";
 import { requireApprovedUser } from "@/lib/session";
 import { addEquipmentUnit } from "./actions";
@@ -27,11 +27,11 @@ import { addEquipmentUnit } from "./actions";
 export default async function EquipmentViewPage() {
   const user = await requireApprovedUser();
 
-  await markUnconfirmed(db);
+  await markUnconfirmedOnce();
   const [allUnits, stores, people] = await Promise.all([
     listEquipmentUnits(db, { includeRetired: true }),
-    listStores(db),
-    listApprovedUsers(db),
+    listStores(db, { includeArchived: true }),
+    listKnownUsers(db),
   ]);
   const personById = new Map(people.map((p) => [p.id, p]));
   const activeUnits = allUnits.filter((u: EquipmentUnit) => u.status === "active");
@@ -171,7 +171,7 @@ export default async function EquipmentViewPage() {
         </section>
       )}
 
-      {isCommitteeOrAbove(user.role) && <AddEquipmentButton stores={stores.map((s: Store) => ({ id: s.id, name: s.name }))} action={addEquipmentUnit} />}
+      {isCommitteeOrAbove(user.role) && <AddEquipmentButton stores={stores.filter((s: Store) => !s.archived).map((s: Store) => ({ id: s.id, name: s.name }))} action={addEquipmentUnit} />}
     </div>
   );
 }

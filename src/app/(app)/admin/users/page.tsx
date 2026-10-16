@@ -6,16 +6,15 @@ import { deleteAccount } from "@/features/account-deletion";
 import { releaseUpcomingDuties } from "@/features/duties";
 import {
   approveUser,
-  blockUser,
-  canManageUsers,
-  listApprovedUsers,
+  blockUserAs,
+  changeRole as changeRoleFor,
+  listKnownUsers,
   listPendingUsers,
-  setRole,
   unblockUser,
   type PendingUser,
   type Role,
 } from "@/features/users";
-import { getCurrentUser } from "@/lib/session";
+import { requireAdmin } from "@/lib/session";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { ConfirmSubmit } from "@/components/confirm-submit";
@@ -43,44 +42,48 @@ function DeleteAccountButton({ person, action }: { person: PendingUser; action: 
 }
 
 export default async function UsersAdminPage() {
-  const user = await getCurrentUser();
-  if (!user || !canManageUsers(user.role)) redirect("/");
+  await requireAdmin();
 
-  const [pending, everyone] = await Promise.all([listPendingUsers(db), listApprovedUsers(db)]);
+  const [pending, everyone] = await Promise.all([listPendingUsers(db), listKnownUsers(db)]);
   const approved = everyone.filter((p: PendingUser) => p.accessState !== "deleted");
 
   async function approve(formData: FormData) {
     "use server";
+    await requireAdmin();
     await approveUser(db, String(formData.get("userId")));
     revalidatePath("/admin/users");
   }
 
   async function block(formData: FormData) {
     "use server";
+    const current = await requireAdmin();
     const userId = String(formData.get("userId"));
-    await blockUser(db, userId);
+    const result = await blockUserAs(db, { actorId: current.id, userId });
+    if (!result.ok) redirect(`/admin/users?error=${result.code}`);
     await releaseUpcomingDuties(db, userId);
     revalidatePath("/admin/users");
   }
 
   async function unblock(formData: FormData) {
     "use server";
+    await requireAdmin();
     await unblockUser(db, String(formData.get("userId")));
     revalidatePath("/admin/users");
   }
 
   async function remove(formData: FormData) {
     "use server";
-    const current = await getCurrentUser();
-    if (!current) redirect("/sign-in");
+    const current = await requireAdmin();
     const result = await deleteAccount(db, { actor: current, userId: String(formData.get("userId")) });
-    if (!result.ok) redirect(`/admin/users?error=${encodeURIComponent(result.error)}`);
+    if (!result.ok) redirect(`/admin/users?error=${result.code}`);
     revalidatePath("/admin/users");
   }
 
   async function changeRole(formData: FormData) {
     "use server";
-    await setRole(db, String(formData.get("userId")), formData.get("role") as Role);
+    const current = await requireAdmin();
+    const result = await changeRoleFor(db, { actorId: current.id, userId: String(formData.get("userId")), role: formData.get("role") });
+    if (!result.ok) redirect(`/admin/users?error=${result.code}`);
     revalidatePath("/admin/users");
   }
 

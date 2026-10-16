@@ -585,9 +585,10 @@ function toDestination(value: string): Extract<DutyRequest, { action: "setDestin
   return { type: "home" };
 }
 
-/** Source option values: "store:<id>" or "holder:<id>". */
+/** Source option values come from the duties feature's `sourceValue`: "store:<id>", "holder:<id>" or "unconfirmed:<event id>". */
 function toPlace(value: string): SourcePart["place"] {
   if (value.startsWith("store:")) return { type: "store", storeId: value.slice("store:".length) };
+  if (value.startsWith("unconfirmed:")) return { type: "unconfirmed", lastSeenEventId: value.slice("unconfirmed:".length) };
   return { type: "holder", holderId: value.slice("holder:".length) };
 }
 

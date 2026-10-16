@@ -217,3 +217,34 @@ describe("Checklists", () => {
     expect(await getChecklist(db, { scope: "event", scopeId: "e1" })).toEqual([{ equipmentUnitId: balls.id, count: 1 }]);
   });
 });
+
+describe("Checklist integrity", () => {
+  it("rejects a count that isn't a positive whole number", async () => {
+    const { db, balls } = await setup();
+    const scope = { scope: "event", scopeId: "e1" } as const;
+
+    for (const count of [0, -2, 1.5]) {
+      expect((await addToChecklist(db, scope, balls.id, count)).ok).toBe(false);
+    }
+    expect(await getChecklist(db, scope)).toBeUndefined();
+
+    await addToChecklist(db, scope, balls.id);
+    for (const count of [0, -2, 1.5]) {
+      expect((await setChecklistItemCount(db, scope, balls.id, count)).ok).toBe(false);
+    }
+    expect(await getChecklist(db, scope)).toEqual([{ equipmentUnitId: balls.id, count: null }]);
+  });
+
+  it("copes with two first edits of the same level at once", async () => {
+    const { db, balls, cones } = await setup();
+    const scope = { scope: "event", scopeId: "e1" } as const;
+    await addToChecklist(db, { scope: "event_type", scopeId: "training" }, balls.id);
+    const target = { ...scope, inherits: { seriesId: null, eventType: "training" } };
+
+    const results = await Promise.all([addToChecklist(db, target, cones.id), addToChecklist(db, target, cones.id)]);
+
+    expect(results.every((r) => r.ok)).toBe(true);
+    const lines = await getChecklist(db, scope);
+    expect(lines?.map((l) => l.equipmentUnitId).sort()).toEqual([balls.id, cones.id].sort());
+  });
+});

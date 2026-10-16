@@ -1,6 +1,7 @@
+import type { Db } from "@/db/types";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { listDutyRecordForUser } from "@/features/duties";
-import { displayName, isCommitteeOrAbove, listApprovedUsers, setPlaying, setPositions, type Role, type RugbyPosition } from "@/features/users";
+import { displayName, isCommitteeOrAbove, listKnownUsers, RUGBY_POSITIONS, setPlaying, setPositions, type Role, type RugbyPosition } from "@/features/users";
 import {
   awayLabel,
   awayPushMessage,
@@ -23,8 +24,6 @@ export { summarizePlayers };
 export { addDays, awayLabel, formatDay, londonToday, periodState, rangeLabel } from "./away-rules";
 export type { AwayInput, AwayPeriod, AwayState } from "./away-rules";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 
 export type Player = {
   id: string;
@@ -47,7 +46,7 @@ export type PlayerHealth = {
 
 // Deleted accounts stay in the Users table so history can name them, but aren't Players.
 async function listPlayerUsers(db: Db) {
-  return (await listApprovedUsers(db)).filter((u) => u.accessState !== "deleted");
+  return (await listKnownUsers(db)).filter((u) => u.accessState !== "deleted");
 }
 
 /** Every approved User as a Player, Position-ordered and split into Playing / Not playing. */
@@ -107,8 +106,16 @@ export async function getPlayer(db: Db, id: string): Promise<(Player & { dutyRec
 }
 
 /** Sets a Player's Positions, deduplicated and never repeating the Preferred one. */
-export async function setPlayerPositions(db: Db, userId: string, preferred: RugbyPosition, other: RugbyPosition[]) {
+export async function setPlayerPositions(
+  db: Db,
+  userId: string,
+  preferred: RugbyPosition,
+  other: RugbyPosition[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const valid = (p: unknown) => (RUGBY_POSITIONS as readonly unknown[]).includes(p);
+  if (!valid(preferred) || !other.every(valid)) return { ok: false, error: "Pick positions from the list." };
   await setPositions(db, userId, normalizePositions(preferred, other));
+  return { ok: true };
 }
 
 // ---- Time away ----------------------------------------------------------------------------
@@ -191,9 +198,9 @@ export type AwayEntry = AwayPeriod & { setBy: string };
 /** A Player's time Away, grouped; only the Player themself and Committee can see it. */
 export async function listAway(db: Db, viewer: Actor, userId: string, today = londonToday()): Promise<AwayListing> {
   if (!mayManage(viewer, userId)) return { current: [], future: [], past: [] };
-  const [rows, people]: [(typeof playerAway.$inferSelect)[], Awaited<ReturnType<typeof listApprovedUsers>>] = await Promise.all([
+  const [rows, people]: [(typeof playerAway.$inferSelect)[], Awaited<ReturnType<typeof listKnownUsers>>] = await Promise.all([
     db.select().from(playerAway).where(and(eq(playerAway.userId, userId), isNull(playerAway.removedAt))),
-    listApprovedUsers(db),
+    listKnownUsers(db),
   ]);
   const names = new Map(people.map((u) => [u.id, displayName(u)]));
   const entries = rows.map((r) => ({ ...toPeriod(r), setBy: names.get(r.setById) ?? "Someone" }));
@@ -229,7 +236,7 @@ export async function awayAlert(
 ): Promise<{ userIds: string[]; title: string; body: string; playerId: string } | null> {
   const row = await findAway(db, id);
   if (!row) return null;
-  const people = await listApprovedUsers(db);
+  const people = await listKnownUsers(db);
   const player = people.find((p) => p.id === row.userId);
   const title = awayPushMessage({ name: player ? displayName(player) : "Someone", from: row.from, until: row.until }, today);
   if (!title) return null;

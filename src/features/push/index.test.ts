@@ -34,6 +34,16 @@ async function setup() {
   return db;
 }
 
+describe("isSubscribed for one device", () => {
+  it("is true only for an endpoint this User has subscribed", async () => {
+    const db = await setup();
+    await subscribe(db, { userId: "tom", subscription: { endpoint: "https://push/phone", p256dh: "k", auth: "a" } });
+    expect(await isSubscribed(db, "tom", "https://push/phone")).toBe(true);
+    expect(await isSubscribed(db, "tom", "https://push/laptop")).toBe(false);
+    expect(await isSubscribed(db, "sam", "https://push/phone")).toBe(false);
+  });
+});
+
 describe("subscribe / unsubscribe / isSubscribed", () => {
   it("records a subscription and reports it back", async () => {
     const db = await setup();

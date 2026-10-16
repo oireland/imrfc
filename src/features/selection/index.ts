@@ -1,8 +1,10 @@
+import type { Db } from "@/db/types";
+import { LIMITS, firstTooLong } from "@/lib/text-limits";
 import { and, eq, inArray } from "drizzle-orm";
 import { getAvailability } from "@/features/availability";
-import { getEvent, listEventsBetween, londonParts, londonToUtc, type Event, type EventWithDetails } from "@/features/events";
+import { getEvent, getEvents, listEventsBetween, londonParts, londonToUtc, startsAt, type Event, type EventWithDetails } from "@/features/events";
 import { listPlayers } from "@/features/players";
-import { displayName, listApprovedUsers, type RugbyPosition } from "@/features/users";
+import { displayName, listKnownUsers, type RugbyPosition } from "@/features/users";
 import { DEFAULT_SHIRTS, fitFor, positionOfShirt, type Candidate, type Fit } from "./shirts";
 import { selectionNotice, selectionPitch, selectionSent, selectionShirt, teamNaming } from "./schema";
 import type { Role } from "./sheet";
@@ -14,8 +16,6 @@ export * from "./naming";
 export { ROLES, ROLE_NAMES, SINGLE_ROLES, buildSheet, missingFromSheet, rolesText } from "./sheet";
 export type { Role, SheetFields, SheetLayout } from "./sheet";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 
 type Viewer = { id: string; committee: boolean };
 type Result = { ok: true } | { ok: false; error: string };
@@ -62,11 +62,10 @@ async function matchDay(db: Db, event: Event): Promise<EventWithDetails[]> {
     sameDay.filter((e) => e.eventType === "match" && londonParts(e.start).date === londonParts(event.start).date).map((e) => e.id),
   );
   day.add(event.id);
-  const withTeams = await Promise.all([...day].map((id) => getEvent(db, id)));
-  return (withTeams.filter(Boolean) as EventWithDetails[]).sort((a, b) => a.start.getTime() - b.start.getTime());
+  return (await getEvents(db, [...day])).sort((a, b) => a.start.getTime() - b.start.getTime());
 }
 
-const isReadOnly = (e: Event, now: Date) => e.cancelled || e.start <= now;
+const isReadOnly = (e: Event, now: Date) => e.cancelled || startsAt(e) <= now;
 
 async function pitchSizes(db: Db, eventIds: string[]): Promise<Map<string, number>> {
   const rows = await db.select().from(selectionPitch).where(inArray(selectionPitch.eventId, eventIds));
@@ -84,7 +83,7 @@ export async function getBoard(db: Db, eventId: string, viewer: Viewer, now: Dat
   const [rows, sizes, people, listing, availability] = await Promise.all([
     db.select().from(selectionShirt).where(inArray(selectionShirt.eventId, ids)),
     pitchSizes(db, ids),
-    listApprovedUsers(db),
+    listKnownUsers(db),
     listPlayers(db),
     getAvailability(db, eventId, viewer, now),
   ]);
@@ -145,7 +144,7 @@ async function refuse(db: Db, ref: ShirtRef, viewer: Viewer, now: Date): Promise
   const event = await getEvent(db, ref.eventId);
   if (!event || event.eventType !== "match") return { ok: false, error: "That match doesn't exist." };
   if (event.cancelled) return { ok: false, error: "This match is cancelled." };
-  if (event.start <= now) return { ok: false, error: "This match has already started." };
+  if (startsAt(event) <= now) return { ok: false, error: "This match has already started." };
   const count = (await pitchSizes(db, [ref.eventId])).get(ref.eventId) ?? DEFAULT_SHIRTS;
   if (!Number.isInteger(ref.shirt) || ref.shirt < 1 || ref.shirt > count) return { ok: false, error: `There's no shirt ${ref.shirt}.` };
   return null;
@@ -199,6 +198,8 @@ export async function pickGuest(db: Db, input: ShirtRef & { name: string; viewer
   if (denied) return denied;
   const name = input.name.trim();
   if (!name) return { ok: false, error: "Type the guest's name." };
+  const tooLong = firstTooLong([["name", name, LIMITS.name]]);
+  if (tooLong) return { ok: false, error: tooLong };
   await fill(db, input, { userId: null, guestName: name }, input.viewer, now);
   return { ok: true };
 }

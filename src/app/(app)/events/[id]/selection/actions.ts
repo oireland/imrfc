@@ -1,6 +1,6 @@
 "use server";
 
-import { headers } from "next/headers";
+import { eventLink } from "@/lib/app-url";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { db } from "@/db/client";
@@ -51,8 +51,7 @@ export async function remove(eventId: string) {
 
 /** Emails and pushes a notice's people once the response has gone, so Committee aren't kept waiting. */
 async function deliverLater(noticeId: string, eventId: string) {
-  const host = (await headers()).get("host");
-  const url = `${host?.startsWith("localhost") ? "http" : "https"}://${host}/events/${eventId}`;
+  const url = eventLink(eventId);
   after(async () => {
     const { reached } = await deliverNotice(db, noticeId, { url, mail: getMailSender() });
     await Promise.all(reached.map(({ userId, title, body }) => sendToUser(db, userId, { title, body, url: `/events/${eventId}` }, getPushSender())));

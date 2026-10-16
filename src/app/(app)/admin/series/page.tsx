@@ -1,28 +1,27 @@
-import { redirect } from "next/navigation";
 import { BackLink } from "@/components/back-link";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { createSeries, extendSeries, listSeries, listVenues } from "@/features/events";
-import { isCommitteeOrAbove } from "@/features/users";
-import { getCurrentUser } from "@/lib/session";
+import { requireCommittee } from "@/lib/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { VenueInput } from "@/components/venue-input";
 import { Textarea } from "@/components/ui/textarea";
+import { ResultForm } from "@/components/result-form";
 import { SubmitButton } from "@/components/submit-button";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export default async function AdminSeriesPage() {
-  const user = await getCurrentUser();
-  if (!user || !isCommitteeOrAbove(user.role)) redirect("/");
+  await requireCommittee();
 
   const [venues, allSeries] = await Promise.all([listVenues(db), listSeries(db)]);
 
   async function create(formData: FormData) {
     "use server";
-    await createSeries(db, {
+    await requireCommittee();
+    const result = await createSeries(db, {
       title: String(formData.get("title")),
       eventType: formData.get("eventType") === "social" ? "social" : "training",
       weekdays: formData.getAll("weekdays").map(Number),
@@ -33,15 +32,20 @@ export default async function AdminSeriesPage() {
       endDate: String(formData.get("endDate")),
       notes: String(formData.get("notes") ?? ""),
     });
+    if (!result.ok) return result;
     revalidatePath("/admin/series");
     revalidatePath("/events");
+    return { ok: true as const };
   }
 
   async function extend(formData: FormData) {
     "use server";
-    await extendSeries(db, String(formData.get("seriesId")), String(formData.get("endDate")));
+    await requireCommittee();
+    const result = await extendSeries(db, String(formData.get("seriesId")), String(formData.get("endDate")));
+    if (!result.ok) return result;
     revalidatePath("/admin/series");
     revalidatePath("/events");
+    return { ok: true as const };
   }
 
   return (
@@ -56,7 +60,8 @@ export default async function AdminSeriesPage() {
           <CardTitle>New series</CardTitle>
         </CardHeader>
         <CardContent>
-          <form action={create} className="flex flex-col gap-3">
+          <ResultForm action={create} successMessage="Series created" className="flex flex-col gap-3">
+            {(pending) => (<>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="series-title">Title (Socials only)</Label>
               <Input id="series-title" name="title" placeholder="Training is called “Training @ Venue”" />
@@ -102,8 +107,9 @@ export default async function AdminSeriesPage() {
               <Label htmlFor="series-notes">Notes</Label>
               <Textarea id="series-notes" name="notes" />
             </div>
-            <SubmitButton>Create series</SubmitButton>
-          </form>
+            <SubmitButton disabled={pending}>Create series</SubmitButton>
+            </>)}
+          </ResultForm>
         </CardContent>
       </Card>
 
@@ -123,16 +129,18 @@ export default async function AdminSeriesPage() {
                     {s.weekdays.map((d) => WEEKDAYS[d]).join(", ")} {s.startTime}–{s.endTime},{" "}
                     {s.startDate} to {s.endDate}
                   </p>
-                  <form action={extend} className="flex items-end gap-2">
+                  <ResultForm action={extend} successMessage="Series extended" className="flex items-end gap-2">
+                    {(pending) => (<>
                     <input type="hidden" name="seriesId" value={s.id} />
                     <div className="flex flex-col gap-1.5">
                       <Label htmlFor={extendFormId}>Extend to</Label>
                       <Input id={extendFormId} type="date" name="endDate" required />
                     </div>
-                    <SubmitButton size="sm" variant="outline">
+                    <SubmitButton size="sm" variant="outline" disabled={pending}>
                       Extend
                     </SubmitButton>
-                  </form>
+                    </>)}
+                  </ResultForm>
                 </div>
               );
             })}

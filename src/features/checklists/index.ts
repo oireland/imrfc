@@ -1,3 +1,4 @@
+import type { Db } from "@/db/types";
 import { and, eq, inArray, or } from "drizzle-orm";
 import { getEquipmentUnit, listEquipmentUnitsByIds } from "@/features/equipment";
 import { checklist, checklistItem } from "./schema";
@@ -7,8 +8,6 @@ export { resolveChecklist, effectiveCount } from "./rules";
 export type { ChecklistLine, ResolvedChecklist } from "./rules";
 export { checklist, checklistItem } from "./schema";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 
 /** A level's Checklist. `inherits` says what the level falls back to while it has none, so its first
  * change can start from that list instead of from nothing. An Event falls back to its Series' list
@@ -60,14 +59,31 @@ export async function getInheritedChecklist(db: Db, target: ChecklistScope): Pro
 async function ensureOwnChecklist(db: Db, target: ChecklistScope): Promise<string> {
   const existing = await findChecklistId(db, target);
   if (existing) return existing;
-  const id = crypto.randomUUID() as string;
-  await db.insert(checklist).values({ id, scope: target.scope, scopeId: target.scopeId });
-  const inherited = await getInheritedChecklist(db, target);
-  if (inherited.length > 0) {
-    await db.insert(checklistItem).values(inherited.map((line) => ({ id: crypto.randomUUID(), checklistId: id, ...line })));
-  }
-  return id;
+  // All or nothing, and safe when two first edits arrive together: whoever inserts the level's
+  // row copies what it inherits; the other just uses the row that is there.
+  return db.transaction(async (tx: Db) => {
+    const created: { id: string }[] = await tx
+      .insert(checklist)
+      .values({ id: crypto.randomUUID(), scope: target.scope, scopeId: target.scopeId })
+      .onConflictDoNothing()
+      .returning({ id: checklist.id });
+    if (created.length === 0) return (await findChecklistId(tx, target)) as string;
+    const id = created[0].id;
+    const inherited = await getInheritedChecklist(tx, target);
+    if (inherited.length > 0) {
+      await tx
+        .insert(checklistItem)
+        .values(inherited.map((line) => ({ id: crypto.randomUUID(), checklistId: id, ...line })))
+        .onConflictDoNothing();
+    }
+    return id;
+  });
 }
+
+function validCount(count: number | null): boolean {
+  return count === null || (Number.isInteger(count) && count >= 1);
+}
+const BAD_COUNT = { ok: false, error: "Enter a whole number, 1 or more." } as const;
 
 export async function addToChecklist(
   db: Db,
@@ -79,6 +95,7 @@ export async function addToChecklist(
   if (!unit || unit.status !== "active") {
     return { ok: false, error: "Missing or retired equipment can't go on the list." };
   }
+  if (!validCount(count)) return BAD_COUNT;
   const id = await ensureOwnChecklist(db, target);
   await db
     .insert(checklistItem)
@@ -94,6 +111,7 @@ export async function setChecklistItemCount(
   equipmentUnitId: string,
   count: number | null,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!validCount(count)) return BAD_COUNT;
   const id = await ensureOwnChecklist(db, target);
   await db
     .update(checklistItem)

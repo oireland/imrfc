@@ -36,8 +36,8 @@ Imperial Medicals RFC keeps forgetting equipment and keeps asking the same quest
 |---|:-:|:-:|:-:|
 | View Events, Equipment, Duties, Movement Log | ✓ | ✓ | ✓ |
 | Claim a Duty, Confirm own Duty, hand own Duty on | ✓ | ✓ | ✓ |
-| Record an ad-hoc Move, edit Condition Note | ✓ | ✓ | ✓ |
-| Create/edit Events, Series, Equipment Units, Stores, Checklists | | ✓ | ✓ |
+| Record an ad-hoc Move | ✓ | ✓ | ✓ |
+| Create/edit Events, Series, Equipment Units, Checklists; edit Condition Note; add and archive Stores | | ✓ | ✓ |
 | Assign / unassign / Confirm any Duty | | ✓ | ✓ |
 | Set own Positions, switch own Playing off/on, report and update own Injuries, add and end own time Away | ✓ | ✓ | ✓ |
 | See Players, everyone's Injuries, time Away and duty record; report/update anyone's Injuries and time Away; Clear a Concussion | | ✓ | ✓ |
@@ -66,7 +66,7 @@ Any User can delete their own account from Profile; an Admin can delete anyone's
 
 ## Stores and Venues
 
-- **Store**: name, address, maps link. Managed by Committee. Never hard-deleted (archive).
+- **Store**: name and address. Committee add and archive Stores; there is no editing a Store or maps link in v1. Never hard-deleted (archive), and a Store can't be archived while it is a Home or holds equipment.
 - **Venues are free text** on each Event and Series (e.g. "Harlington", or an away ground's address), so nobody has to add a record for every away fixture. Venue boxes suggest venues already used; an Event's venue links to a Google Maps search.
 
 ## Equipment
@@ -290,7 +290,7 @@ Lets Committee pick each Match's team on a shared board, turn it into the club's
 - The club's pre-match sheet, made from a Match's Selection, with a live preview beside the fields (below them on a phone) and a **PDF** download generated in code (`@react-pdf/renderer`, so it runs on Vercel's free plan with no browser on the server). Layout as the handover's example: the details in a header, then one row per filled Shirt (number, name, Match Day Roles); empty Shirts don't print.
 - **From the Event**, overridable on the sheet only (never written back to the Event): title ("IMRFC 1st XV vs Imperial 2nd XV"), Kick-off, Meet (from Meet Time / Travel Meet Time, free text so it can say "8.30am coach from SK or 8.45am coach from Hammersmith") and Location (the Venue). Kick-off keeps following the Event unless overridden.
 - A free-text **Schedule** line ("Changing Rooms 10.15am, Warmup 10.30am").
-- **Sheet Defaults**, kept per Team: Travel Attire, Warm Up Attire, Post Match Activity and the message ("Congratulations on your selection to represent IMRFC 1s…"). Each has a Default tick: use the default, override for this Match, or save the new value as the default. Typed once on first use; nothing is imported.
+- **Travel Attire, Warm Up Attire and Post Match Activity** are stored on each Match, entered when the Match is created or edited, alongside the Schedule. There are no per-Team defaults and no selection message.
 - **Match Day Roles**, from a fixed list, given only to people on that sheet (Guests included): Leadership C (captain), VC (vice captain) — at most one each; Match Day LM (linesman), HT (hydration technician), NT (nutrition technician), SGC (shower gel captain), KD (kit duty) — any number. One person can hold several ("C, KD"). The sheet prints the legend. KD is set by hand, even though it usually matches whoever takes home the team's kit.
 - **What's missing**, listed above Notify the team: empty starting Shirts, picked Players who are Not available or have No reply, no C. It warns, never blocks.
 

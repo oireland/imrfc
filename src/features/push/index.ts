@@ -1,3 +1,4 @@
+import type { Db } from "@/db/types";
 import { eq, and } from "drizzle-orm";
 import { listDutyUserIdsByEvent } from "@/features/duties";
 import { listAvailableUserIds } from "@/features/availability";
@@ -6,8 +7,6 @@ import { PushSubscriptionGoneError, type PushSender, type PushSubscriptionKeys }
 import { morningOfMessage, morningOfRecipients } from "./rules";
 import { pushSubscription } from "./schema";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 
 /** Records a device's subscription; re-subscribing the same endpoint replaces its keys. */
 export async function subscribe(db: Db, input: { userId: string; subscription: PushSubscriptionKeys }) {
@@ -31,9 +30,12 @@ export async function unsubscribeEverywhere(db: Db, userId: string) {
   await db.delete(pushSubscription).where(eq(pushSubscription.userId, userId));
 }
 
-/** Whether this User has any device subscribed — the Profile toggle's initial state. */
-export async function isSubscribed(db: Db, userId: string): Promise<boolean> {
-  const rows = await db.select({ id: pushSubscription.id }).from(pushSubscription).where(eq(pushSubscription.userId, userId)).limit(1);
+/** Whether this User has a device subscribed — or, given an endpoint, that particular device. */
+export async function isSubscribed(db: Db, userId: string, endpoint?: string): Promise<boolean> {
+  const where = endpoint
+    ? and(eq(pushSubscription.userId, userId), eq(pushSubscription.endpoint, endpoint))
+    : eq(pushSubscription.userId, userId);
+  const rows = await db.select({ id: pushSubscription.id }).from(pushSubscription).where(where).limit(1);
   return rows.length > 0;
 }
 

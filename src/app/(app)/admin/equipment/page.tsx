@@ -1,21 +1,20 @@
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import {
-  deleteEquipmentUnit,
   listEquipmentUnits,
+  retireEquipmentUnit,
   setConditionNote,
   setEquipmentStatus,
   type EquipmentStatus,
   type EquipmentUnit,
 } from "@/features/equipment";
-import { isCommitteeOrAbove } from "@/features/users";
-import { getCurrentUser } from "@/lib/session";
+import { requireCommittee } from "@/lib/session";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { ResultForm } from "@/components/result-form";
 import { SubmitButton } from "@/components/submit-button";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { BackLink } from "@/components/back-link";
@@ -35,31 +34,36 @@ const STATUS_BADGE_VARIANT: Record<EquipmentStatus, "secondary" | "destructive" 
 };
 
 export default async function EquipmentUnitsPage() {
-  const user = await getCurrentUser();
-  if (!user || !isCommitteeOrAbove(user.role)) redirect("/");
+  await requireCommittee();
 
   const units = await listEquipmentUnits(db, { includeRetired: true });
 
   async function changeStatus(formData: FormData) {
     "use server";
-    await setEquipmentStatus(db, String(formData.get("equipmentUnitId")), formData.get("status") as EquipmentStatus);
+    await requireCommittee();
+    const status = String(formData.get("status"));
+    if (!STATUSES.includes(status as EquipmentStatus)) return;
+    await setEquipmentStatus(db, String(formData.get("equipmentUnitId")), status as EquipmentStatus);
     revalidatePath("/admin/equipment");
   }
 
   async function changeNote(formData: FormData) {
     "use server";
-    await setConditionNote(
+    const current = await requireCommittee();
+    const result = await setConditionNote(
       db,
       String(formData.get("equipmentUnitId")),
-      user!.id,
+      current.id,
       String(formData.get("conditionNote")),
     );
-    revalidatePath("/admin/equipment");
+    if (result.ok) revalidatePath("/admin/equipment");
+    return result;
   }
 
-  async function remove(formData: FormData) {
+  async function retire(formData: FormData) {
     "use server";
-    await deleteEquipmentUnit(db, String(formData.get("equipmentUnitId")));
+    await requireCommittee();
+    await retireEquipmentUnit(db, String(formData.get("equipmentUnitId")));
     revalidatePath("/admin/equipment");
   }
 
@@ -99,7 +103,9 @@ export default async function EquipmentUnitsPage() {
                   </SubmitButton>
                 </form>
               </div>
-              <form action={changeNote} className="flex items-center gap-2">
+              <ResultForm action={changeNote} resetOnSuccess={false} className="flex items-center gap-2">
+                {(pending) => (
+                  <>
                 <input type="hidden" name="equipmentUnitId" value={k.id} />
                 <Label htmlFor={`note-${k.id}`} className="sr-only">
                   Condition of {k.name}
@@ -111,24 +117,28 @@ export default async function EquipmentUnitsPage() {
                   placeholder="Condition, e.g. 2 balls need pumping"
                   className="flex-1"
                 />
-                <SubmitButton size="sm" variant="outline">
+                <SubmitButton size="sm" variant="outline" disabled={pending}>
                   Save
                 </SubmitButton>
-              </form>
-              <div className="flex justify-end">
-                <form id={`delete-${k.id}`} action={remove}>
-                  <input type="hidden" name="equipmentUnitId" value={k.id} />
-                </form>
-                <ConfirmSubmit
-                  formId={`delete-${k.id}`}
-                  triggerLabel="Delete"
-                  triggerSize="sm"
-                  triggerVariant="ghost"
-                  title={`Delete ${k.name}?`}
-                  description="This removes it for good, not just Retired — use this only for a mistake, e.g. a typo or a duplicate."
-                  confirmLabel="Delete"
-                />
-              </div>
+                  </>
+                )}
+              </ResultForm>
+              {k.status !== "retired" && (
+                <div className="flex justify-end">
+                  <form id={`retire-${k.id}`} action={retire}>
+                    <input type="hidden" name="equipmentUnitId" value={k.id} />
+                  </form>
+                  <ConfirmSubmit
+                    formId={`retire-${k.id}`}
+                    triggerLabel="Retire"
+                    triggerSize="sm"
+                    triggerVariant="ghost"
+                    title={`Retire ${k.name}?`}
+                    description="It leaves circulation and can't go on a list. Its history is kept, and you can make it Active again from the status above."
+                    confirmLabel="Retire"
+                  />
+                </div>
+              )}
             </div>
           ))}
         </div>

@@ -1,15 +1,14 @@
+import type { Db } from "@/db/types";
 import { eq } from "drizzle-orm";
 import { joinNames, listUpcomingDutiesForUser } from "@/features/duties";
 import { listEvents } from "@/features/events";
 import { listEquipmentUnits } from "@/features/equipment";
-import { displayName, listApprovedUsers, user } from "@/features/users";
+import { displayName, listKnownUsers, user } from "@/features/users";
 import { buildCalendar, type FeedEvent } from "./ics-rules";
 import { feedToken } from "./schema";
 
 export { feedToken } from "./schema";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 
 export type FeedResult = { status: 200; body: string } | { status: 404 | 410 };
 
@@ -52,7 +51,7 @@ export async function renderFeed(db: Db, token: string, now: Date = new Date()):
     listEvents(db, { when: "past" }),
     listEquipmentUnits(db, { includeRetired: true }),
     listUpcomingDutiesForUser(db, owner.id),
-    listApprovedUsers(db),
+    listKnownUsers(db),
   ]);
   const equipmentById = new Map(equipment.map((k) => [k.id, k]));
   const equipmentLabel = (equipmentUnitId: string, count: number) => {

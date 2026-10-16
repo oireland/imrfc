@@ -1,18 +1,18 @@
+import type { Db } from "@/db/types";
 import { eq } from "drizzle-orm";
 import { askStatus, type AskStatus } from "@/features/availability";
-import { getEvent, londonParts } from "@/features/events";
-import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
+import { getEvent, getEvents, londonParts, startsAt } from "@/features/events";
+import { displayName, isCommitteeOrAbove, listApprovedUsers, listKnownUsers } from "@/features/users";
 import { emailLayout } from "@/lib/email-layout";
 import { formatDay } from "@/lib/format-time";
 import type { MailSender } from "@/lib/mail";
 import { committeeAlert, diffNamed, noticeMessage, type Change, type Slot } from "./naming-rules";
+import type { Board } from "./index";
 import { selectionNotice, selectionShirt, selectionSent, teamNaming, type NoticeRecipient } from "./schema";
 import { ROLES, buildSheet, type Role, type SheetLayout } from "./sheet";
 import { getTeamSheet, settleFields } from "./team-sheet";
 import { STARTING_SHIRTS } from "./shirts";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 type Viewer = { id: string; committee: boolean };
 type Result = { ok: true } | { ok: false; error: string };
 type SendResult = { ok: true; noticeId: string | null; sending: number } | { ok: false; error: string };
@@ -43,7 +43,7 @@ const boardSlots = async (db: Db, eventId: string): Promise<Slot[]> => (await db
 const sentSlots = async (db: Db, eventId: string): Promise<Slot[]> => (await db.select().from(selectionSent).where(eq(selectionSent.eventId, eventId))).map(asSlot);
 
 async function namesById(db: Db) {
-  const people = await listApprovedUsers(db);
+  const people = await listKnownUsers(db);
   return { people, names: new Map<string, string>(people.map((u: Parameters<typeof displayName>[0] & { id: string }) => [u.id, displayName(u)])) };
 }
 
@@ -76,15 +76,22 @@ async function refuse(db: Db, eventId: string, viewer: Viewer, now: Date): Promi
   const event = await getEvent(db, eventId);
   if (!event || event.eventType !== "match") return { ok: false, error: "That match doesn't exist." };
   if (event.cancelled) return { ok: false, error: "This match is cancelled." };
-  if (event.start <= now) return { ok: false, error: "This match has already started." };
+  if (startsAt(event) <= now) return { ok: false, error: "This match has already started." };
   return null;
 }
 
 /** Name the team's state for the board: whether it's named, what's unsent, what's missing. Committee only. */
-export async function getNaming(db: Db, eventId: string, viewer: Viewer, now: Date = new Date()): Promise<Naming | null> {
+export async function getNaming(
+  db: Db,
+  eventId: string,
+  viewer: Viewer,
+  now: Date = new Date(),
+  /** The match day's board, when the caller has already loaded it. */
+  board?: Board,
+): Promise<Naming | null> {
   if (!viewer.committee) return null;
   const [sheet, [naming], { names }] = await Promise.all([
-    getTeamSheet(db, eventId, viewer, now),
+    getTeamSheet(db, eventId, viewer, now, board),
     db.select().from(teamNaming).where(eq(teamNaming.eventId, eventId)),
     namesById(db),
   ]);
@@ -115,7 +122,7 @@ export async function getNaming(db: Db, eventId: string, viewer: Viewer, now: Da
 
 async function reachable(db: Db, recipients: NoticeRecipient[]): Promise<NoticeRecipient[]> {
   const people = await listApprovedUsers(db);
-  const approved = new Set(people.filter((p: { accessState: string }) => p.accessState === "approved").map((p: { id: string }) => p.id));
+  const approved = new Set(people.map((p: { id: string }) => p.id));
   return recipients.filter((r) => approved.has(r.userId));
 }
 
@@ -302,10 +309,11 @@ export type PlayingCard = { eventId: string; label: string; start: Date; shirt: 
 /** For Home: the named Matches still to come that `userId` is in, soonest first; none once Cancelled. */
 export async function listPlayingFor(db: Db, userId: string, now: Date = new Date()): Promise<PlayingCard[]> {
   const rows: { eventId: string; shirt: number }[] = await db.select().from(selectionSent).where(eq(selectionSent.userId, userId));
+  const events = new Map((await getEvents(db, rows.map((r) => r.eventId))).map((e) => [e.id, e]));
   const cards: PlayingCard[] = [];
   for (const row of rows) {
-    const event = await getEvent(db, row.eventId);
-    if (!event || event.cancelled || event.start <= now) continue;
+    const event = events.get(row.eventId);
+    if (!event || event.cancelled || startsAt(event) <= now) continue;
     cards.push({ eventId: row.eventId, label: event.teams[0]?.name ?? event.title, start: event.start, shirt: row.shirt, bench: row.shirt > STARTING_SHIRTS });
   }
   return cards.sort((a, b) => a.start.getTime() - b.start.getTime());
@@ -324,9 +332,10 @@ export async function alertOnNotAvailable(
   if (!replied) return null;
   const day = londonParts(replied.start).date;
   const rows: { eventId: string; shirt: number }[] = await db.select().from(selectionSent).where(eq(selectionSent.userId, input.playerId));
+  const events = new Map((await getEvents(db, rows.map((r) => r.eventId))).map((e) => [e.id, e]));
   for (const row of rows) {
-    const event = await getEvent(db, row.eventId);
-    if (!event || event.cancelled || event.start <= now || londonParts(event.start).date !== day) continue;
+    const event = events.get(row.eventId);
+    if (!event || event.cancelled || startsAt(event) <= now || londonParts(event.start).date !== day) continue;
 
     const { people, names } = await namesById(db);
     const userIds = people

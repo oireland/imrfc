@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   checkInFlag,
+  injuryAppliesOn,
   injuryLine,
   isWorse,
   notChasedFor,
@@ -53,6 +54,11 @@ describe("validateReport", () => {
   it("accepts a full report, trimming text", () => {
     const result = validateReport(report({ description: "  Pulled it  " }), today);
     expect(result).toEqual({ ok: true, value: expect.objectContaining({ description: "Pulled it", area: "Thigh", expectedReturn: "2026-10-20" }) });
+  });
+
+  it("only accepts an open Injury Status", () => {
+    expect(validateReport(report({ status: "cleared" as never }), today).ok).toBe(false);
+    expect(validateReport(report({ status: "banana" as never }), today).ok).toBe(false);
   });
 
   it("needs a body area", () => {
@@ -153,5 +159,44 @@ describe("statusAlert", () => {
     expect(statusAlert("Jo King", "out")).toBe("Jo King is now Out");
     expect(statusAlert("Jo King", "training_only")).toBe("Jo King is now Training only");
     expect(statusAlert("Jo King", "playing_through")).toBe("Jo King is now Playing through it");
+  });
+});
+
+describe("validateUpdate Injury Status", () => {
+  it("rejects a status that isn't an open one", () => {
+    const input = { status: "cleared" as never, expectedReturn: "2026-10-20", notSure: false, note: "", needsPhysio: false, physioNote: "" };
+    expect(validateUpdate(input, today).ok).toBe(false);
+  });
+});
+
+describe("injury length limits", () => {
+  it("rejects a description, physio note or progress note that's far too long", () => {
+    expect(validateReport(report({ description: "a".repeat(1001) }), today).ok).toBe(false);
+    expect(validateReport(report({ physioNote: "a".repeat(1001) }), today).ok).toBe(false);
+    const update = { status: "playing_through" as const, expectedReturn: "2026-10-20", notSure: false, needsPhysio: false, physioNote: "", note: "a".repeat(1001) };
+    expect(validateUpdate(update, today)).toEqual({ ok: false, error: "The note is too long. Keep it to 1000 characters or fewer." });
+  });
+});
+
+describe("injuryAppliesOn", () => {
+  const injury = (over: Partial<{ happenedOn: string; expectedReturn: string | null }> = {}) => ({
+    happenedOn: "2026-09-28",
+    expectedReturn: "2026-10-20",
+    ...over,
+  });
+
+  it("holds a Player back from the day it happened until the day they're due back", () => {
+    expect(injuryAppliesOn(injury(), "2026-09-27", today)).toBe(false);
+    expect(injuryAppliesOn(injury(), "2026-09-28", today)).toBe(true);
+    expect(injuryAppliesOn(injury(), "2026-10-19", today)).toBe(true);
+    expect(injuryAppliesOn(injury(), "2026-10-20", today)).toBe(false);
+  });
+
+  it("holds them back indefinitely with no Expected Return", () => {
+    expect(injuryAppliesOn(injury({ expectedReturn: null }), "2027-01-01", today)).toBe(true);
+  });
+
+  it("ignores an Expected Return that has already passed while the Injury is still open", () => {
+    expect(injuryAppliesOn(injury({ expectedReturn: "2026-10-05" }), "2026-10-30", today)).toBe(true);
   });
 });

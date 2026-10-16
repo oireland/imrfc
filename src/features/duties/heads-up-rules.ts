@@ -1,4 +1,5 @@
 // Heads-up rules: pure functions over plain data, no database or Next.js.
+import { startsAt } from "@/features/events";
 import { joinNames } from "./names-rules";
 import { byStart, dutyUsers, heldBy, inStores, itemCount, needsUnit, HOUR, type PlanEvent, type PlanEquipment } from "./plan";
 
@@ -75,7 +76,7 @@ export function findHeadsUps({
   }
 
   for (const e of sorted) {
-    const untilStart = e.start.getTime() - now.getTime();
+    const untilStart = startsAt(e).getTime() - now.getTime();
     if (untilStart < 0 || untilStart > UNFILLED_WARNING_WINDOW) continue;
     for (const { equipmentUnitId } of e.items) {
       const nobodyTo = dutyUsers(e, equipmentUnitId, "to").length === 0;

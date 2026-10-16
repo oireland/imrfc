@@ -1,9 +1,7 @@
-import { redirect } from "next/navigation";
 import { Download } from "lucide-react";
 import { db } from "@/db/client";
 import { EVENT_CSV_COLUMNS, MAX_EVENTS_PER_IMPORT, eventCsvTemplate, listTeams } from "@/features/events";
-import { isCommitteeOrAbove } from "@/features/users";
-import { getCurrentUser } from "@/lib/session";
+import { requireCommittee } from "@/lib/session";
 import { BackLink } from "@/components/back-link";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,8 +10,7 @@ import { CsvFormatDialog } from "./csv-format-dialog";
 import { ImportEventsForm } from "./import-events-form";
 
 export default async function ImportEventsPage() {
-  const user = await getCurrentUser();
-  if (!user || !isCommitteeOrAbove(user.role)) redirect("/");
+  await requireCommittee();
 
   const teams = await listTeams(db);
   const template = `data:text/csv;charset=utf-8,${encodeURIComponent(eventCsvTemplate())}`;

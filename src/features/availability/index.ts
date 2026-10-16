@@ -1,9 +1,10 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import type { Db } from "@/db/types";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { seasonStart } from "@/features/duties";
 import { getEvent, listEventsBetween, londonParts, londonToUtc, type Event, type EventType } from "@/features/events";
 import { listFitness, notChasedFor } from "@/features/injuries";
 import { listAwayOn, listPlayers } from "@/features/players";
-import { displayName, listApprovedUsers } from "@/features/users";
+import { displayName, listApprovedUsers, listKnownUsers } from "@/features/users";
 import type { MailSender } from "@/lib/mail";
 import { askEmail, type AskedEvent } from "./announce-rules";
 import { availabilityAnnouncement, availabilityAsk, availabilityMessaged, availabilityNudge, availabilityReply } from "./schema";
@@ -33,8 +34,6 @@ export { askPush, chaseMessage, whatsappMessage } from "./announce-rules";
 export type { AskedEvent } from "./announce-rules";
 export type { AskStatus, AvailabilityRow, AvailabilitySummary, MyReply, NotChasedRow, RecordLine, ReplyCounts, ReplyStatus, SeasonRecord, WaitingAsk } from "./rules";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 
 type Viewer = { id: string; committee: boolean };
 
@@ -87,8 +86,8 @@ async function repliesFor(db: Db, eventIds: string[]): Promise<Reply[]> {
 /** Players by id, leaving out Blocked Users. */
 async function playersById(db: Db) {
   const [listing, people] = await Promise.all([listPlayers(db), listApprovedUsers(db)]);
-  const blocked = new Set(people.filter((u: { accessState: string }) => u.accessState === "blocked").map((u: { id: string }) => u.id));
-  return new Map([...listing.playing, ...listing.notPlaying].filter((p) => !blocked.has(p.id)).map((p) => [p.id, p]));
+  const approved = new Set(people.map((u: { id: string }) => u.id));
+  return new Map([...listing.playing, ...listing.notPlaying].filter((p) => approved.has(p.id)).map((p) => [p.id, p]));
 }
 
 /** Players who replied Available to each of `eventIds`, grouped by Event, per-event only (no day-grouping). */
@@ -106,12 +105,18 @@ export async function listAvailableUserIds(db: Db, eventIds: string[]): Promise<
 }
 
 /**
- * Players not chased for an Event: Away on its date, Out, or Training only for a Match. Away comes
+ * Players not chased for an Event: Away on its date, or Out / Training only (for a Match) on its date,
+ * so an Injury that ends before the Event, or begins after it, is judged accordingly. Away comes
  * first when both apply. A reply still wins (see `summarizeAvailability`).
  */
-async function notChasedOn(db: Db, playerIds: string[], event: { start: Date; eventType: EventType }): Promise<Map<string, NotChased>> {
+async function notChasedOn(
+  db: Db,
+  playerIds: string[],
+  event: { start: Date; eventType: EventType },
+  now: Date,
+): Promise<Map<string, NotChased>> {
   const date = londonParts(event.start).date;
-  const [away, fitness] = await Promise.all([listAwayOn(db, playerIds, date), listFitness(db, date)]);
+  const [away, fitness] = await Promise.all([listAwayOn(db, playerIds, date), listFitness(db, londonParts(now).date, date)]);
   const notChased = new Map<string, NotChased>();
   for (const [id, f] of fitness) {
     if (playerIds.includes(id) && event.eventType !== "social" && notChasedFor(f.fitness, event.eventType)) {
@@ -209,7 +214,7 @@ export async function getAvailability(db: Db, eventId: string, viewer: Viewer, n
   const [replies, players, people, announcement, nudges, asks, messages] = await Promise.all([
     repliesFor(db, eventIds),
     playersById(db),
-    listApprovedUsers(db),
+    listKnownUsers(db),
     announcementFor(db, eventIds),
     nudgesFor(db, eventIds),
     viewer.committee ? asksFor(db, eventIds) : [],
@@ -224,7 +229,7 @@ export async function getAvailability(db: Db, eventId: string, viewer: Viewer, n
     replyBy: announcement?.replyBy ?? null,
     nudges,
     messages,
-    notChased: await notChasedOn(db, [...players.keys()], event),
+    notChased: await notChasedOn(db, [...players.keys()], event, now),
   });
 
   const self = players.get(viewer.id);
@@ -255,7 +260,7 @@ type AskResult = { ok: true; askId: string; sending: number } | { ok: false; err
 /** Who is being emailed: Approved Users among `playerIds`. */
 async function reachable(db: Db, playerIds: string[]): Promise<string[]> {
   const people = await listApprovedUsers(db);
-  return people.filter((p: { id: string; accessState: string }) => playerIds.includes(p.id) && p.accessState === "approved").map((p: { id: string }) => p.id);
+  return people.filter((p: { id: string }) => playerIds.includes(p.id)).map((p: { id: string }) => p.id);
 }
 
 /** Records an Announce or Nudge whose emails are still to send (see `deliverAsk`). */
@@ -281,14 +286,21 @@ export async function announce(
   if (!availability.canAnnounce) return { ok: false, error: "You can't announce this one." };
   if (input.replyBy && input.replyBy <= now) return { ok: false, error: "Pick a reply-by time that's still to come." };
 
-  await db.insert(availabilityAnnouncement).values({
-    id: crypto.randomUUID(),
-    eventId: input.eventId,
-    announcedById: input.viewer.id,
-    replyBy: input.replyBy,
-    createdAt: now,
+  // Two Committee pressing Announce together must send once: serialise on the day's group, then
+  // look again for an announcement the other press may have just made.
+  const { eventIds } = await groupFor(db, (await getEvent(db, input.eventId))!);
+  return db.transaction(async (tx: Db) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${[...eventIds].sort()[0]}))`);
+    if (await announcementFor(tx, eventIds)) return { ok: false, error: "This has already been announced." } as const;
+    await tx.insert(availabilityAnnouncement).values({
+      id: crypto.randomUUID(),
+      eventId: input.eventId,
+      announcedById: input.viewer.id,
+      replyBy: input.replyBy,
+      createdAt: now,
+    });
+    return recordAsk(tx, "announce", input, availability.summary.noReply.map((r) => r.userId), now);
   });
-  return recordAsk(db, "announce", input, availability.summary.noReply.map((r) => r.userId), now);
 }
 
 /**
@@ -411,7 +423,7 @@ function askNotice(row: typeof availabilityAsk.$inferSelect, names: Map<string, 
 }
 
 async function namesById(db: Db): Promise<Map<string, string>> {
-  const people = await listApprovedUsers(db);
+  const people = await listKnownUsers(db);
   return new Map(people.map((u: Parameters<typeof displayName>[0] & { id: string }) => [u.id, displayName(u)]));
 }
 
@@ -469,7 +481,7 @@ export async function listWaitingOnReply(db: Db, playerId: string, now: Date = n
   const skipped = await Promise.all(
     waiting.map(async (ask) => {
       const event = events.find((e) => e.id === ask.eventId);
-      return !!event && (await notChasedOn(db, [playerId], event)).has(playerId);
+      return !!event && (await notChasedOn(db, [playerId], event, now)).has(playerId);
     }),
   );
   return waiting.filter((_, i) => !skipped[i]);
@@ -500,11 +512,30 @@ export async function getSeasonRecord(db: Db, playerId: string, now: Date = new 
   return seasonRecord({ events, replies, announcedEventIds, since, now });
 }
 
-/** Removes every reply, announcement, nudge and ask for a deleted Event. */
+/**
+ * Removes the replies, announcement, nudges and asks of a deleted Event. When it was one of a
+ * day's Matches, its replies, announcement, nudges and messages also covered the others, so
+ * they move to a sibling instead of going.
+ */
 export async function deleteAvailabilityForEvent(db: Db, eventId: string) {
+  const sibling = await siblingMatch(db, eventId);
+  if (sibling) {
+    await db.update(availabilityReply).set({ eventId: sibling }).where(eq(availabilityReply.eventId, eventId));
+    await db.update(availabilityAnnouncement).set({ eventId: sibling }).where(eq(availabilityAnnouncement.eventId, eventId));
+    await db.update(availabilityNudge).set({ eventId: sibling }).where(eq(availabilityNudge.eventId, eventId));
+    await db.update(availabilityMessaged).set({ eventId: sibling }).where(eq(availabilityMessaged.eventId, eventId));
+  }
   await db.delete(availabilityReply).where(eq(availabilityReply.eventId, eventId));
   await db.delete(availabilityAnnouncement).where(eq(availabilityAnnouncement.eventId, eventId));
   await db.delete(availabilityNudge).where(eq(availabilityNudge.eventId, eventId));
   await db.delete(availabilityMessaged).where(eq(availabilityMessaged.eventId, eventId));
   await db.delete(availabilityAsk).where(eq(availabilityAsk.eventId, eventId));
+}
+
+/** Another Match on the same London day as `eventId`, if it is a Match with one. */
+async function siblingMatch(db: Db, eventId: string): Promise<string | null> {
+  const event = await getEvent(db, eventId);
+  if (!event || event.eventType !== "match") return null;
+  const { eventIds } = await groupFor(db, event);
+  return eventIds.find((id) => id !== eventId) ?? null;
 }

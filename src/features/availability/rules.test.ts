@@ -392,3 +392,39 @@ describe("askStatus", () => {
     expect(askStatus({ createdAt, finishedAt: null, missed: 0 }, later(15))).toBe("failed");
   });
 });
+
+describe("a Match with a TBC kick-off", () => {
+  // Saturday 3 Oct 2026 in London (BST): the day starts at 23:00Z on the 2nd.
+  const tbc = { id: "tbc", eventType: "match" as const, start: new Date("2026-10-02T23:00:00Z"), cancelled: false, startTbc: true };
+  const morning = new Date("2026-10-03T08:00:00Z");
+
+  it("keeps replies open through match day rather than closing at midnight", () => {
+    expect(replyGroup(tbc, []).closesAt).toEqual(new Date("2026-10-03T22:59:00Z"));
+    expect(myReplies({ events: [tbc], replies: [], playing: true, now: morning })).toEqual({ tbc: { status: null, open: true } });
+  });
+
+  it("is still waiting on a reply on match day", () => {
+    const asks = waitingOnReply({
+      events: [{ ...tbc, title: "1st XV vs Barts" }],
+      announcements: [{ eventId: "tbc", replyBy: null }],
+      repliedEventIds: new Set(),
+      now: morning,
+    });
+    expect(asks.map((a) => a.eventId)).toEqual(["tbc"]);
+  });
+
+  it("closes at the first timed kick-off when the day has one", () => {
+    const timed = { id: "timed", eventType: "match" as const, start: new Date("2026-10-03T13:00:00Z"), cancelled: false };
+    expect(replyGroup(tbc, [timed]).closesAt).toEqual(timed.start);
+  });
+});
+
+describe("reply length limits", () => {
+  it("rejects a note or Reason that's far too long", () => {
+    expect(validateReply({ status: "available", note: "a".repeat(1001), reason: "" })).toEqual({
+      ok: false,
+      error: "The note is too long. Keep it to 1000 characters or fewer.",
+    });
+    expect(validateReply({ status: "not_available", note: "", reason: "a".repeat(201) }).ok).toBe(false);
+  });
+});

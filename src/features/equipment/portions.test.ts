@@ -169,6 +169,27 @@ describe("moveMultiple", () => {
     );
   });
 
+  it("rejects sources that don't add up to the targets, so a Quantity can't grow", () => {
+    const sam = portion({ count: 1, whereaboutsType: "holder", storeId: null, holderId: "sam" });
+    expect(
+      moveMultiple([sam], { sources: [], targets: [{ to: { type: "holder", holderId: "tom" }, count: 1 }] }),
+    ).toEqual({ ok: false, error: "What's being moved doesn't add up." });
+    expect(
+      moveMultiple([sam], {
+        sources: [{ from: { type: "holder", holderId: "sam" }, count: 1 }],
+        targets: [{ to: { type: "holder", holderId: "tom" }, count: 3 }],
+      }).ok,
+    ).toBe(false);
+  });
+
+  it("rejects negative or fractional counts", () => {
+    const shed = portion({ count: 4 });
+    const from = { type: "store", storeId: "shed" } as const;
+    const to = { type: "holder", holderId: "tom" } as const;
+    expect(moveMultiple([shed], { sources: [{ from, count: -2 }], targets: [{ to, count: -2 }] }).ok).toBe(false);
+    expect(moveMultiple([shed], { sources: [{ from, count: 1.5 }], targets: [{ to, count: 1.5 }] }).ok).toBe(false);
+  });
+
   it("rejects a source place that doesn't have enough", () => {
     const shed = portion({ count: 1, storeId: "shed" });
     const result = moveMultiple([shed], {
@@ -244,5 +265,15 @@ describe("lowerQuantity", () => {
       ok: false,
       error: "There aren't 5 there to remove.",
     });
+  });
+});
+
+describe("movePortion counts", () => {
+  it("rejects zero, negative and fractional counts", () => {
+    const shed = portion({ count: 4 });
+    for (const count of [0, -3, 1.5, Number.NaN]) {
+      const result = movePortion([shed], { count, from: { type: "store", storeId: "shed" }, to: { type: "holder", holderId: "tom" } });
+      expect(result.ok).toBe(false);
+    }
   });
 });

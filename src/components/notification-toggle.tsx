@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { unsubscribeThisDevice } from "@/lib/push-client";
 import { Button } from "@/components/ui/button";
 
 type Subscription = { endpoint: string; p256dh: string; auth: string };
@@ -12,19 +13,39 @@ function urlBase64ToUint8Array(base64: string) {
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
 }
 
-/** Profile's single Notifications on/off switch. One subscribed device counts as "on". */
+/** Profile's Notifications on/off switch. It reflects this browser's own subscription, not any device's. */
 export function NotificationToggle({
-  initiallySubscribed,
   vapidPublicKey,
   subscribe,
   unsubscribe,
+  isThisDeviceSubscribed,
 }: {
-  initiallySubscribed: boolean;
   vapidPublicKey: string;
   subscribe: (subscription: Subscription) => Promise<void>;
   unsubscribe: (endpoint: string) => Promise<void>;
+  isThisDeviceSubscribed: (endpoint: string) => Promise<boolean>;
 }) {
-  const [on, setOn] = useState(initiallySubscribed);
+  // null while we find out whether this browser is subscribed.
+  const [on, setOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      let subscribed = false;
+      try {
+        if ("serviceWorker" in navigator && "PushManager" in window) {
+          const registration = await navigator.serviceWorker.ready;
+          const existing = await registration.pushManager.getSubscription();
+          subscribed = existing ? await isThisDeviceSubscribed(existing.endpoint) : false;
+        }
+      } catch {
+        subscribed = false;
+      }
+      if (!cancelled) setOn(subscribed);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isThisDeviceSubscribed]);
   const [pending, startTransition] = useTransition();
 
   async function turnOn() {
@@ -48,12 +69,7 @@ export function NotificationToggle({
   }
 
   async function turnOff() {
-    const registration = await navigator.serviceWorker.ready;
-    const pushSubscription = await registration.pushManager.getSubscription();
-    if (pushSubscription) {
-      await unsubscribe(pushSubscription.endpoint);
-      await pushSubscription.unsubscribe();
-    }
+    await unsubscribeThisDevice(unsubscribe);
     setOn(false);
   }
 
@@ -61,7 +77,7 @@ export function NotificationToggle({
     <Button
       type="button"
       variant="outline"
-      disabled={pending}
+      disabled={pending || on === null}
       onClick={() => startTransition(async () => {
         try {
           await (on ? turnOff() : turnOn());

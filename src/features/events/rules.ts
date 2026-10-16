@@ -1,3 +1,6 @@
+import { LIMITS, firstTooLong } from "@/lib/text-limits";
+import { londonParts, londonToUtc } from "./series-rules";
+
 export type EventType = "training" | "match" | "social";
 export type HomeAway = "home" | "away";
 export type Competition = "bucs" | "lusl" | "friendly" | "other";
@@ -36,6 +39,19 @@ export type NewEvent =
 export type ValidationResult = { ok: true } | { ok: false; error: string };
 
 export function validateEvent(input: NewEvent): ValidationResult {
+  const m = input.eventType === "match" ? input.matchDetails : undefined;
+  const tooLong = firstTooLong([
+    ["title", input.eventType === "social" ? input.title : undefined, LIMITS.name],
+    ["venue", input.venue, LIMITS.line],
+    ["notes", input.notes, LIMITS.note],
+    ["opponent", m?.opponent, LIMITS.name],
+    ["meeting point", m?.travelMeetPoint, LIMITS.line],
+    ["schedule", m?.schedule, LIMITS.note],
+    ["travel attire", m?.travelAttire, LIMITS.line],
+    ["warm-up attire", m?.warmUpAttire, LIMITS.line],
+    ["post-match plan", m?.postMatchActivity, LIMITS.line],
+  ]);
+  if (tooLong) return { ok: false, error: tooLong };
   if (input.eventType === "social" && !input.title.trim()) return { ok: false, error: "Give the event a title." };
   if (!input.venue.trim()) return { ok: false, error: "Where is it? Add a venue." };
   if (input.end < input.start) return { ok: false, error: "The event can't end before it starts." };
@@ -68,4 +84,12 @@ export function eventTitle(input: NewEvent, teamName?: string): string {
 /** An Event is Past once it has ended; otherwise it is Upcoming. */
 export function classifyEvent(event: { end: Date }, now: Date): "upcoming" | "past" {
   return event.end < now ? "past" : "upcoming";
+}
+
+/**
+ * When an Event is treated as having started. A Match whose kick-off is TBC only has a day, so
+ * it counts as starting at the end of that London day rather than at midnight.
+ */
+export function startsAt(e: { start: Date; startTbc?: boolean }): Date {
+  return e.startTbc ? londonToUtc(londonParts(e.start).date, "23:59") : e.start;
 }

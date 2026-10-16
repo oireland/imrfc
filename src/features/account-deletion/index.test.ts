@@ -53,6 +53,7 @@ describe("deleteAccount", () => {
     expect(await deleteAccount(db, { actor: actor("ann", "admin"), userId: "bea" })).toEqual({
       ok: false,
       error: "You can't delete another admin's account.",
+      code: "delete-admin",
     });
 
     expect(await accessStateOf(db, "bea")).toBe("approved");
@@ -73,10 +74,12 @@ describe("deleteAccount", () => {
     expect(await deleteAccount(db, { actor: actor("ann", "admin"), userId: "tom" })).toEqual({
       ok: false,
       error: "That account has already been deleted.",
+      code: "already-deleted",
     });
     expect(await deleteAccount(db, { actor: actor("ann", "admin"), userId: "nobody" })).toEqual({
       ok: false,
       error: "That account has already been deleted.",
+      code: "already-deleted",
     });
   });
 
@@ -102,6 +105,44 @@ describe("deleteAccount", () => {
     expect(duties.map((d) => d.userIds)).toEqual([[], []]);
     expect((await renderFeed(db, token)).status).toBe(404);
     expect(await isSubscribed(db, "tom")).toBe(false);
+  });
+
+  it("leaves the account untouched when a later step fails", async () => {
+    const db = await setup();
+    const token = await getFeedToken(db, "tom");
+    await subscribe(db, { userId: "tom", subscription: { endpoint: "https://push/tom", p256dh: "k", auth: "a" } });
+    // Erasing the User is the last step; make it fail after the others have run.
+    const failing = new Proxy(db, {
+      get(target, prop) {
+        if (prop === "transaction") {
+          return (run: (tx: unknown) => Promise<unknown>) =>
+            target.transaction((tx: object) =>
+              run(
+                new Proxy(tx, {
+                  get(t, p) {
+                    if (p === "update") {
+                      return (table: unknown) => {
+                        if (table === user) throw new Error("boom");
+                        return (t as typeof db).update(table as typeof user);
+                      };
+                    }
+                    const value = Reflect.get(t, p);
+                    return typeof value === "function" ? value.bind(t) : value;
+                  },
+                }),
+              ),
+            );
+        }
+        const value = Reflect.get(target, prop);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+
+    await expect(deleteAccount(failing, { actor: actor("tom", "member"), userId: "tom" })).rejects.toThrow("boom");
+
+    expect(await accessStateOf(db, "tom")).toBe("approved");
+    expect((await renderFeed(db, token)).status).toBe(200);
+    expect(await isSubscribed(db, "tom")).toBe(true);
   });
 
   it("wipes their Mobile number", async () => {

@@ -1,3 +1,4 @@
+import { teamsForRequest } from "../../request-cache";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
@@ -32,6 +33,7 @@ import { describeWhereabouts, listEquipmentUnits, listPortionsFor, type Equipmen
 import {
   actOnDuty,
   deleteDutiesForEvent,
+  sourceValue,
   dropDutiesFor,
   dutyActions,
   voidDutiesForEvent,
@@ -52,7 +54,6 @@ import {
   editOccurrence,
   getEvent,
   listEventTitles,
-  listTeams,
   listVenues,
   londonParts,
   type QuickEventInput,
@@ -61,7 +62,7 @@ import { deleteAvailabilityForEvent, takesReplies } from "@/features/availabilit
 import { deleteSelectionForEvent, getTeamCard, listPickedPlayerIds } from "@/features/selection";
 import { formatPhysioList, listPhysioNeeds } from "@/features/injuries";
 import { listStores, type Store } from "@/features/stores";
-import { canDeleteEvent, displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
+import { canDeleteEvent, displayName, isCommitteeOrAbove, listKnownUsers } from "@/features/users";
 import { requireApprovedUser } from "@/lib/session";
 
 /** Why the signed-in User can't change this Event's list, or null if they can: Committee only, and not once it's Cancelled. */
@@ -88,11 +89,11 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
   const [eventDetails, equipmentUnits, people, stores, warnings, venues, allTeams, teamCard] = await Promise.all([
     getEvent(db, id),
     listEquipmentUnits(db),
-    listApprovedUsers(db),
+    listKnownUsers(db),
     listStores(db),
-    listPlanWarnings(db),
+    listPlanWarnings(db, new Date(), { eventId: id }),
     committee ? listVenues(db) : [],
-    committee ? listTeams(db) : [],
+    committee ? teamsForRequest() : [],
     getTeamCard(db, id, { id: user.id, committee }),
   ]);
   if (!eventDetails) notFound();
@@ -109,8 +110,10 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     "use server";
     const current = await requireApprovedUser();
     if (!isCommitteeOrAbove(current.role)) return;
-    await cancelEvent(db, id);
-    await voidDutiesForEvent(db, id);
+    await db.transaction(async (tx) => {
+      await cancelEvent(tx, id);
+      await voidDutiesForEvent(tx, id);
+    });
     revalidatePath(`/events/${id}`);
   }
 
@@ -118,15 +121,19 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     "use server";
     const current = await requireApprovedUser();
     if (!canDeleteEvent(current.role)) return;
-    await deleteDutiesForEvent(db, id);
-    await deleteSelectionForEvent(db, id);
-    await deleteAvailabilityForEvent(db, id);
-    await clearChecklist(db, { scope: "event", scopeId: id });
-    await deleteEvent(db, id);
+    await db.transaction(async (tx) => {
+      await deleteDutiesForEvent(tx, id);
+      await deleteSelectionForEvent(tx, id);
+      await deleteAvailabilityForEvent(tx, id);
+      await clearChecklist(tx, { scope: "event", scopeId: id });
+      await deleteEvent(tx, id);
+    });
     revalidatePath("/events");
     redirect("/events");
   }
 
+  // An Event's type is fixed: edits use the stored one, never what the client sends.
+  const storedType = eventDetails.eventType;
   async function edit(input: QuickEventInput & { scope: "this" | "future" }): Promise<{ ok: true } | { ok: false; error: string }> {
     "use server";
     const current = await requireApprovedUser();
@@ -139,7 +146,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
           { title: input.title, startTime: input.startTime, endTime: input.endTime ?? input.startTime, venue: input.venue, notes: input.notes },
           input.scope,
         )
-      : await editEvent(db, id, buildQuickEvent(input));
+      : await editEvent(db, id, buildQuickEvent({ ...input, type: storedType }));
     if (!result.ok) return result;
 
     revalidatePath(`/events/${id}`);
@@ -248,12 +255,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
       const needsSource = d.direction === "to" && needsSourceChoice(equipmentPortions, { dutyUserIds: d.userIds, count });
       const sourceOptions: SourceOption[] = needsSource
         ? gatherConfirmSources(equipmentPortions, { dutyUserIds: d.userIds, homeStoreId: homeId ?? "", count }).sources.map((s) => ({
-            value:
-              s.place.type === "store"
-                ? `store:${s.place.storeId}`
-                : s.place.type === "holder"
-                  ? `holder:${s.place.holderId}`
-                  : `store:${homeId}`,
+            value: sourceValue(s.place),
             label:
               s.place.type === "store"
                 ? storeName(s.place.storeId)

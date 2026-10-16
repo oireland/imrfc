@@ -1,30 +1,32 @@
-import { redirect } from "next/navigation";
 import { BackLink } from "@/components/back-link";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { db } from "@/db/client";
-import { archiveStore, createStore, listStores, type Store } from "@/features/stores";
-import { isCommitteeOrAbove } from "@/features/users";
-import { getCurrentUser } from "@/lib/session";
+import { createStore, listStores, type Store } from "@/features/stores";
+import { archiveStoreIfUnused } from "@/features/equipment";
+import { requireCommittee } from "@/lib/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SubmitButton } from "@/components/submit-button";
 
 export default async function StoresPage() {
-  const user = await getCurrentUser();
-  if (!user || !isCommitteeOrAbove(user.role)) redirect("/");
+  await requireCommittee();
 
   const stores = await listStores(db);
 
   async function create(formData: FormData) {
     "use server";
+    await requireCommittee();
     await createStore(db, { name: String(formData.get("name")), address: String(formData.get("address")) });
     revalidatePath("/stores");
   }
 
   async function archive(formData: FormData) {
     "use server";
-    await archiveStore(db, String(formData.get("storeId")));
+    await requireCommittee();
+    const result = await archiveStoreIfUnused(db, String(formData.get("storeId")));
+    if (!result.ok) redirect(`/stores?error=${result.error}`);
     revalidatePath("/stores");
   }
 

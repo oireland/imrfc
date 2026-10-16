@@ -6,7 +6,10 @@ import { account, session, user } from "./schema";
 import {
   approveUser,
   blockUser,
+  blockUserAs,
+  changeRole,
   listApprovedUsers,
+  listKnownUsers,
   countPendingUsers,
   eraseUser,
   listPendingUsers,
@@ -104,19 +107,110 @@ describe("blockUser / unblockUser", () => {
 });
 
 describe("listApprovedUsers", () => {
-  it("returns Approved and Blocked Users, excluding Pending", async () => {
+  it("returns only Approved Users", async () => {
     const db = await createTestDb();
     await migrate(db);
     await seedUser(db, { accessState: "pending", name: "Pending Pat" });
     await seedUser(db, { accessState: "approved", name: "Approved Alex" });
     await seedUser(db, { accessState: "blocked", name: "Blocked Bo" });
+    await seedUser(db, { accessState: "deleted", name: "Deleted Dee" });
 
     const users = await listApprovedUsers(db);
 
-    expect(users.map((u: { name: string }) => u.name).sort()).toEqual([
-      "Approved Alex",
-      "Blocked Bo",
-    ]);
+    expect(users.map((u: { name: string }) => u.name)).toEqual(["Approved Alex"]);
+  });
+});
+
+describe("listKnownUsers", () => {
+  it("returns everyone but Pending Users, so names in past records still resolve", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    await seedUser(db, { accessState: "pending", name: "Pending Pat" });
+    await seedUser(db, { accessState: "approved", name: "Approved Alex" });
+    await seedUser(db, { accessState: "blocked", name: "Blocked Bo" });
+    await seedUser(db, { accessState: "deleted", name: "Deleted Dee" });
+
+    const users = await listKnownUsers(db);
+
+    expect(users.map((u: { name: string }) => u.name).sort()).toEqual(["Approved Alex", "Blocked Bo", "Deleted Dee"]);
+  });
+});
+
+describe("changeRole", () => {
+  it("changes another User's Role", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const ann = await seedUser(db, { role: "admin", accessState: "approved" });
+    const tom = await seedUser(db, { accessState: "approved" });
+
+    expect(await changeRole(db, { actorId: ann.id, userId: tom.id, role: "committee" })).toEqual({ ok: true });
+
+    expect((await db.select().from(user).where(eq(user.id, tom.id)))[0].role).toBe("committee");
+  });
+
+  it("refuses a Role that doesn't exist", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const ann = await seedUser(db, { role: "admin", accessState: "approved" });
+    const tom = await seedUser(db, { accessState: "approved" });
+
+    const result = await changeRole(db, { actorId: ann.id, userId: tom.id, role: "superuser" });
+
+    expect(result.ok).toBe(false);
+    expect((await db.select().from(user).where(eq(user.id, tom.id)))[0].role).toBe("member");
+  });
+
+  it("stops the last Admin demoting themselves", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const ann = await seedUser(db, { role: "admin", accessState: "approved" });
+
+    const result = await changeRole(db, { actorId: ann.id, userId: ann.id, role: "member" });
+
+    expect(result.ok).toBe(false);
+    expect((await db.select().from(user).where(eq(user.id, ann.id)))[0].role).toBe("admin");
+  });
+
+  it("lets an Admin demote themselves when another Admin remains", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const ann = await seedUser(db, { role: "admin", accessState: "approved" });
+    await seedUser(db, { role: "admin", accessState: "approved" });
+
+    expect(await changeRole(db, { actorId: ann.id, userId: ann.id, role: "member" })).toEqual({ ok: true });
+  });
+
+  it("doesn't count a blocked Admin as one who remains", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const ann = await seedUser(db, { role: "admin", accessState: "approved" });
+    await seedUser(db, { role: "admin", accessState: "blocked" });
+
+    expect((await changeRole(db, { actorId: ann.id, userId: ann.id, role: "member" })).ok).toBe(false);
+  });
+});
+
+describe("blockUserAs", () => {
+  it("stops an Admin blocking themselves", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const ann = await seedUser(db, { role: "admin", accessState: "approved" });
+
+    const result = await blockUserAs(db, { actorId: ann.id, userId: ann.id });
+
+    expect(result.ok).toBe(false);
+    expect((await db.select().from(user).where(eq(user.id, ann.id)))[0].accessState).toBe("approved");
+  });
+
+  it("blocks another User and ends their sessions", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const ann = await seedUser(db, { role: "admin", accessState: "approved" });
+    const tom = await seedUser(db, { accessState: "approved" });
+
+    expect(await blockUserAs(db, { actorId: ann.id, userId: tom.id })).toEqual({ ok: true });
+
+    expect((await db.select().from(user).where(eq(user.id, tom.id)))[0].accessState).toBe("blocked");
   });
 });
 
@@ -237,5 +331,21 @@ describe("eraseUser", () => {
 
     expect(await listPendingUsers(db)).toEqual([]);
     expect(await countPendingUsers(db)).toBe(0);
+  });
+});
+
+describe("setName length limit", () => {
+  it("refuses a name that's far too long", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const u = await seedUser(db, { name: "Kept" });
+
+    expect(await setName(db, u.id, "a".repeat(101))).toEqual({
+      ok: false,
+      error: "The name is too long. Keep it to 100 characters or fewer.",
+    });
+
+    const [row] = await db.select().from(user).where(eq(user.id, u.id));
+    expect(row.name).toBe("Kept");
   });
 });

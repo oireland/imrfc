@@ -1,9 +1,11 @@
+import type { Db } from "@/db/types";
 import { and, eq, inArray, isNull, ne } from "drizzle-orm";
-import { displayName, isCommitteeOrAbove, listApprovedUsers, type Role } from "@/features/users";
+import { displayName, isCommitteeOrAbove, listKnownUsers, type Role } from "@/features/users";
 import { injury, injuryChange } from "./schema";
 import type { PhysioNeed } from "./physio-list-rules";
 import {
   checkInFlag,
+  injuryAppliesOn,
   injuryLine,
   isWorse,
   statusAlert,
@@ -17,13 +19,11 @@ import {
   type UpdateInput,
 } from "./rules";
 
-export { BODY_AREAS, OPEN_STATUSES, STATUS_LABEL, notChasedFor, worstFitness } from "./rules";
+export { BODY_AREAS, OPEN_STATUSES, STATUS_LABEL, notChasedFor, worstFitness, injuryAppliesOn } from "./rules";
 export { formatPhysioList } from "./physio-list-rules";
 export type { PhysioNeed } from "./physio-list-rules";
 export type { BodyArea, Fitness, InjuryStatus, OpenStatus, ReportInput, UpdateInput } from "./rules";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 
 type Actor = { id: string; role: Role };
 type Row = typeof injury.$inferSelect;
@@ -40,7 +40,7 @@ async function findOpen(db: Db, id: string): Promise<Row | undefined> {
 }
 
 async function alertFor(db: Db, row: Row, actorId: string, status: OpenStatus): Promise<InjuryAlert> {
-  const people = await listApprovedUsers(db);
+  const people = await listKnownUsers(db);
   const player = people.find((p) => p.id === row.userId);
   return {
     userIds: people
@@ -178,9 +178,9 @@ export async function listInjuries(db: Db, viewer: Actor, userId: string, today:
   if (!mayManage(viewer, userId)) return { open: [], history: [] };
   const rows: Row[] = await db.select().from(injury).where(and(eq(injury.userId, userId), isNull(injury.mistakeAt)));
   if (rows.length === 0) return { open: [], history: [] };
-  const [changes, people]: [(typeof injuryChange.$inferSelect)[], Awaited<ReturnType<typeof listApprovedUsers>>] = await Promise.all([
+  const [changes, people]: [(typeof injuryChange.$inferSelect)[], Awaited<ReturnType<typeof listKnownUsers>>] = await Promise.all([
     db.select().from(injuryChange).where(inArray(injuryChange.injuryId, rows.map((r) => r.id))),
-    listApprovedUsers(db),
+    listKnownUsers(db),
   ]);
   const names = new Map(people.map((p) => [p.id, displayName(p)]));
   const views = rows.map<InjuryView>((r) => ({
@@ -223,8 +223,10 @@ export type PlayerFitness = {
  * Every Player with an open Injury, by user id: Fitness (the worst open Injury), the Players list's line and
  * check-in flag. Players who are Fit have no entry. For Committee screens and the availability feature.
  */
-export async function listFitness(db: Db, today: string): Promise<Map<string, PlayerFitness>> {
-  const rows: Row[] = await db.select().from(injury).where(and(isNull(injury.mistakeAt), isNull(injury.clearedAt)));
+export async function listFitness(db: Db, today: string, onDate: string = today): Promise<Map<string, PlayerFitness>> {
+  const all: Row[] = await db.select().from(injury).where(and(isNull(injury.mistakeAt), isNull(injury.clearedAt)));
+  // Fitness on `onDate`: Injuries that haven't started yet, or that will be over by then, don't count.
+  const rows = all.filter((r) => injuryAppliesOn(r, onDate, today));
   const byUser = Map.groupBy(rows, (r) => r.userId);
   const fitness = new Map<string, PlayerFitness>();
   for (const [userId, injuries] of byUser) {
@@ -265,7 +267,7 @@ export async function listPhysioNeeds(db: Db, userIds?: string[]): Promise<Physi
       ),
     );
   if (rows.length === 0) return [];
-  const people = await listApprovedUsers(db);
+  const people = await listKnownUsers(db);
   const names = new Map(people.map((p) => [p.id, displayName(p)]));
   return rows.map((r) => ({ name: names.get(r.userId) ?? "Someone", area: r.area, physioNote: r.physioNote }));
 }

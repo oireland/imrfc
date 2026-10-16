@@ -52,3 +52,14 @@ describe("archiveStore", () => {
     expect(await listStores(db, { includeArchived: true })).toMatchObject([{ name: "Old cupboard", archived: true }]);
   });
 });
+
+describe("createStore length limits", () => {
+  it("rejects a name or address that's far too long", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+
+    expect((await createStore(db, { name: "a".repeat(101), address: "SW7" })).ok).toBe(false);
+    expect((await createStore(db, { name: "Shed", address: "a".repeat(201) })).ok).toBe(false);
+    expect(await listStores(db)).toEqual([]);
+  });
+});

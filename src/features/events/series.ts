@@ -1,7 +1,10 @@
-import { and, asc, eq, gte } from "drizzle-orm";
+import type { Db } from "@/db/types";
+import { LIMITS, firstTooLong } from "@/lib/text-limits";
+import { and, asc, count, eq, gte } from "drizzle-orm";
 import { event, series } from "./schema";
 import { trainingTitle } from "./rules";
 import {
+  checkOccurrenceCount,
   londonParts,
   londonToUtc,
   occurrenceDates,
@@ -16,8 +19,6 @@ export type OccurrenceChanges = Partial<
   Pick<SeriesPattern, "title" | "venue" | "notes" | "startTime" | "endTime">
 >;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 type Failure = { ok: false; error: string };
 
 async function insertOccurrences(db: Db, s: Series, dates: string[]) {
@@ -47,7 +48,12 @@ export async function createSeries(
   const result = validateSeries(input);
   if (!result.ok) return result;
 
-  const [row] = await db
+  const dates = occurrenceDates(input);
+  const size = checkOccurrenceCount(dates.length, 0);
+  if (!size.ok) return size;
+
+  const row: Series = await db.transaction(async (tx: Db) => {
+    const [created] = await tx
     .insert(series)
     .values({
       id: crypto.randomUUID(),
@@ -62,8 +68,9 @@ export async function createSeries(
       notes: input.notes ?? "",
     })
     .returning();
-
-  await insertOccurrences(db, row, occurrenceDates(input));
+    await insertOccurrences(tx, created, dates);
+    return created;
+  });
   return { ok: true, series: row };
 }
 
@@ -82,6 +89,8 @@ export async function extendSeries(
 ): Promise<{ ok: true } | Failure> {
   const [row]: Series[] = await db.select().from(series).where(eq(series.id, seriesId));
   if (!row) return { ok: false, error: "That series no longer exists." };
+  const valid = validateSeries({ ...row, eventType: row.eventType as SeriesPattern["eventType"], endDate: newEndDate });
+  if (!valid.ok) return valid;
   if (newEndDate <= row.endDate) {
     return { ok: false, error: "Pick a date after the current last date." };
   }
@@ -90,8 +99,14 @@ export async function extendSeries(
     .toISOString()
     .slice(0, 10);
   const dates = occurrenceDates({ weekdays: row.weekdays, startDate: nextDay, endDate: newEndDate });
-  await insertOccurrences(db, row, dates);
-  await db.update(series).set({ endDate: newEndDate }).where(eq(series.id, seriesId));
+  const [{ existing }] = await db.select({ existing: count() }).from(event).where(eq(event.seriesId, seriesId));
+  const size = checkOccurrenceCount(dates.length, Number(existing));
+  if (!size.ok) return size;
+
+  await db.transaction(async (tx: Db) => {
+    await insertOccurrences(tx, row, dates);
+    await tx.update(series).set({ endDate: newEndDate }).where(eq(series.id, seriesId));
+  });
   return { ok: true };
 }
 
@@ -103,6 +118,13 @@ export async function editOccurrence(
 ): Promise<{ ok: true } | Failure> {
   const [target]: Occurrence[] = await db.select().from(event).where(eq(event.id, eventId));
   if (!target?.seriesId) return { ok: false, error: "That event isn't part of a series." };
+
+  const tooLong = firstTooLong([
+    ["title", changes.title, LIMITS.name],
+    ["venue", changes.venue, LIMITS.line],
+    ["notes", changes.notes, LIMITS.note],
+  ]);
+  if (tooLong) return { ok: false, error: tooLong };
 
   const current = { start: londonParts(target.start).time, end: londonParts(target.end).time };
   const startTime = changes.startTime ?? current.start;

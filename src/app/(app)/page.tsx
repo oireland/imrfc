@@ -1,3 +1,4 @@
+import { markUnconfirmedOnce } from "./request-cache";
 import { Fragment } from "react";
 import Link from "next/link";
 import { db } from "@/db/client";
@@ -8,12 +9,12 @@ import { CrestThemePicker } from "@/components/crest-theme-picker";
 import { HealthStack } from "@/components/health-stack";
 import { InjuryHomeCard } from "@/components/injury-home-card";
 import { listWaitingOnReply } from "@/features/availability";
-import { joinNames, listUpcomingDutiesForUser, markUnconfirmed } from "@/features/duties";
+import { joinNames, listUpcomingDutiesForUser } from "@/features/duties";
 import { listEquipmentHeldBy, listEquipmentUnits } from "@/features/equipment";
 import { listInjuries } from "@/features/injuries";
 import { formatDay, listAway, londonToday } from "@/features/players";
 import { listPlayingFor } from "@/features/selection";
-import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
+import { displayName, isCommitteeOrAbove, listKnownUsers } from "@/features/users";
 import { greeting, londonDay, londonTime } from "@/lib/calendar";
 import { requireApprovedUser } from "@/lib/session";
 import { cn } from "cn";
@@ -39,7 +40,7 @@ function relativeDay(start: Date, today: string): string {
 export default async function Home() {
   const user = await requireApprovedUser();
 
-  await markUnconfirmed(db);
+  await markUnconfirmedOnce();
   const upcomingDuties = listUpcomingDutiesForUser(db, user.id);
   const [asks, playing, duties, held, comingUp, allEquipment, people, away, injuries] = await Promise.all([
     listWaitingOnReply(db, user.id),
@@ -48,7 +49,7 @@ export default async function Home() {
     listEquipmentHeldBy(db, user.id),
     loadComingUp(user.id, upcomingDuties),
     listEquipmentUnits(db, { includeRetired: true }),
-    listApprovedUsers(db),
+    listKnownUsers(db),
     listAway(db, user, user.id, londonToday()),
     listInjuries(db, user, user.id, londonToday()),
   ]);

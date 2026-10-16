@@ -14,9 +14,13 @@ export default async function SelectionPage({ params }: PageProps<"/events/[id]/
   const viewer = { id: current.id, committee: isCommitteeOrAbove(current.role) };
   const [board, event] = await Promise.all([getBoard(db, id, viewer), getEvent(db, id)]);
   if (!board || !event) notFound();
-  const namings = Object.fromEntries(await Promise.all(board.pitches.map(async (p) => [p.eventId, await getNaming(db, p.eventId, viewer)] as const)));
-
-  const layouts = Object.fromEntries(await Promise.all(board.pitches.map(async (p) => [p.eventId, (await getTeamSheet(db, p.eventId, viewer))?.layout ?? null] as const)));
+  // The board is loaded once and shared, so each pitch's naming and sheet don't reload it.
+  const now = new Date();
+  const sheets = await Promise.all(
+    board.pitches.map(async (p) => [p.eventId, await getTeamSheet(db, p.eventId, viewer, now, board), await getNaming(db, p.eventId, viewer, now, board)] as const),
+  );
+  const namings = Object.fromEntries(sheets.map(([eventId, , naming]) => [eventId, naming]));
+  const layouts = Object.fromEntries(sheets.map(([eventId, sheet]) => [eventId, sheet?.layout ?? null]));
 
   return (
     <div className="flex flex-col gap-4">

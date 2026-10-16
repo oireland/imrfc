@@ -67,6 +67,7 @@ export function movePortion(
   portions: Portion[],
   { count, from, to }: { count: number; from: Place; to: Place },
 ): { ok: true; portions: Portion[] } | { ok: false; error: string } {
+  if (!Number.isInteger(count) || count < 1) return { ok: false, error: "Enter how many to move." };
   const available = countAt(portions, from);
   if (count > available) return { ok: false, error: `There aren't ${count} there to move.` };
 
@@ -98,6 +99,12 @@ export function moveMultiple(
   portions: Portion[],
   { sources, targets }: { sources: { from: Place; count: number }[]; targets: { to: Place; count: number }[] },
 ): { ok: true; portions: Portion[] } | { ok: false; error: string } {
+  const counts = [...sources.map((s) => s.count), ...targets.map((t) => t.count)];
+  if (counts.some((c) => !Number.isInteger(c) || c < 0)) return { ok: false, error: "Enter how many to move." };
+  const sourceTotal = sources.reduce((sum, s) => sum + s.count, 0);
+  const targetTotal = targets.reduce((sum, t) => sum + t.count, 0);
+  if (sourceTotal !== targetTotal) return { ok: false, error: "What's being moved doesn't add up." };
+
   let working = portions;
   for (const { from, count } of sources) {
     if (count <= 0) continue;

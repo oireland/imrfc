@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
+import { failOnInsert } from "@/test/fail-on-insert";
+import { event, matchDetails } from "./schema";
 import {
   cancelEvent,
   createEvent,
@@ -8,6 +10,7 @@ import {
   deleteEvent,
   editEvent,
   getEvent,
+  getEvents,
   listVenues,
   listEvents,
   listEventsBetween,
@@ -16,6 +19,20 @@ import {
   listTeams,
   type NewEvent,
 } from "./index";
+
+/** Counts insert/update/delete calls made on a test db from now on. */
+function countWrites(db: object): () => number {
+  let count = 0;
+  for (const method of ["insert", "update", "delete"] as const) {
+    const target = db as Record<string, (...args: unknown[]) => unknown>;
+    const original = target[method].bind(db);
+    target[method] = (...args: unknown[]) => {
+      count++;
+      return original(...args);
+    };
+  }
+  return () => count;
+}
 
 describe("listTeams", () => {
   it("seeds and returns 1st XV and 2nd XV", async () => {
@@ -36,9 +53,37 @@ describe("listTeams", () => {
 
     expect(teams).toHaveLength(2);
   });
+
+  it("writes nothing once the Teams exist, so viewing a page is read-only", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    await listTeams(db);
+
+    const writes = countWrites(db);
+    await listTeams(db);
+
+    expect(writes()).toBe(0);
+  });
 });
 
 describe("createEvent", () => {
+  it("saves a Match and its details together or not at all", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    await listTeams(db);
+    const match: NewEvent = {
+      eventType: "match",
+      start: new Date("2999-01-07T14:00:00Z"),
+      end: new Date("2999-01-07T16:00:00Z"),
+      venue: "Harlington",
+      matchDetails: { teamId: "1st XV", opponent: "Barts", homeAway: "home", competition: "bucs" },
+    };
+
+    await expect(createEvent(failOnInsert(db, matchDetails), match)).rejects.toThrow("boom");
+
+    expect(await db.select().from(event)).toEqual([]);
+  });
+
   it("creates a Training Event", async () => {
     const db = await createTestDb();
     await migrate(db);
@@ -153,6 +198,29 @@ describe("createEvent", () => {
 });
 
 describe("editEvent", () => {
+  it("won't change an Event's type", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const created = await createEvent(db, {
+      eventType: "training",
+      start: new Date("2999-01-01T19:00:00Z"),
+      end: new Date("2999-01-01T21:00:00Z"),
+      venue: "Harlington",
+    });
+    if (!created.ok) throw new Error("expected Event to be created");
+
+    const result = await editEvent(db, created.event.id, {
+      eventType: "social",
+      title: "Sneaky",
+      start: new Date("2999-01-01T19:00:00Z"),
+      end: new Date("2999-01-01T21:00:00Z"),
+      venue: "Harlington",
+    });
+
+    expect(result).toEqual({ ok: false, error: "An event's type can't be changed." });
+    expect((await getEvent(db, created.event.id))!.title).toBe("Training @ Harlington");
+  });
+
   it("edits a standalone Social's title, time, venue and notes", async () => {
     const db = await createTestDb();
     await migrate(db);
@@ -479,5 +547,36 @@ describe("listEventTitles", () => {
 
     expect(titles).toEqual(new Map([[a.id, "Social A"], [b.id, "Social B"]]));
     expect(await listEventTitles(db, [])).toEqual(new Map());
+  });
+});
+
+describe("getEvents", () => {
+  it("loads each Event with its match details and Team in one go, leaving out ids that don't exist", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    await listTeams(db);
+    const match = await createEvent(db, {
+      eventType: "match",
+      start: new Date("2999-01-07T14:00:00Z"),
+      end: new Date("2999-01-07T16:00:00Z"),
+      venue: "Harlington",
+      matchDetails: { teamId: "2nd XV", opponent: "Barts", homeAway: "home", competition: "bucs" },
+    });
+    const training = await createEvent(db, {
+      eventType: "training",
+      start: new Date("2999-01-08T19:00:00Z"),
+      end: new Date("2999-01-08T20:00:00Z"),
+      venue: "Harlington",
+    });
+    if (!match.ok || !training.ok) throw new Error("expected Events to be created");
+
+    const events = await getEvents(db, [match.event.id, training.event.id, "gone"]);
+
+    expect(events.map((e) => e.id).sort()).toEqual([match.event.id, training.event.id].sort());
+    const loaded = events.find((e) => e.id === match.event.id)!;
+    expect(loaded.matchDetails?.opponent).toBe("Barts");
+    expect(loaded.teams.map((t) => t.name)).toEqual(["2nd XV"]);
+    expect(events.find((e) => e.id === training.event.id)).toMatchObject({ matchDetails: null, teams: [] });
+    expect(await getEvents(db, [])).toEqual([]);
   });
 });

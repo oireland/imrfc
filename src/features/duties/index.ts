@@ -1,3 +1,4 @@
+import type { Db } from "@/db/types";
 import { and, eq, inArray, isNotNull, isNull, lt } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { resolveEventChecklist, resolveEventChecklists, type ResolvedEventChecklist } from "@/features/checklists";
@@ -5,15 +6,16 @@ import { event, getEvent, listEvents } from "@/features/events";
 import {
   getEquipmentUnit,
   getPortions,
+  hasMoveSince,
   listEquipmentUnits,
   listEquipmentUnitsByIds,
   listPortionsFor,
   recordSplitMove,
   setUnconfirmed,
 } from "@/features/equipment";
-import { displayName, isCommitteeOrAbove, listApprovedUsers, type Role } from "@/features/users";
+import { displayName, filterApprovedUserIds, isCommitteeOrAbove, listKnownUsers, type Role } from "@/features/users";
 import { findClashes, type Clash } from "./clashes-rules";
-import { gatherConfirmSources, gatherFromDutyUsers, validateHolderSplit, type HolderPart, type SourcePart } from "./confirm-source-rules";
+import { gatherConfirmSources, gatherFromDutyUsers, gatherHeldBy, validateHolderSplit, type HolderPart, type SourcePart } from "./confirm-source-rules";
 import { dutyActions, type DutyAction } from "./duty-actions-rules";
 import { lastDuties, seasonCount } from "./duty-record-rules";
 import { findHeadsUps, type HeadsUp } from "./heads-up-rules";
@@ -29,10 +31,9 @@ export type { DutyAction } from "./duty-actions-rules";
 export { joinNames } from "./names-rules";
 export { seasonStart } from "./duty-record-rules";
 export { gatherConfirmSources, needsSourceChoice } from "./confirm-source-rules";
+export { parseSourceValue, sourceValue } from "./source-value";
 export type { HolderPart, SourcePart } from "./confirm-source-rules";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 
 export type DutyDestination = { type: "home" } | { type: "store"; storeId: string } | { type: "holder" };
 export type Duty = Omit<typeof duty.$inferSelect, "destinationType" | "destinationStoreId"> & {
@@ -159,8 +160,11 @@ export async function assignDuty(db: Db, dutyId: string, userIds: string[]): Pro
   const row = await getDuty(db, dutyId);
   if (!row) return { ok: false, error: "That duty no longer exists." };
   const current = await userIdsOf(db, dutyId);
+  const added = userIds.filter((id) => !current.includes(id));
+  const approved = await filterApprovedUserIds(db, added);
+  if (added.some((id) => !approved.has(id))) return { ok: false, error: "That person isn't a member of the club." };
   for (const id of current.filter((id) => !userIds.includes(id))) await removeUser(db, row, id);
-  for (const id of userIds.filter((id) => !current.includes(id))) await addUser(db, row, id);
+  for (const id of added) await addUser(db, row, id);
   return { ok: true };
 }
 
@@ -171,6 +175,9 @@ export async function handOnDuty(db: Db, dutyId: string, actorId: string, toUser
   const ids = await userIdsOf(db, dutyId);
   if (!ids.includes(actorId)) return { ok: false, error: "You can only hand on your own place." };
   if (ids.includes(toUserId)) return { ok: false, error: "They're already on it." };
+  if (!(await filterApprovedUserIds(db, [toUserId])).has(toUserId)) {
+    return { ok: false, error: "That person isn't a member of the club." };
+  }
   await removeUser(db, row, actorId);
   await addUser(db, row, toUserId);
   return { ok: true };
@@ -274,10 +281,25 @@ export async function confirmDuty(
   const equipment = await getEquipmentUnit(db, row.equipmentUnitId);
   if (!equipment) return { ok: false, error: "That equipment no longer exists." };
 
+  // The Move and "confirmed" go together: if the Move fails, the Duty stays open to retry.
+  return db.transaction(async (tx: Db) => {
+    const moved = await recordConfirmMove(tx, row, equipment, userIds, actor, options);
+    if (!moved.ok) return moved;
+    await tx.update(duty).set({ confirmedAt: new Date() }).where(eq(duty.id, dutyId));
+    return moved;
+  });
+}
+
+async function recordConfirmMove(
+  db: Db,
+  row: typeof duty.$inferSelect,
+  equipment: { id: string; homeId: string; quantity: number },
+  userIds: string[],
+  actor: { id: string; role: Role },
+  options?: { from?: SourcePart[]; holders?: HolderPart[] },
+): Promise<Result> {
   const count = await checklistCountFor(db, row, equipment.quantity);
   const portions = await getPortions(db, row.equipmentUnitId);
-
-  await db.update(duty).set({ confirmedAt: new Date() }).where(eq(duty.id, dutyId));
 
   if (row.direction === "to") {
     const holderSplit = resolveHolderSplit(userIds, count, actor.id, options?.holders);
@@ -402,11 +424,21 @@ export async function markUnconfirmed(db: Db) {
   // Only From Duties that could need it: not Confirmed, on an ended, uncancelled Event,
   // whose To Duty was Confirmed. Usually there are none, and this is the only query.
   const toDuty = alias(duty, "to_duty");
-  const fromRows: { eventId: string; equipmentUnitId: string; toDutyId: string; seriesId: string | null; eventType: string }[] = await db
+  const fromRows: {
+    eventId: string;
+    equipmentUnitId: string;
+    toDutyId: string;
+    toConfirmedAt: Date | null;
+    eventEnd: Date;
+    seriesId: string | null;
+    eventType: string;
+  }[] = await db
     .select({
       eventId: duty.eventId,
       equipmentUnitId: duty.equipmentUnitId,
       toDutyId: toDuty.id,
+      toConfirmedAt: toDuty.confirmedAt,
+      eventEnd: event.end,
       seriesId: event.seriesId,
       eventType: event.eventType,
     })
@@ -449,7 +481,12 @@ export async function markUnconfirmed(db: Db) {
     const equipment = equipmentById.get(from.equipmentUnitId);
     if (!equipment) continue;
     const count = countFromResolved(checklistsByEvent.get(from.eventId), from.equipmentUnitId, equipment.quantity);
-    const held = gatherFromDutyUsers(portionsByEquipment.get(equipment.id) ?? [], { userIds: toUserIds, count });
+    const held = gatherHeldBy(portionsByEquipment.get(equipment.id) ?? [], { userIds: toUserIds, count });
+    if (held.sources.length === 0) continue;
+    // Anyone recording a Move since the Event ended (or since the To Duty was Confirmed late) has
+    // sorted it out already: put back, "I've got it", or Confirmed onto the next Event.
+    const since = from.toConfirmedAt && from.toConfirmedAt > from.eventEnd ? from.toConfirmedAt : from.eventEnd;
+    if (await hasMoveSince(db, equipment.id, since)) continue;
     for (const source of held.sources) {
       await setUnconfirmed(db, equipment.id, from.eventId, source.place, source.count);
     }
@@ -584,8 +621,14 @@ export async function listDutyRecordForUser(
   };
 }
 
+/**
+ * Narrows the plan to one Equipment Unit, or to the Equipment Units on one Event's Checklist.
+ * Warnings are per Equipment Unit, so a scoped plan gives exactly that part of the full answer.
+ */
+export type PlanScope = { equipmentUnitId: string } | { eventId: string };
+
 /** The equipment plan for every upcoming, uncancelled Event. Read-only: it never creates Duties. */
-async function loadPlan(db: Db): Promise<{ equipment: PlanEquipment[]; events: PlanEvent[] }> {
+async function loadPlan(db: Db, scope?: PlanScope): Promise<{ equipment: PlanEquipment[]; events: PlanEvent[] }> {
   const events = (await listEvents(db, { when: "upcoming" })).filter((e) => !e.cancelled);
   if (events.length === 0) return { equipment: [], events: [] };
   const [equipment, dutyRows] = await Promise.all([
@@ -603,25 +646,35 @@ async function loadPlan(db: Db): Promise<{ equipment: PlanEquipment[]; events: P
         ),
       ) as Promise<(typeof duty.$inferSelect)[]>,
   ]);
-  const [userIdsByDuty, checklistsByEvent, portions] = await Promise.all([
-    loadUserIdsFor(db, dutyRows.map((r) => r.id)),
-    resolveChecklistsForEvents(db, events),
-    listPortionsFor(db, equipment.map((k) => k.id)),
+  const checklistsByEvent = await resolveChecklistsForEvents(db, events);
+  const itemsOf = (eventId: string) => checklistsByEvent.get(eventId)?.items ?? [];
+  const inScope: Set<string> | undefined = !scope
+    ? undefined
+    : "equipmentUnitId" in scope
+      ? new Set([scope.equipmentUnitId])
+      : new Set(itemsOf(scope.eventId).map((i) => i.equipmentUnitId));
+  const wanted = inScope ? equipment.filter((k) => inScope.has(k.id)) : equipment;
+  const [userIdsByDuty, portions] = await Promise.all([
+    loadUserIdsFor(db, dutyRows.filter((d) => !inScope || inScope.has(d.equipmentUnitId)).map((r) => r.id)),
+    listPortionsFor(db, wanted.map((k) => k.id)),
   ]);
-  const planEvents: PlanEvent[] = events.map((e) => ({
+  const planEvents: PlanEvent[] = events
+    .map((e) => ({
     id: e.id,
     title: e.title,
     start: e.start,
+    startTbc: e.startTbc,
     end: e.end,
-    items: checklistsByEvent.get(e.id)?.items ?? [],
+    items: itemsOf(e.id).filter((i) => !inScope || inScope.has(i.equipmentUnitId)),
     duties: dutyRows
-      .filter((d) => d.eventId === e.id)
+      .filter((d) => d.eventId === e.id && (!inScope || inScope.has(d.equipmentUnitId)))
       .map((d) => ({ equipmentUnitId: d.equipmentUnitId, direction: d.direction, userIds: userIdsByDuty.get(d.id) ?? [] })),
-  }));
+    }))
+    .filter((e) => !inScope || e.items.length > 0);
   const portionsByUnit = new Map<string, typeof portions>();
   for (const p of portions) portionsByUnit.set(p.equipmentUnitId, [...(portionsByUnit.get(p.equipmentUnitId) ?? []), p]);
   return {
-    equipment: equipment.map((k) => ({
+    equipment: wanted.map((k) => ({
       id: k.id,
       name: k.name,
       status: k.status,
@@ -645,8 +698,12 @@ export async function listHeadsUps(db: Db, now: Date = new Date()): Promise<Head
 }
 
 /** Clashes and heads-ups together, from one load of the equipment plan. */
-export async function listPlanWarnings(db: Db, now: Date = new Date()): Promise<{ clashes: Clash[]; headsUps: HeadsUp[] }> {
-  const [plan, people] = await Promise.all([loadPlan(db), listApprovedUsers(db)]);
+export async function listPlanWarnings(
+  db: Db,
+  now: Date = new Date(),
+  scope?: PlanScope,
+): Promise<{ clashes: Clash[]; headsUps: HeadsUp[] }> {
+  const [plan, people] = await Promise.all([loadPlan(db, scope), listKnownUsers(db)]);
   const names = new Map(people.map((p) => [p.id, displayName(p)]));
   return {
     clashes: findClashes(plan),

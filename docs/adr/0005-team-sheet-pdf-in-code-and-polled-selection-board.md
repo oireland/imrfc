@@ -11,7 +11,7 @@ old output, were dropped.
 
 The Selection board is shared by every Committee User picking a match day, so two
 selectors can edit at once. Each Shirt is saved on its own (the last change to a Shirt
-wins) and an open board refreshes every ~5 seconds, flashing a Shirt someone else changed.
+wins) and an open board refreshes every ~10 seconds, flashing a Shirt someone else changed.
 With three or so selectors editing different Shirts, a few seconds' lag is harmless, and
 per-Shirt saves mean they never overwrite each other's work.
 
@@ -31,7 +31,7 @@ per-Shirt saves mean they never overwrite each other's work.
 
 - The on-screen preview and the PDF must read from one layout definition (which fields,
   in what order, which Shirts print) so they can't drift apart.
-- An open board makes a request every ~5 seconds per selector. Stop polling when the tab
+- An open board makes a request every ~10 seconds per selector, which loads the board once and shares it. Stop polling when the tab
   is hidden.
 - If selection ever needs many simultaneous editors, swap polling for a realtime channel
   behind the same per-Shirt save; the data model doesn't change.

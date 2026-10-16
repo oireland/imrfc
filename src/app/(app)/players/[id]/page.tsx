@@ -15,9 +15,9 @@ import { getMobileNumber, setMobileNumber, whatsappLink } from "@/features/conta
 import { listInjuries, STATUS_LABEL, worstFitness, type OpenStatus } from "@/features/injuries";
 import { getPlayer, listAway, londonToday, setPlayerPositions, setPlaying } from "@/features/players";
 import { formatWhen } from "@/lib/format-time";
-import { isCommitteeOrAbove, type RugbyPosition } from "@/features/users";
+import type { RugbyPosition } from "@/features/users";
 import { buttonVariants } from "@/components/ui/button";
-import { getCurrentUser } from "@/lib/session";
+import { requireCommittee } from "@/lib/session";
 import { addAwayAction, editAwayAction, imBackAction, removeAwayAction } from "../../away-actions";
 import { awayItems } from "../../away-items";
 import { recentEventOptions } from "../../injury-events";
@@ -25,8 +25,7 @@ import { clearInjuryAction, logByMistakeAction, reportInjuryAction, updateInjury
 import { injuryItems } from "../../injury-items";
 
 export default async function PlayerPage({ params }: PageProps<"/players/[id]">) {
-  const user = await getCurrentUser();
-  if (!user || !isCommitteeOrAbove(user.role)) redirect("/");
+  const user = await requireCommittee();
 
   const { id } = await params;
   const today = londonToday();
@@ -46,17 +45,18 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
 
   async function savePositions(preferred: RugbyPosition, other: RugbyPosition[]) {
     "use server";
-    const current = await getCurrentUser();
-    if (!current || !isCommitteeOrAbove(current.role)) redirect("/");
-    await setPlayerPositions(db, id, preferred, other);
-    revalidatePath(`/players/${id}`);
-    revalidatePath("/players");
+    await requireCommittee();
+    const result = await setPlayerPositions(db, id, preferred, other);
+    if (result.ok) {
+      revalidatePath(`/players/${id}`);
+      revalidatePath("/players");
+    }
+    return result;
   }
 
   async function saveMobileNumber(input: string) {
     "use server";
-    const current = await getCurrentUser();
-    if (!current || !isCommitteeOrAbove(current.role)) redirect("/");
+    const current = await requireCommittee();
     const result = await setMobileNumber(db, current, id, input);
     if (result.ok) revalidatePath(`/players/${id}`);
     return result;
@@ -64,8 +64,7 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
 
   async function togglePlaying(formData: FormData) {
     "use server";
-    const current = await getCurrentUser();
-    if (!current || !isCommitteeOrAbove(current.role)) redirect("/");
+    await requireCommittee();
     await setPlaying(db, id, formData.get("playing") === "true");
     revalidatePath(`/players/${id}`);
     revalidatePath("/players");
