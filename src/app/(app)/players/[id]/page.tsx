@@ -46,9 +46,12 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
   async function savePositions(preferred: RugbyPosition, other: RugbyPosition[]) {
     "use server";
     await requireCommittee();
-    await setPlayerPositions(db, id, preferred, other);
-    revalidatePath(`/players/${id}`);
-    revalidatePath("/players");
+    const result = await setPlayerPositions(db, id, preferred, other);
+    if (result.ok) {
+      revalidatePath(`/players/${id}`);
+      revalidatePath("/players");
+    }
+    return result;
   }
 
   async function saveMobileNumber(input: string) {

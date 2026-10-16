@@ -69,8 +69,9 @@ export default async function ProfilePage() {
   async function savePositions(preferred: RugbyPosition, other: RugbyPosition[]) {
     "use server";
     const current = await requireApprovedUser();
-    await setPlayerPositions(db, current.id, preferred, other);
-    revalidatePath("/profile");
+    const result = await setPlayerPositions(db, current.id, preferred, other);
+    if (result.ok) revalidatePath("/profile");
+    return result;
   }
 
   async function togglePlaying(formData: FormData) {
