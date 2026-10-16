@@ -49,7 +49,7 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
 
   const [found, stores, portions, log, warnings, people] = await Promise.all([
     getEquipmentUnit(db, id),
-    listStores(db),
+    listStores(db, { includeArchived: true }),
     getPortions(db, id),
     listMovementLog(db, id),
     listPlanWarnings(db),
@@ -213,7 +213,7 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
           </label>
           <div className="flex gap-2">
             <NativeSelect id={`put-in-store-${portion.id}`} name="storeId" className="flex-1" defaultValue={unit.homeId}>
-              {stores.map((s: Store) => (
+              {stores.filter((s: Store) => !s.archived).map((s: Store) => (
                 <NativeSelectOption key={s.id} value={s.id}>
                   {s.name}
                 </NativeSelectOption>

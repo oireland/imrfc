@@ -1,7 +1,9 @@
 import { BackLink } from "@/components/back-link";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { db } from "@/db/client";
-import { archiveStore, createStore, listStores, type Store } from "@/features/stores";
+import { createStore, listStores, type Store } from "@/features/stores";
+import { archiveStoreIfUnused } from "@/features/equipment";
 import { requireCommittee } from "@/lib/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,7 +25,8 @@ export default async function StoresPage() {
   async function archive(formData: FormData) {
     "use server";
     await requireCommittee();
-    await archiveStore(db, String(formData.get("storeId")));
+    const result = await archiveStoreIfUnused(db, String(formData.get("storeId")));
+    if (!result.ok) redirect(`/stores?error=${result.error}`);
     revalidatePath("/stores");
   }
 

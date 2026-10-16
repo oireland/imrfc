@@ -6,6 +6,8 @@ const ERRORS: Record<string, string> = {
   "invalid-role": "That isn't a Role.",
   "last-admin": "You're the only Admin, so you can't give up the role.",
   "block-self": "You can't block yourself.",
+  "store-is-home": "That store is some equipment's home. Move it to another home first.",
+  "store-not-empty": "There's still equipment in that store. Move it out first.",
 };
 
 const GENERIC_ERROR = "Something went wrong. Please try again.";

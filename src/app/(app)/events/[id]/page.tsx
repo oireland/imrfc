@@ -32,6 +32,7 @@ import { describeWhereabouts, listEquipmentUnits, listPortionsFor, type Equipmen
 import {
   actOnDuty,
   deleteDutiesForEvent,
+  sourceValue,
   dropDutiesFor,
   dutyActions,
   voidDutiesForEvent,
@@ -109,8 +110,10 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     "use server";
     const current = await requireApprovedUser();
     if (!isCommitteeOrAbove(current.role)) return;
-    await cancelEvent(db, id);
-    await voidDutiesForEvent(db, id);
+    await db.transaction(async (tx) => {
+      await cancelEvent(tx, id);
+      await voidDutiesForEvent(tx, id);
+    });
     revalidatePath(`/events/${id}`);
   }
 
@@ -118,11 +121,13 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     "use server";
     const current = await requireApprovedUser();
     if (!canDeleteEvent(current.role)) return;
-    await deleteDutiesForEvent(db, id);
-    await deleteSelectionForEvent(db, id);
-    await deleteAvailabilityForEvent(db, id);
-    await clearChecklist(db, { scope: "event", scopeId: id });
-    await deleteEvent(db, id);
+    await db.transaction(async (tx) => {
+      await deleteDutiesForEvent(tx, id);
+      await deleteSelectionForEvent(tx, id);
+      await deleteAvailabilityForEvent(tx, id);
+      await clearChecklist(tx, { scope: "event", scopeId: id });
+      await deleteEvent(tx, id);
+    });
     revalidatePath("/events");
     redirect("/events");
   }
@@ -248,12 +253,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
       const needsSource = d.direction === "to" && needsSourceChoice(equipmentPortions, { dutyUserIds: d.userIds, count });
       const sourceOptions: SourceOption[] = needsSource
         ? gatherConfirmSources(equipmentPortions, { dutyUserIds: d.userIds, homeStoreId: homeId ?? "", count }).sources.map((s) => ({
-            value:
-              s.place.type === "store"
-                ? `store:${s.place.storeId}`
-                : s.place.type === "holder"
-                  ? `holder:${s.place.holderId}`
-                  : `store:${homeId}`,
+            value: sourceValue(s.place),
             label:
               s.place.type === "store"
                 ? storeName(s.place.storeId)

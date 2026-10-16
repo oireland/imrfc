@@ -1,8 +1,8 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import {
-  deleteEquipmentUnit,
   listEquipmentUnits,
+  retireEquipmentUnit,
   setConditionNote,
   setEquipmentStatus,
   type EquipmentStatus,
@@ -58,10 +58,10 @@ export default async function EquipmentUnitsPage() {
     revalidatePath("/admin/equipment");
   }
 
-  async function remove(formData: FormData) {
+  async function retire(formData: FormData) {
     "use server";
     await requireCommittee();
-    await deleteEquipmentUnit(db, String(formData.get("equipmentUnitId")));
+    await retireEquipmentUnit(db, String(formData.get("equipmentUnitId")));
     revalidatePath("/admin/equipment");
   }
 
@@ -117,20 +117,22 @@ export default async function EquipmentUnitsPage() {
                   Save
                 </SubmitButton>
               </form>
-              <div className="flex justify-end">
-                <form id={`delete-${k.id}`} action={remove}>
-                  <input type="hidden" name="equipmentUnitId" value={k.id} />
-                </form>
-                <ConfirmSubmit
-                  formId={`delete-${k.id}`}
-                  triggerLabel="Delete"
-                  triggerSize="sm"
-                  triggerVariant="ghost"
-                  title={`Delete ${k.name}?`}
-                  description="This removes it for good, not just Retired — use this only for a mistake, e.g. a typo or a duplicate."
-                  confirmLabel="Delete"
-                />
-              </div>
+              {k.status !== "retired" && (
+                <div className="flex justify-end">
+                  <form id={`retire-${k.id}`} action={retire}>
+                    <input type="hidden" name="equipmentUnitId" value={k.id} />
+                  </form>
+                  <ConfirmSubmit
+                    formId={`retire-${k.id}`}
+                    triggerLabel="Retire"
+                    triggerSize="sm"
+                    triggerVariant="ghost"
+                    title={`Retire ${k.name}?`}
+                    description="It leaves circulation and can't go on a list. Its history is kept, and you can make it Active again from the status above."
+                    confirmLabel="Retire"
+                  />
+                </div>
+              )}
             </div>
           ))}
         </div>

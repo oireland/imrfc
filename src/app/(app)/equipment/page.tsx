@@ -30,7 +30,7 @@ export default async function EquipmentViewPage() {
   await markUnconfirmed(db);
   const [allUnits, stores, people] = await Promise.all([
     listEquipmentUnits(db, { includeRetired: true }),
-    listStores(db),
+    listStores(db, { includeArchived: true }),
     listKnownUsers(db),
   ]);
   const personById = new Map(people.map((p) => [p.id, p]));
@@ -171,7 +171,7 @@ export default async function EquipmentViewPage() {
         </section>
       )}
 
-      {isCommitteeOrAbove(user.role) && <AddEquipmentButton stores={stores.map((s: Store) => ({ id: s.id, name: s.name }))} action={addEquipmentUnit} />}
+      {isCommitteeOrAbove(user.role) && <AddEquipmentButton stores={stores.filter((s: Store) => !s.archived).map((s: Store) => ({ id: s.id, name: s.name }))} action={addEquipmentUnit} />}
     </div>
   );
 }

@@ -1,5 +1,6 @@
-import { and, desc, eq, inArray, ne } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import { equipmentPortion, equipmentUnit, movementLogEntry } from "./schema";
+import { archiveStore } from "@/features/stores";
 import { validateEquipmentUnit, type NewEquipmentUnit } from "./rules";
 import {
   lowerQuantity as lowerQuantityRule,
@@ -29,6 +30,18 @@ export type EquipmentStatus = EquipmentUnit["status"];
 export type MovementLogEntry = typeof movementLogEntry.$inferSelect;
 export type MoveTarget = { type: "store"; storeId: string } | { type: "holder"; holderId: string };
 export type MoveSource = Place;
+
+/**
+ * Runs `fn` in a transaction holding a row lock on the Equipment Unit, so two people changing
+ * where it is (or its Quantity) at once take turns instead of overwriting each other's Portions.
+ * Re-entrant: inside an outer transaction the lock is simply taken again.
+ */
+async function withUnitLock<T>(db: Db, equipmentUnitId: string, fn: (tx: Db) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx: Db) => {
+    await tx.execute(sql`select id from equipment_unit where id = ${equipmentUnitId} for update`);
+    return fn(tx);
+  });
+}
 
 async function loadPortions(db: Db, equipmentUnitId: string): Promise<Portion[]> {
   return db.select().from(equipmentPortion).where(eq(equipmentPortion.equipmentUnitId, equipmentUnitId));
@@ -67,21 +80,24 @@ export async function createEquipmentUnit(
   if (!result.ok) return result;
 
   const quantity = input.quantity ?? 1;
-  const [row] = await db
-    .insert(equipmentUnit)
-    .values({
+  const row: EquipmentUnit = await db.transaction(async (tx: Db) => {
+    const [created] = await tx
+      .insert(equipmentUnit)
+      .values({
+        id: crypto.randomUUID(),
+        name: input.name,
+        homeId: input.homeId,
+        quantity,
+      })
+      .returning();
+    await tx.insert(equipmentPortion).values({
       id: crypto.randomUUID(),
-      name: input.name,
-      homeId: input.homeId,
-      quantity,
-    })
-    .returning();
-  await db.insert(equipmentPortion).values({
-    id: crypto.randomUUID(),
-    equipmentUnitId: row.id,
-    count: quantity,
-    whereaboutsType: "store",
-    storeId: input.homeId,
+      equipmentUnitId: created.id,
+      count: quantity,
+      whereaboutsType: "store",
+      storeId: input.homeId,
+    });
+    return created;
   });
   return { ok: true, equipmentUnit: row };
 }
@@ -90,11 +106,40 @@ export async function setEquipmentStatus(db: Db, id: string, status: EquipmentSt
   await db.update(equipmentUnit).set({ status }).where(eq(equipmentUnit.id, id));
 }
 
-/** Hard-deletes an Equipment Unit added by mistake, along with its Portions and Movement Log. */
-export async function deleteEquipmentUnit(db: Db, id: string) {
-  await db.delete(movementLogEntry).where(eq(movementLogEntry.equipmentUnitId, id));
-  await db.delete(equipmentPortion).where(eq(equipmentPortion.equipmentUnitId, id));
-  await db.delete(equipmentUnit).where(eq(equipmentUnit.id, id));
+/**
+ * Takes an Equipment Unit out of circulation (Retired), e.g. one added by mistake. Equipment Units
+ * are never deleted: its Portions, Movement Log and Duties stay, so history still reads.
+ */
+export async function retireEquipmentUnit(db: Db, id: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const retired: { id: string }[] = await db
+    .update(equipmentUnit)
+    .set({ status: "retired" })
+    .where(eq(equipmentUnit.id, id))
+    .returning({ id: equipmentUnit.id });
+  if (retired.length === 0) return { ok: false, error: "That equipment no longer exists." };
+  return { ok: true };
+}
+
+/**
+ * Archives a Store unless it is still in use: some in-circulation Equipment Unit has it as its Home
+ * or has a Portion there. (It lives here because Equipment already depends on Stores, not the reverse.)
+ */
+export async function archiveStoreIfUnused(db: Db, storeId: string): Promise<{ ok: true } | { ok: false; error: "store-is-home" | "store-not-empty" }> {
+  const [homed] = await db
+    .select({ id: equipmentUnit.id })
+    .from(equipmentUnit)
+    .where(and(eq(equipmentUnit.homeId, storeId), ne(equipmentUnit.status, "retired")))
+    .limit(1);
+  if (homed) return { ok: false, error: "store-is-home" };
+  const [holding] = await db
+    .select({ id: equipmentPortion.id })
+    .from(equipmentPortion)
+    .innerJoin(equipmentUnit, eq(equipmentUnit.id, equipmentPortion.equipmentUnitId))
+    .where(and(eq(equipmentPortion.storeId, storeId), ne(equipmentUnit.status, "retired")))
+    .limit(1);
+  if (holding) return { ok: false, error: "store-not-empty" };
+  await archiveStore(db, storeId);
+  return { ok: true };
 }
 
 export async function setConditionNote(
@@ -141,6 +186,20 @@ export async function recordMove(
   userId: string,
   target: MoveTarget,
   reason: "ad_hoc" | "duty" = "ad_hoc",
+  options?: { count?: number; from?: Place },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (options?.count !== undefined && (!Number.isInteger(options.count) || options.count < 1)) {
+    return { ok: false, error: "Enter how many to move." };
+  }
+  return withUnitLock(db, equipmentUnitId, (tx) => recordMoveLocked(tx, equipmentUnitId, userId, target, reason, options));
+}
+
+async function recordMoveLocked(
+  db: Db,
+  equipmentUnitId: string,
+  userId: string,
+  target: MoveTarget,
+  reason: "ad_hoc" | "duty",
   options?: { count?: number; from?: Place },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const portions = await loadPortions(db, equipmentUnitId);
@@ -214,6 +273,16 @@ export async function recordSplitMove(
   equipmentUnitId: string,
   userId: string,
   reason: "ad_hoc" | "duty",
+  moves: { sources: { from: Place; count: number }[]; targets: { to: MoveTarget; count: number }[] },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  return withUnitLock(db, equipmentUnitId, (tx) => recordSplitMoveLocked(tx, equipmentUnitId, userId, reason, moves));
+}
+
+async function recordSplitMoveLocked(
+  db: Db,
+  equipmentUnitId: string,
+  userId: string,
+  reason: "ad_hoc" | "duty",
   { sources, targets }: { sources: { from: Place; count: number }[]; targets: { to: MoveTarget; count: number }[] },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const portions = await loadPortions(db, equipmentUnitId);
@@ -252,12 +321,17 @@ function portionCountAt(portions: Portion[], place: Place): number {
  * whole Quantity, with no `from`) was last seen at the given Event. No Move is recorded.
  */
 export async function setUnconfirmed(db: Db, equipmentUnitId: string, lastSeenEventId: string, from?: Place, count?: number) {
+  return withUnitLock(db, equipmentUnitId, (tx) => setUnconfirmedLocked(tx, equipmentUnitId, lastSeenEventId, from, count));
+}
+
+async function setUnconfirmedLocked(db: Db, equipmentUnitId: string, lastSeenEventId: string, from?: Place, count?: number) {
   const portions = await loadPortions(db, equipmentUnitId);
   const target: Place = { type: "unconfirmed", lastSeenEventId };
   let nextPortions: Portion[];
   if (from) {
     const available = portionCountAt(portions, from);
     const moveCount = count !== undefined ? Math.min(count, available) : available;
+    if (moveCount < 1) return;
     const moved = movePortion(portions, { count: moveCount, from, to: target });
     nextPortions = moved.ok ? moved.portions : portions;
   } else {
@@ -296,6 +370,15 @@ export async function raiseQuantity(
   addCount: number,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!Number.isInteger(addCount) || addCount < 1) return { ok: false, error: "Enter how many were bought." };
+  return withUnitLock(db, equipmentUnitId, (tx) => raiseQuantityLocked(tx, equipmentUnitId, userId, addCount));
+}
+
+async function raiseQuantityLocked(
+  db: Db,
+  equipmentUnitId: string,
+  userId: string,
+  addCount: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const [unit, portions] = await Promise.all([getEquipmentUnit(db, equipmentUnitId), loadPortions(db, equipmentUnitId)]);
   if (!unit) return { ok: false, error: "That equipment no longer exists." };
 
@@ -325,6 +408,16 @@ export async function lowerQuantity(
   from?: Place,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!Number.isInteger(removeCount) || removeCount < 1) return { ok: false, error: "Enter how many were lost." };
+  return withUnitLock(db, equipmentUnitId, (tx) => lowerQuantityLocked(tx, equipmentUnitId, userId, removeCount, from));
+}
+
+async function lowerQuantityLocked(
+  db: Db,
+  equipmentUnitId: string,
+  userId: string,
+  removeCount: number,
+  from?: Place,
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const [unit, portions] = await Promise.all([getEquipmentUnit(db, equipmentUnitId), loadPortions(db, equipmentUnitId)]);
   if (!unit) return { ok: false, error: "That equipment no longer exists." };
 
@@ -359,6 +452,16 @@ export async function setQuantity(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!Number.isInteger(quantity)) return { ok: false, error: "Enter how many there are now." };
   if (quantity < 1) return { ok: false, error: "Can't lower an equipment unit's quantity below 1." };
+  return withUnitLock(db, equipmentUnitId, (tx) => setQuantityLocked(tx, equipmentUnitId, userId, quantity, from));
+}
+
+async function setQuantityLocked(
+  db: Db,
+  equipmentUnitId: string,
+  userId: string,
+  quantity: number,
+  from?: Place,
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const unit = await getEquipmentUnit(db, equipmentUnitId);
   if (!unit) return { ok: false, error: "That equipment no longer exists." };
 
@@ -388,4 +491,20 @@ export async function listEquipmentHeldBy(db: Db, userId: string): Promise<(Equi
     .where(and(inArray(equipmentUnit.id, held.map((p) => p.equipmentUnitId)), ne(equipmentUnit.status, "retired")));
   const countByUnit = new Map(held.map((p) => [p.equipmentUnitId, p.count]));
   return units.map((u) => ({ ...u, count: countByUnit.get(u.id) ?? 0 }));
+}
+
+/** Whether anyone has recorded a Move of this Equipment Unit after the given moment. */
+export async function hasMoveSince(db: Db, equipmentUnitId: string, since: Date): Promise<boolean> {
+  const rows: { id: string }[] = await db
+    .select({ id: movementLogEntry.id })
+    .from(movementLogEntry)
+    .where(
+      and(
+        eq(movementLogEntry.equipmentUnitId, equipmentUnitId),
+        eq(movementLogEntry.kind, "move"),
+        gt(movementLogEntry.createdAt, since),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
 }

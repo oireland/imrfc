@@ -1,4 +1,4 @@
-import { and, count, eq, ne } from "drizzle-orm";
+import { and, count, eq, inArray, ne } from "drizzle-orm";
 import type { Role } from "./access";
 import type { RugbyPosition } from "./positions";
 import { account, session, user } from "./schema";
@@ -39,6 +39,16 @@ export async function listApprovedUsers(db: Db): Promise<PendingUser[]> {
  */
 export async function listKnownUsers(db: Db): Promise<PendingUser[]> {
   return db.select().from(user).where(ne(user.accessState, "pending"));
+}
+
+/** Which of these ids belong to Approved Users (unknown, pending, blocked and deleted ones are left out). */
+export async function filterApprovedUserIds(db: Db, ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const rows: { id: string }[] = await db
+    .select({ id: user.id })
+    .from(user)
+    .where(and(inArray(user.id, ids), eq(user.accessState, "approved")));
+  return new Set(rows.map((r) => r.id));
 }
 
 export async function approveUser(db: Db, userId: string) {
