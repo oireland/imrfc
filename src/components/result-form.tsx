@@ -1,14 +1,21 @@
 "use client";
 
-import { useTransition } from "react";
+import { createContext, useContext, useTransition } from "react";
 import { toast } from "sonner";
 
 type Result = { ok: true } | { ok: false; error: string };
 
+const ResultFormPending = createContext(false);
+
+/** Whether the enclosing ResultForm is waiting on its action. */
+export function useResultFormPending() {
+  return useContext(ResultFormPending);
+}
+
 /**
  * A form whose server action answers `{ ok, error }`. A failure shows the error as a toast and
- * leaves what was typed in place; a success resets the form. `children` is a render function so
- * the submit button can see the pending state.
+ * leaves what was typed in place; a success resets the form. A SubmitButton inside it shows the
+ * pending state through context, so server pages can render it with plain children.
  */
 export function ResultForm({
   action,
@@ -22,7 +29,7 @@ export function ResultForm({
   /** Clear the fields after a success (right for "add" forms, wrong for ones that edit a value in place). */
   resetOnSuccess?: boolean;
   className?: string;
-  children: (pending: boolean) => React.ReactNode;
+  children: React.ReactNode;
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -44,7 +51,7 @@ export function ResultForm({
         });
       }}
     >
-      {children(pending)}
+      <ResultFormPending value={pending}>{children}</ResultFormPending>
     </form>
   );
 }
