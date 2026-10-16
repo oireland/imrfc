@@ -29,14 +29,17 @@ import { injuryItems } from "../injury-items";
 
 export default async function ProfilePage() {
   const user = await requireApprovedUser();
-  const notificationsOn = await isSubscribed(db, user.id);
-  const mobileNumber = await getMobileNumber(db, user, user.id);
-  const token = await getFeedToken(db, user.id);
   const today = londonToday();
-  const away = awayItems(await listAway(db, user, user.id, today), user.id);
-  const injuries = await listInjuries(db, user, user.id, today);
-  const eventOptions = await recentEventOptions();
-  const host = (await headers()).get("host");
+  const [mobileNumber, token, awayPeriods, injuries, eventOptions, requestHeaders] = await Promise.all([
+    getMobileNumber(db, user, user.id),
+    getFeedToken(db, user.id),
+    listAway(db, user, user.id, today),
+    listInjuries(db, user, user.id, today),
+    recentEventOptions(),
+    headers(),
+  ]);
+  const away = awayItems(awayPeriods, user.id);
+  const host = requestHeaders.get("host");
   const protocol = host?.startsWith("localhost") ? "http" : "https";
   const feedUrl = `${protocol}://${host}/api/feed/${token}.ics`;
 
@@ -87,6 +90,12 @@ export default async function ProfilePage() {
     "use server";
     const current = await requireApprovedUser();
     await unsubscribe(db, { userId: current.id, endpoint });
+  }
+
+  async function isThisDeviceSubscribed(endpoint: string) {
+    "use server";
+    const current = await requireApprovedUser();
+    return isSubscribed(db, current.id, endpoint);
   }
 
   async function deleteMyAccount() {
@@ -180,10 +189,10 @@ export default async function ProfilePage() {
               you&rsquo;re asked for your availability.
             </p>
             <NotificationToggle
-              initiallySubscribed={notificationsOn}
               vapidPublicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY}
               subscribe={subscribeToPush}
               unsubscribe={unsubscribeFromPush}
+              isThisDeviceSubscribed={isThisDeviceSubscribed}
             />
           </CardContent>
         </Card>
@@ -234,7 +243,7 @@ export default async function ProfilePage() {
         </CardContent>
       </Card>
 
-      <SignOutButton />
+      <SignOutButton unsubscribe={unsubscribeFromPush} />
 
       <Card>
         <CardHeader>

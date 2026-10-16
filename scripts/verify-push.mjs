@@ -5,7 +5,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const BASE = "http://localhost:3000";
-const ADMIN_EMAIL = "irelandoliver4@gmail.com";
+// Usage: ADMIN_EMAIL=you@example.com CRON_SECRET=... node scripts/verify-push.mjs  (or pass the email as the first argument)
+const ADMIN_EMAIL = process.argv[2] ?? process.env.ADMIN_EMAIL;
+if (!ADMIN_EMAIL) {
+  console.error("Pass the Admin email as an argument or set ADMIN_EMAIL.");
+  process.exit(1);
+}
 const DATABASE_URL = "postgres://imrfc:imrfc@localhost:5432/imrfc";
 
 // Push API needs a real (non-incognito) profile, so use a persistent context.
