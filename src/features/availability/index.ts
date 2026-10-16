@@ -105,12 +105,18 @@ export async function listAvailableUserIds(db: Db, eventIds: string[]): Promise<
 }
 
 /**
- * Players not chased for an Event: Away on its date, Out, or Training only for a Match. Away comes
+ * Players not chased for an Event: Away on its date, or Out / Training only (for a Match) on its date,
+ * so an Injury that ends before the Event, or begins after it, is judged accordingly. Away comes
  * first when both apply. A reply still wins (see `summarizeAvailability`).
  */
-async function notChasedOn(db: Db, playerIds: string[], event: { start: Date; eventType: EventType }): Promise<Map<string, NotChased>> {
+async function notChasedOn(
+  db: Db,
+  playerIds: string[],
+  event: { start: Date; eventType: EventType },
+  now: Date,
+): Promise<Map<string, NotChased>> {
   const date = londonParts(event.start).date;
-  const [away, fitness] = await Promise.all([listAwayOn(db, playerIds, date), listFitness(db, date)]);
+  const [away, fitness] = await Promise.all([listAwayOn(db, playerIds, date), listFitness(db, londonParts(now).date, date)]);
   const notChased = new Map<string, NotChased>();
   for (const [id, f] of fitness) {
     if (playerIds.includes(id) && event.eventType !== "social" && notChasedFor(f.fitness, event.eventType)) {
@@ -223,7 +229,7 @@ export async function getAvailability(db: Db, eventId: string, viewer: Viewer, n
     replyBy: announcement?.replyBy ?? null,
     nudges,
     messages,
-    notChased: await notChasedOn(db, [...players.keys()], event),
+    notChased: await notChasedOn(db, [...players.keys()], event, now),
   });
 
   const self = players.get(viewer.id);
@@ -475,7 +481,7 @@ export async function listWaitingOnReply(db: Db, playerId: string, now: Date = n
   const skipped = await Promise.all(
     waiting.map(async (ask) => {
       const event = events.find((e) => e.id === ask.eventId);
-      return !!event && (await notChasedOn(db, [playerId], event)).has(playerId);
+      return !!event && (await notChasedOn(db, [playerId], event, now)).has(playerId);
     }),
   );
   return waiting.filter((_, i) => !skipped[i]);

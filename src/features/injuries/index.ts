@@ -5,6 +5,7 @@ import { injury, injuryChange } from "./schema";
 import type { PhysioNeed } from "./physio-list-rules";
 import {
   checkInFlag,
+  injuryAppliesOn,
   injuryLine,
   isWorse,
   statusAlert,
@@ -18,7 +19,7 @@ import {
   type UpdateInput,
 } from "./rules";
 
-export { BODY_AREAS, OPEN_STATUSES, STATUS_LABEL, notChasedFor, worstFitness } from "./rules";
+export { BODY_AREAS, OPEN_STATUSES, STATUS_LABEL, notChasedFor, worstFitness, injuryAppliesOn } from "./rules";
 export { formatPhysioList } from "./physio-list-rules";
 export type { PhysioNeed } from "./physio-list-rules";
 export type { BodyArea, Fitness, InjuryStatus, OpenStatus, ReportInput, UpdateInput } from "./rules";
@@ -222,8 +223,10 @@ export type PlayerFitness = {
  * Every Player with an open Injury, by user id: Fitness (the worst open Injury), the Players list's line and
  * check-in flag. Players who are Fit have no entry. For Committee screens and the availability feature.
  */
-export async function listFitness(db: Db, today: string): Promise<Map<string, PlayerFitness>> {
-  const rows: Row[] = await db.select().from(injury).where(and(isNull(injury.mistakeAt), isNull(injury.clearedAt)));
+export async function listFitness(db: Db, today: string, onDate: string = today): Promise<Map<string, PlayerFitness>> {
+  const all: Row[] = await db.select().from(injury).where(and(isNull(injury.mistakeAt), isNull(injury.clearedAt)));
+  // Fitness on `onDate`: Injuries that haven't started yet, or that will be over by then, don't count.
+  const rows = all.filter((r) => injuryAppliesOn(r, onDate, today));
   const byUser = Map.groupBy(rows, (r) => r.userId);
   const fitness = new Map<string, PlayerFitness>();
   for (const [userId, injuries] of byUser) {

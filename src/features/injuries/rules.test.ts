@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   checkInFlag,
+  injuryAppliesOn,
   injuryLine,
   isWorse,
   notChasedFor,
@@ -174,5 +175,28 @@ describe("injury length limits", () => {
     expect(validateReport(report({ physioNote: "a".repeat(1001) }), today).ok).toBe(false);
     const update = { status: "playing_through" as const, expectedReturn: "2026-10-20", notSure: false, needsPhysio: false, physioNote: "", note: "a".repeat(1001) };
     expect(validateUpdate(update, today)).toEqual({ ok: false, error: "The note is too long. Keep it to 1000 characters or fewer." });
+  });
+});
+
+describe("injuryAppliesOn", () => {
+  const injury = (over: Partial<{ happenedOn: string; expectedReturn: string | null }> = {}) => ({
+    happenedOn: "2026-09-28",
+    expectedReturn: "2026-10-20",
+    ...over,
+  });
+
+  it("holds a Player back from the day it happened until the day they're due back", () => {
+    expect(injuryAppliesOn(injury(), "2026-09-27", today)).toBe(false);
+    expect(injuryAppliesOn(injury(), "2026-09-28", today)).toBe(true);
+    expect(injuryAppliesOn(injury(), "2026-10-19", today)).toBe(true);
+    expect(injuryAppliesOn(injury(), "2026-10-20", today)).toBe(false);
+  });
+
+  it("holds them back indefinitely with no Expected Return", () => {
+    expect(injuryAppliesOn(injury({ expectedReturn: null }), "2027-01-01", today)).toBe(true);
+  });
+
+  it("ignores an Expected Return that has already passed while the Injury is still open", () => {
+    expect(injuryAppliesOn(injury({ expectedReturn: "2026-10-05" }), "2026-10-30", today)).toBe(true);
   });
 });

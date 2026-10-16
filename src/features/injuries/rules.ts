@@ -149,6 +149,21 @@ export function injuryLine(injuries: { status: OpenStatus; area: BodyArea }[]): 
   return `${STATUS_LABEL[main.status]} · ${main.area.toLowerCase()}${others.length > 0 ? ` (+${others.length})` : ""}`;
 }
 
+/**
+ * Whether an open Injury is still holding a Player back on `date` (London day). It hasn't started
+ * before it happened, and it's over once its Expected Return arrives. An Expected Return that has
+ * already passed while the Injury stays open is stale, so it's ignored until Committee clear it.
+ */
+export function injuryAppliesOn(
+  injury: { happenedOn: string; expectedReturn: string | null },
+  date: string,
+  today: string,
+): boolean {
+  if (injury.happenedOn > date) return false;
+  const due = injury.expectedReturn;
+  return !(due && due > today && due <= date);
+}
+
 /** Whether Fitness means a Player isn't chased for this kind of Event: Out for both, Training only for Matches. */
 export function notChasedFor(fitness: Fitness, eventType: "training" | "match"): boolean {
   return fitness === "out" || (fitness === "training_only" && eventType === "match");

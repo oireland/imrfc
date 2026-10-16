@@ -631,4 +631,54 @@ describe("Not chased (Fitness)", () => {
     expect(summary.available.map((r) => r.name)).toEqual(["Jo King"]);
     expect(summary.notChased).toEqual([]);
   });
+
+  describe("on the Event's date", () => {
+    const injureUntil = async (db: Awaited<ReturnType<typeof setup>>, expectedReturn: string | null, happenedOn = "2026-09-28", reportedOn = "2026-10-01") => {
+      const result = await reportInjury(
+        db,
+        { id: "jo", role: "member" },
+        "jo",
+        { area: "Knee", description: "", happenedOn, eventId: null, status: "out", expectedReturn, notSure: expectedReturn === null, needsPhysio: false, physioNote: "" },
+        reportedOn,
+        now,
+      );
+      if (!result.ok) throw new Error(result.error);
+    };
+    const chasedFor = async (db: Awaited<ReturnType<typeof setup>>, start: string) => {
+      const eventId = await makeEvent(db, { start: new Date(start) });
+      const { summary } = await getAvailability(db, eventId, tom, now);
+      return { chased: summary.noReply.some((r) => r.name === "Jo King"), skipped: summary.notChased.length === 1 };
+    };
+
+    it("chases a Player again for an Event after their Expected Return, but not before it", async () => {
+      const db = await setup();
+      await injureUntil(db, "2026-10-10");
+      expect(await chasedFor(db, "2026-10-08T18:00:00Z")).toEqual({ chased: false, skipped: true });
+      expect(await chasedFor(db, "2026-10-10T18:00:00Z")).toEqual({ chased: true, skipped: false });
+      expect(await chasedFor(db, "2026-10-14T18:00:00Z")).toEqual({ chased: true, skipped: false });
+    });
+
+    it("doesn't count an Injury against an Event dated before it happened", async () => {
+      const db = await setup();
+      await injureUntil(db, null, "2026-09-28");
+      expect(await chasedFor(db, "2026-09-25T18:00:00Z")).toEqual({ chased: true, skipped: false });
+      expect(await chasedFor(db, "2026-10-05T18:00:00Z")).toEqual({ chased: false, skipped: true });
+    });
+
+    it("keeps skipping them when the Expected Return has already passed but the Injury is still open", async () => {
+      const db = await setup();
+      await injureUntil(db, "2026-09-30", "2026-09-20", "2026-09-25");
+      expect(await chasedFor(db, "2026-10-05T18:00:00Z")).toEqual({ chased: false, skipped: true });
+    });
+
+    it("applies to Home's Can you make it? card too", async () => {
+      const db = await setup();
+      await injureUntil(db, "2026-10-10");
+      const soon = await makeEvent(db, { start: new Date("2026-10-08T18:00:00Z") });
+      const later = await makeEvent(db, { start: new Date("2026-10-14T18:00:00Z") });
+      await announce(db, { eventId: soon, viewer: tom, replyBy: null }, now);
+      await announce(db, { eventId: later, viewer: tom, replyBy: null }, now);
+      expect((await listWaitingOnReply(db, "jo", now)).map((w) => w.eventId)).toEqual([later]);
+    });
+  });
 });
