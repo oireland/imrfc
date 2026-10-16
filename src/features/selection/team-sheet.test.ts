@@ -3,7 +3,8 @@ import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { createEvent, listTeams, type NewEvent } from "@/features/events";
 import { user } from "@/features/users";
-import { pickGuest, pickPlayer, swapShirts } from "./index";
+import { getBoard, pickGuest, pickPlayer, swapShirts } from "./index";
+import { getNaming } from "./naming";
 import { getTeamSheet, setRoles } from "./team-sheet";
 
 const now = new Date("2026-10-01T12:00:00Z");
@@ -158,5 +159,18 @@ describe("what's missing", () => {
     expect(missing).toContain("14 empty starting shirts (1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)");
     expect(missing).toContain("Sam Patel hasn't replied");
     expect(missing).toContain("No captain");
+  });
+});
+
+describe("with a board already loaded", () => {
+  it("draws the sheet and naming from the board it is given instead of loading its own", async () => {
+    const db = await setup();
+    const eventId = await makeMatch(db);
+    const board = (await getBoard(db, eventId, tom, now))!;
+    const supplied = { ...board, pitches: board.pitches.map((p) => ({ ...p, label: "From the supplied board" })) };
+
+    expect((await getTeamSheet(db, eventId, tom, now, supplied))!.label).toBe("From the supplied board");
+    expect(await getNaming(db, eventId, tom, now, supplied)).toMatchObject({ canName: true });
+    expect((await getTeamSheet(db, eventId, tom, now))!.label).toBe("1st XV");
   });
 });

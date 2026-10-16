@@ -181,6 +181,20 @@ export async function getEvent(db: Db, id: string): Promise<EventWithDetails | u
   return { ...row, matchDetails: details, teams };
 }
 
+/** Several Events with their match details and Teams, in three queries however many there are. Ids with no Event are left out. */
+export async function getEvents(db: Db, ids: string[]): Promise<EventWithDetails[]> {
+  if (ids.length === 0) return [];
+  const rows: Event[] = await db.select().from(event).where(inArray(event.id, [...new Set(ids)]));
+  const matchIds = rows.filter((r) => r.eventType === "match").map((r) => r.id);
+  const details: MatchDetails[] = matchIds.length ? await db.select().from(matchDetails).where(inArray(matchDetails.eventId, matchIds)) : [];
+  const teamIds = [...new Set(details.map((d) => d.teamId))];
+  const teams: Team[] = teamIds.length ? await db.select().from(team).where(inArray(team.id, teamIds)) : [];
+  return rows.map((row) => {
+    const mine = details.find((d) => d.eventId === row.id) ?? null;
+    return { ...row, matchDetails: mine, teams: mine ? teams.filter((t) => t.id === mine.teamId) : [] };
+  });
+}
+
 /**
  * Edits a standalone Event's every field in place. For an Occurrence, use
  * `editOccurrence` instead, which offers "this one" or "this and future".

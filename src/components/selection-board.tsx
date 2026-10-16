@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useOptimistic, useState, useTransition } from "react";
+import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cn } from "cn";
@@ -27,7 +27,7 @@ type Actions = {
   remove: (eventId: string) => Promise<Result>;
 };
 
-const POLL_MS = 5000;
+const POLL_MS = 10_000;
 const key = (r: Ref) => `${r.eventId}:${r.shirt}`;
 
 /**
@@ -60,10 +60,13 @@ export function SelectionBoard({
   // Shown straight away; it falls back to the real board once the save lands (or fails).
   const [shown, addOptimistic] = useOptimistic(board, applyOptimistic);
 
-  // Everyone's board stays fresh without a realtime service (ADR 0005); idle tabs don't poll.
+  // Everyone's board stays fresh without a realtime service (ADR 0005); idle tabs don't poll,
+  // and neither does a tab mid-save, since the save brings the fresh board back itself.
+  const saving = useRef(false);
+  saving.current = pending;
   useEffect(() => {
     const id = setInterval(() => {
-      if (document.visibilityState === "visible") router.refresh();
+      if (document.visibilityState === "visible" && !saving.current) router.refresh();
     }, POLL_MS);
     return () => clearInterval(id);
   }, [router]);

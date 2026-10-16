@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { getAvailability } from "@/features/availability";
-import { getEvent, listEventsBetween, londonParts, londonToUtc, startsAt, type Event, type EventWithDetails } from "@/features/events";
+import { getEvent, getEvents, listEventsBetween, londonParts, londonToUtc, startsAt, type Event, type EventWithDetails } from "@/features/events";
 import { listPlayers } from "@/features/players";
 import { displayName, listApprovedUsers, type RugbyPosition } from "@/features/users";
 import { DEFAULT_SHIRTS, fitFor, positionOfShirt, type Candidate, type Fit } from "./shirts";
@@ -62,8 +62,7 @@ async function matchDay(db: Db, event: Event): Promise<EventWithDetails[]> {
     sameDay.filter((e) => e.eventType === "match" && londonParts(e.start).date === londonParts(event.start).date).map((e) => e.id),
   );
   day.add(event.id);
-  const withTeams = await Promise.all([...day].map((id) => getEvent(db, id)));
-  return (withTeams.filter(Boolean) as EventWithDetails[]).sort((a, b) => a.start.getTime() - b.start.getTime());
+  return (await getEvents(db, [...day])).sort((a, b) => a.start.getTime() - b.start.getTime());
 }
 
 const isReadOnly = (e: Event, now: Date) => e.cancelled || startsAt(e) <= now;
