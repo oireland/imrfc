@@ -61,7 +61,7 @@ import { deleteAvailabilityForEvent, takesReplies } from "@/features/availabilit
 import { deleteSelectionForEvent, getTeamCard, listPickedPlayerIds } from "@/features/selection";
 import { formatPhysioList, listPhysioNeeds } from "@/features/injuries";
 import { listStores, type Store } from "@/features/stores";
-import { canDeleteEvent, displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
+import { canDeleteEvent, displayName, isCommitteeOrAbove, listKnownUsers } from "@/features/users";
 import { requireApprovedUser } from "@/lib/session";
 
 /** Why the signed-in User can't change this Event's list, or null if they can: Committee only, and not once it's Cancelled. */
@@ -88,7 +88,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
   const [eventDetails, equipmentUnits, people, stores, warnings, venues, allTeams, teamCard] = await Promise.all([
     getEvent(db, id),
     listEquipmentUnits(db),
-    listApprovedUsers(db),
+    listKnownUsers(db),
     listStores(db),
     listPlanWarnings(db),
     committee ? listVenues(db) : [],

@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { askStatus, type AskStatus } from "@/features/availability";
 import { getEvent, londonParts } from "@/features/events";
-import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
+import { displayName, isCommitteeOrAbove, listApprovedUsers, listKnownUsers } from "@/features/users";
 import { emailLayout } from "@/lib/email-layout";
 import { formatDay } from "@/lib/format-time";
 import type { MailSender } from "@/lib/mail";
@@ -43,7 +43,7 @@ const boardSlots = async (db: Db, eventId: string): Promise<Slot[]> => (await db
 const sentSlots = async (db: Db, eventId: string): Promise<Slot[]> => (await db.select().from(selectionSent).where(eq(selectionSent.eventId, eventId))).map(asSlot);
 
 async function namesById(db: Db) {
-  const people = await listApprovedUsers(db);
+  const people = await listKnownUsers(db);
   return { people, names: new Map<string, string>(people.map((u: Parameters<typeof displayName>[0] & { id: string }) => [u.id, displayName(u)])) };
 }
 
@@ -115,7 +115,7 @@ export async function getNaming(db: Db, eventId: string, viewer: Viewer, now: Da
 
 async function reachable(db: Db, recipients: NoticeRecipient[]): Promise<NoticeRecipient[]> {
   const people = await listApprovedUsers(db);
-  const approved = new Set(people.filter((p: { accessState: string }) => p.accessState === "approved").map((p: { id: string }) => p.id));
+  const approved = new Set(people.map((p: { id: string }) => p.id));
   return recipients.filter((r) => approved.has(r.userId));
 }
 

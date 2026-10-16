@@ -19,7 +19,7 @@ import {
 } from "@/features/equipment";
 import { markUnconfirmed } from "@/features/duties";
 import { listEventTitles } from "@/features/events";
-import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
+import { displayName, isCommitteeOrAbove, listKnownUsers } from "@/features/users";
 import { listStores, type Store } from "@/features/stores";
 import { requireApprovedUser } from "@/lib/session";
 import { addEquipmentUnit } from "./actions";
@@ -31,7 +31,7 @@ export default async function EquipmentViewPage() {
   const [allUnits, stores, people] = await Promise.all([
     listEquipmentUnits(db, { includeRetired: true }),
     listStores(db),
-    listApprovedUsers(db),
+    listKnownUsers(db),
   ]);
   const personById = new Map(people.map((p) => [p.id, p]));
   const activeUnits = allUnits.filter((u: EquipmentUnit) => u.status === "active");

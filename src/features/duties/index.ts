@@ -11,7 +11,7 @@ import {
   recordSplitMove,
   setUnconfirmed,
 } from "@/features/equipment";
-import { displayName, isCommitteeOrAbove, listApprovedUsers, type Role } from "@/features/users";
+import { displayName, isCommitteeOrAbove, listKnownUsers, type Role } from "@/features/users";
 import { findClashes, type Clash } from "./clashes-rules";
 import { gatherConfirmSources, gatherFromDutyUsers, validateHolderSplit, type HolderPart, type SourcePart } from "./confirm-source-rules";
 import { dutyActions, type DutyAction } from "./duty-actions-rules";
@@ -646,7 +646,7 @@ export async function listHeadsUps(db: Db, now: Date = new Date()): Promise<Head
 
 /** Clashes and heads-ups together, from one load of the equipment plan. */
 export async function listPlanWarnings(db: Db, now: Date = new Date()): Promise<{ clashes: Clash[]; headsUps: HeadsUp[] }> {
-  const [plan, people] = await Promise.all([loadPlan(db), listApprovedUsers(db)]);
+  const [plan, people] = await Promise.all([loadPlan(db), listKnownUsers(db)]);
   const names = new Map(people.map((p) => [p.id, displayName(p)]));
   return {
     clashes: findClashes(plan),

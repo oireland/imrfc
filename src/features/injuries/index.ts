@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNull, ne } from "drizzle-orm";
-import { displayName, isCommitteeOrAbove, listApprovedUsers, type Role } from "@/features/users";
+import { displayName, isCommitteeOrAbove, listKnownUsers, type Role } from "@/features/users";
 import { injury, injuryChange } from "./schema";
 import type { PhysioNeed } from "./physio-list-rules";
 import {
@@ -40,7 +40,7 @@ async function findOpen(db: Db, id: string): Promise<Row | undefined> {
 }
 
 async function alertFor(db: Db, row: Row, actorId: string, status: OpenStatus): Promise<InjuryAlert> {
-  const people = await listApprovedUsers(db);
+  const people = await listKnownUsers(db);
   const player = people.find((p) => p.id === row.userId);
   return {
     userIds: people
@@ -178,9 +178,9 @@ export async function listInjuries(db: Db, viewer: Actor, userId: string, today:
   if (!mayManage(viewer, userId)) return { open: [], history: [] };
   const rows: Row[] = await db.select().from(injury).where(and(eq(injury.userId, userId), isNull(injury.mistakeAt)));
   if (rows.length === 0) return { open: [], history: [] };
-  const [changes, people]: [(typeof injuryChange.$inferSelect)[], Awaited<ReturnType<typeof listApprovedUsers>>] = await Promise.all([
+  const [changes, people]: [(typeof injuryChange.$inferSelect)[], Awaited<ReturnType<typeof listKnownUsers>>] = await Promise.all([
     db.select().from(injuryChange).where(inArray(injuryChange.injuryId, rows.map((r) => r.id))),
-    listApprovedUsers(db),
+    listKnownUsers(db),
   ]);
   const names = new Map(people.map((p) => [p.id, displayName(p)]));
   const views = rows.map<InjuryView>((r) => ({
@@ -265,7 +265,7 @@ export async function listPhysioNeeds(db: Db, userIds?: string[]): Promise<Physi
       ),
     );
   if (rows.length === 0) return [];
-  const people = await listApprovedUsers(db);
+  const people = await listKnownUsers(db);
   const names = new Map(people.map((p) => [p.id, displayName(p)]));
   return rows.map((r) => ({ name: names.get(r.userId) ?? "Someone", area: r.area, physioNote: r.physioNote }));
 }

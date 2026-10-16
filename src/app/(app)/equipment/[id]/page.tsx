@@ -23,7 +23,7 @@ import {
   type Portion,
 } from "@/features/equipment";
 import { listEventTitles } from "@/features/events";
-import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
+import { displayName, isCommitteeOrAbove, listApprovedUsers, listKnownUsers } from "@/features/users";
 import { listStores, type Store } from "@/features/stores";
 import { requireApprovedUser } from "@/lib/session";
 
@@ -53,7 +53,7 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
     getPortions(db, id),
     listMovementLog(db, id),
     listPlanWarnings(db),
-    listApprovedUsers(db),
+    listKnownUsers(db),
   ]);
   if (!found) notFound();
   const unit = found;
@@ -117,7 +117,7 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
     const holderId = String(formData.get("holderId"));
     const from = parsePlace(String(formData.get("from")));
     const count = Number(formData.get("count"));
-    const recipient = (await listApprovedUsers(db)).find((p) => p.id === holderId && p.accessState === "approved");
+    const recipient = (await listApprovedUsers(db)).find((p) => p.id === holderId);
     if (!recipient || !count) return;
     await recordMove(db, id, userId, { type: "holder", holderId }, "ad_hoc", { count, from });
     revalidatePath(`/equipment/${id}`);

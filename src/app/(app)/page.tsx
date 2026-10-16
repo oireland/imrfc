@@ -13,7 +13,7 @@ import { listEquipmentHeldBy, listEquipmentUnits } from "@/features/equipment";
 import { listInjuries } from "@/features/injuries";
 import { formatDay, listAway, londonToday } from "@/features/players";
 import { listPlayingFor } from "@/features/selection";
-import { displayName, isCommitteeOrAbove, listApprovedUsers } from "@/features/users";
+import { displayName, isCommitteeOrAbove, listKnownUsers } from "@/features/users";
 import { greeting, londonDay, londonTime } from "@/lib/calendar";
 import { requireApprovedUser } from "@/lib/session";
 import { cn } from "cn";
@@ -48,7 +48,7 @@ export default async function Home() {
     listEquipmentHeldBy(db, user.id),
     loadComingUp(user.id, upcomingDuties),
     listEquipmentUnits(db, { includeRetired: true }),
-    listApprovedUsers(db),
+    listKnownUsers(db),
     listAway(db, user, user.id, londonToday()),
     listInjuries(db, user, user.id, londonToday()),
   ]);
