@@ -63,7 +63,9 @@ export function SelectionBoard({
   // Everyone's board stays fresh without a realtime service (ADR 0005); idle tabs don't poll,
   // and neither does a tab mid-save, since the save brings the fresh board back itself.
   const saving = useRef(false);
-  saving.current = pending;
+  useEffect(() => {
+    saving.current = pending;
+  }, [pending]);
   useEffect(() => {
     const id = setInterval(() => {
       if (document.visibilityState === "visible" && !saving.current) router.refresh();
