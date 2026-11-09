@@ -11,8 +11,6 @@ export type Clash = {
   message: string;
 };
 
-const overlaps = (a: PlanEvent, b: PlanEvent) => a.start.getTime() < b.end.getTime() && b.start.getTime() < a.end.getTime();
-
 function joinTitles(titles: string[]): string {
   if (titles.length <= 2) return titles.join(" and ");
   return `${titles.slice(0, -1).join(", ")} and ${titles[titles.length - 1]}`;
@@ -69,10 +67,13 @@ export function findClashes({ equipment, events }: { equipment: PlanEquipment[];
     }
     flushOnNow();
 
-    // Back-to-back: adjacent pairs only, as today — only when the first's From Duty is unfilled.
-    for (let i = 0; i + 1 < needing.length; i++) {
-      const [a, b] = [needing[i], needing[i + 1]];
-      if (overlaps(a, b)) continue; // already covered above
+    // Back-to-back: each Event against the one that finished last before it started, which
+    // needn't be its neighbour by start time. Only when that one's From Duty is unfilled.
+    for (const b of needing) {
+      const a = needing
+        .filter((other) => other.end.getTime() <= b.start.getTime())
+        .reduce<PlanEvent | undefined>((latest, other) => (!latest || other.end > latest.end ? other : latest), undefined);
+      if (!a) continue;
       const gap = b.start.getTime() - a.end.getTime();
       if (gap >= BACK_TO_BACK_GAP || dutyUsers(a, unit.id, "from").length > 0) continue;
       const total = itemCount(a, unit.id) + itemCount(b, unit.id);
