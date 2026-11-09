@@ -151,6 +151,71 @@ describe("findClashes", () => {
       ]);
     });
 
+    it("is fine when a chain of overlapping Events never needs more than the Quantity at once", () => {
+      const a = event({
+        id: "a",
+        title: "A",
+        start: at("2026-10-20T09:00:00Z"),
+        end: at("2026-10-20T10:00:00Z"),
+        items: [{ equipmentUnitId: "shields", count: 5 }],
+      });
+      const b = event({
+        id: "b",
+        title: "B",
+        start: at("2026-10-20T09:30:00Z"),
+        end: at("2026-10-20T12:00:00Z"),
+        items: [{ equipmentUnitId: "shields", count: 1 }],
+      });
+      const c = event({
+        id: "c",
+        title: "C",
+        start: at("2026-10-20T11:00:00Z"),
+        end: at("2026-10-20T12:00:00Z"),
+        items: [{ equipmentUnitId: "shields", count: 5 }],
+      });
+
+      expect(findClashes({ equipment: [shields], events: [a, b, c] })).toEqual([]);
+    });
+
+    it("names only the Events on at the same moment when a chain goes over the Quantity twice", () => {
+      const a = event({
+        id: "a",
+        title: "A",
+        start: at("2026-10-20T09:00:00Z"),
+        end: at("2026-10-20T10:00:00Z"),
+        items: [{ equipmentUnitId: "shields", count: 5 }],
+      });
+      const b = event({
+        id: "b",
+        title: "B",
+        start: at("2026-10-20T09:30:00Z"),
+        end: at("2026-10-20T12:00:00Z"),
+        items: [{ equipmentUnitId: "shields", count: 4 }],
+      });
+      const c = event({
+        id: "c",
+        title: "C",
+        start: at("2026-10-20T11:00:00Z"),
+        end: at("2026-10-20T12:00:00Z"),
+        items: [{ equipmentUnitId: "shields", count: 5 }],
+      });
+
+      expect(findClashes({ equipment: [shields], events: [a, b, c] })).toEqual([
+        {
+          kind: "overlap",
+          equipmentUnitId: "shields",
+          eventIds: ["a", "b"],
+          message: "A and B need 9 tackle shields between them, but the club only has 8.",
+        },
+        {
+          kind: "overlap",
+          equipmentUnitId: "shields",
+          eventIds: ["b", "c"],
+          message: "B and C need 9 tackle shields between them, but the club only has 8.",
+        },
+      ]);
+    });
+
     it("clashes back-to-back Events only when their counts add up to more than the Quantity", () => {
       const noFrom = { direction: "from" as const, equipmentUnitId: "shields", userIds: [] };
       const a = event({
