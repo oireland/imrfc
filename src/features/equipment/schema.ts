@@ -1,5 +1,6 @@
 import { index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { store } from "@/features/stores";
+import { event } from "@/features/events";
 import { user } from "@/features/users";
 
 export const equipmentUnit = pgTable("equipment_unit", {
@@ -31,8 +32,8 @@ export const equipmentPortion = pgTable(
     whereaboutsType: text("whereabouts_type", { enum: ["store", "holder", "unconfirmed"] }).notNull(),
     storeId: text("store_id").references(() => store.id),
     holderId: text("holder_id").references(() => user.id),
-    // Plain Event id (equipment never imports events); set only while Unconfirmed.
-    lastSeenEventId: text("last_seen_event_id"),
+    // Set only while Unconfirmed. An Event can't be deleted while equipment was last seen there.
+    lastSeenEventId: text("last_seen_event_id").references(() => event.id),
   },
   (t) => [index("equipment_portion_equipment_unit_id_idx").on(t.equipmentUnitId)],
 );

@@ -1,9 +1,10 @@
 import { index, integer, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
+import { event } from "@/features/events";
 import { user } from "@/features/users";
 
 // How many Shirts a Match's pitch has: 23 by default, more once someone adds Shirts.
 export const selectionPitch = pgTable("selection_pitch", {
-  eventId: text("event_id").primaryKey(),
+  eventId: text("event_id").primaryKey().references(() => event.id),
   shirtCount: integer("shirt_count").notNull(),
 });
 
@@ -12,7 +13,7 @@ export const selectionPitch = pgTable("selection_pitch", {
 export const selectionShirt = pgTable(
   "selection_shirt",
   {
-    eventId: text("event_id").notNull(),
+    eventId: text("event_id").notNull().references(() => event.id),
     shirt: integer("shirt").notNull(),
     userId: text("user_id").references(() => user.id),
     guestName: text("guest_name"),
@@ -28,7 +29,7 @@ export const selectionShirt = pgTable(
 
 // When Committee named a Match's team. Its presence is what "named" means.
 export const teamNaming = pgTable("team_naming", {
-  eventId: text("event_id").primaryKey(),
+  eventId: text("event_id").primaryKey().references(() => event.id),
   namedAt: timestamp("named_at", { withTimezone: true }).notNull(),
   namedById: text("named_by_id")
     .notNull()
@@ -40,7 +41,7 @@ export const teamNaming = pgTable("team_naming", {
 export const selectionSent = pgTable(
   "selection_sent",
   {
-    eventId: text("event_id").notNull(),
+    eventId: text("event_id").notNull().references(() => event.id),
     shirt: integer("shirt").notNull(),
     userId: text("user_id").references(() => user.id),
     guestName: text("guest_name"),
@@ -58,7 +59,7 @@ export const selectionNotice = pgTable(
   "selection_notice",
   {
     id: text("id").primaryKey(),
-    eventId: text("event_id").notNull(),
+    eventId: text("event_id").notNull().references(() => event.id),
     kind: text("kind", { enum: ["name", "changes"] }).notNull(),
     sentById: text("sent_by_id")
       .notNull()

@@ -1,10 +1,10 @@
 import { boolean, date, index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { event } from "@/features/events";
 import { user } from "@/features/users";
 import { BODY_AREAS, OPEN_STATUSES } from "./rules";
 
 // Something a Player has hurt. Never deleted: one logged in error gets `mistakeAt` and drops
-// out of every view; a Cleared one stays as history. The Event it happened at is a plain id so
-// this feature never reaches into `events`.
+// out of every view; a Cleared one stays as history. Deleting the Event it happened at keeps the Injury.
 export const injury = pgTable(
   "injury",
   {
@@ -15,7 +15,7 @@ export const injury = pgTable(
     area: text("area", { enum: BODY_AREAS }).notNull(),
     description: text("description").notNull().default(""),
     happenedOn: date("happened_on", { mode: "string" }).notNull(),
-    eventId: text("event_id"),
+    eventId: text("event_id").references(() => event.id, { onDelete: "set null" }),
     status: text("status", { enum: [...OPEN_STATUSES, "cleared"] as const }).notNull(),
     expectedReturn: date("expected_return", { mode: "string" }),
     needsPhysio: boolean("needs_physio").notNull().default(false),

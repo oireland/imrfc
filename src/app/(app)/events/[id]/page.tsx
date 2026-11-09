@@ -29,7 +29,7 @@ import {
   setChecklistItemCount,
   type ChecklistScope,
 } from "@/features/checklists";
-import { describeWhereabouts, listEquipmentUnits, listPortionsFor, type EquipmentUnit, type Portion } from "@/features/equipment";
+import { describeWhereabouts, hasEquipmentUnconfirmedAt, listEquipmentUnits, listPortionsFor, type EquipmentUnit, type Portion } from "@/features/equipment";
 import {
   actOnDuty,
   deleteDutiesForEvent,
@@ -121,6 +121,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     "use server";
     const current = await requireApprovedUser();
     if (!canDeleteEvent(current.role)) return;
+    if (await hasEquipmentUnconfirmedAt(db, id)) redirect(`/events/${id}?error=event-has-unconfirmed`);
     await db.transaction(async (tx) => {
       await deleteDutiesForEvent(tx, id);
       await deleteSelectionForEvent(tx, id);

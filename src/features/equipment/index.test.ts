@@ -3,9 +3,11 @@ import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { listStores, store } from "@/features/stores";
 import { user } from "@/features/users";
+import { event } from "@/features/events";
 import {
   createEquipmentUnit,
   getPortions,
+  hasEquipmentUnconfirmedAt,
   listEquipmentHeldBy,
   listEquipmentUnits,
   listMovementLog,
@@ -30,6 +32,11 @@ async function seedHome(db: Awaited<ReturnType<typeof createTestDb>>) {
     })
     .returning();
   return row;
+}
+
+async function seedEvent(db: Awaited<ReturnType<typeof createTestDb>>, id = "event-1") {
+  const start = new Date("2026-01-10T10:00:00Z");
+  await db.insert(event).values({ id, title: "Training", eventType: "training", start, end: new Date(start.getTime() + 3_600_000), venue: "Harlington" });
 }
 
 async function seedUser(db: Awaited<ReturnType<typeof createTestDb>>) {
@@ -366,6 +373,7 @@ describe("setUnconfirmed", () => {
     const created = await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
     if (!created.ok) throw new Error("expected Equipment Unit to be created");
 
+    await seedEvent(db);
     await setUnconfirmed(db, created.equipmentUnit.id, "event-1");
 
     const portions = await getPortions(db, created.equipmentUnit.id);
@@ -569,5 +577,23 @@ describe("setConditionNote length limit", () => {
     expect(result).toEqual({ ok: false, error: "The note is too long. Keep it to 1000 characters or fewer." });
     expect((await listEquipmentUnits(db))[0].conditionNote).toBe("");
     expect(await listMovementLog(db, created.equipmentUnit.id)).toEqual([]);
+  });
+});
+
+describe("hasEquipmentUnconfirmedAt", () => {
+  it("is true only while equipment is Unconfirmed at that Event", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    await seedEvent(db, "event-1");
+    await seedEvent(db, "event-2");
+    const created = await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
+    if (!created.ok) throw new Error("setup");
+
+    expect(await hasEquipmentUnconfirmedAt(db, "event-1")).toBe(false);
+    await setUnconfirmed(db, created.equipmentUnit.id, "event-1");
+
+    expect(await hasEquipmentUnconfirmedAt(db, "event-1")).toBe(true);
+    expect(await hasEquipmentUnconfirmedAt(db, "event-2")).toBe(false);
   });
 });

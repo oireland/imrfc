@@ -7,6 +7,7 @@ const ERRORS: Record<string, string> = {
   "last-admin": "You're the only Admin, so you can't give up the role.",
   "block-self": "You can't block yourself.",
   "store-is-home": "That store is some equipment's home. Move it to another home first.",
+  "event-has-unconfirmed": "Some equipment was last seen at this event. Sort out where it is, then delete it.",
   "store-not-empty": "There's still equipment in that store. Move it out first.",
 };
 
