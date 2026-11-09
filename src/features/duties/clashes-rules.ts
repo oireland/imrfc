@@ -47,33 +47,27 @@ export function findClashes({ equipment, events }: { equipment: PlanEquipment[];
   for (const unit of equipment) {
     const needing = sorted.filter((e) => needsUnit(e, unit.id));
 
-    // Overlap: sweep sorted-by-start Events into maximal mutually-overlapping groups
-    // (interval merging), and flag any group whose combined count exceeds the Quantity.
-    let group: PlanEvent[] = [];
-    let groupEnd = -Infinity;
-    const flushGroup = () => {
-      if (group.length < 2) return;
-      const total = group.reduce((sum, e) => sum + itemCount(e, unit.id), 0);
+    // Overlap: sweep sorted-by-start Events, tracking those on at the same moment. Just
+    // before one ends the set is at its largest, so flag it if it needs over the Quantity.
+    let onNow: PlanEvent[] = [];
+    const flushOnNow = () => {
+      if (onNow.length < 2) return;
+      const total = onNow.reduce((sum, e) => sum + itemCount(e, unit.id), 0);
       if (total > unit.quantity) {
         clashes.push({
           kind: "overlap",
           equipmentUnitId: unit.id,
-          eventIds: group.map((e) => e.id),
-          message: overlapMessage(unit, group, total),
+          eventIds: onNow.map((e) => e.id),
+          message: overlapMessage(unit, onNow, total),
         });
       }
     };
     for (const e of needing) {
-      if (group.length > 0 && e.start.getTime() < groupEnd) {
-        group.push(e);
-        groupEnd = Math.max(groupEnd, e.end.getTime());
-      } else {
-        flushGroup();
-        group = [e];
-        groupEnd = e.end.getTime();
-      }
+      const stillOn = onNow.filter((other) => other.end.getTime() > e.start.getTime());
+      if (stillOn.length < onNow.length) flushOnNow();
+      onNow = [...stillOn, e];
     }
-    flushGroup();
+    flushOnNow();
 
     // Back-to-back: adjacent pairs only, as today — only when the first's From Duty is unfilled.
     for (let i = 0; i + 1 < needing.length; i++) {
