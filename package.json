@@ -13,7 +13,7 @@
     "test:pg": "vitest run --config vitest.pg.config.mts",
     "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "node scripts/migrate.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
