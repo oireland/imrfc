@@ -1,14 +1,14 @@
 import { index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { event } from "@/features/events";
 import { user } from "@/features/users";
 
 // Every reply a Player (or Committee for them) has given, never deleted: a Player's
-// Availability for an Event is their latest reply. The Event is referenced by plain id
-// so this feature never reaches into `events` internals.
+// Availability for an Event is their latest reply.
 export const availabilityReply = pgTable(
   "availability_reply",
   {
     id: text("id").primaryKey(),
-    eventId: text("event_id").notNull(),
+    eventId: text("event_id").notNull().references(() => event.id),
     userId: text("user_id")
       .notNull()
       .references(() => user.id),
@@ -29,7 +29,7 @@ export const availabilityAnnouncement = pgTable(
   "availability_announcement",
   {
     id: text("id").primaryKey(),
-    eventId: text("event_id").notNull(),
+    eventId: text("event_id").notNull().references(() => event.id),
     announcedById: text("announced_by_id")
       .notNull()
       .references(() => user.id),
@@ -44,7 +44,7 @@ export const availabilityNudge = pgTable(
   "availability_nudge",
   {
     id: text("id").primaryKey(),
-    eventId: text("event_id").notNull(),
+    eventId: text("event_id").notNull().references(() => event.id),
     userId: text("user_id")
       .notNull()
       .references(() => user.id),
@@ -62,7 +62,7 @@ export const availabilityMessaged = pgTable(
   "availability_messaged",
   {
     id: text("id").primaryKey(),
-    eventId: text("event_id").notNull(),
+    eventId: text("event_id").notNull().references(() => event.id),
     userId: text("user_id")
       .notNull()
       .references(() => user.id),
@@ -81,7 +81,7 @@ export const availabilityAsk = pgTable(
   "availability_ask",
   {
     id: text("id").primaryKey(),
-    eventId: text("event_id").notNull(),
+    eventId: text("event_id").notNull().references(() => event.id),
     kind: text("kind", { enum: ["announce", "nudge"] }).notNull(),
     askedById: text("asked_by_id")
       .notNull()

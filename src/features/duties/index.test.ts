@@ -5,7 +5,7 @@ import { createTestDb } from "@/test/db";
 import { store } from "@/features/stores";
 import { createEquipmentUnit, getPortions, listMovementLog, raiseQuantity, recordMove } from "@/features/equipment";
 import { addToChecklist, setChecklistItemCount } from "@/features/checklists";
-import { cancelEvent, createEvent } from "@/features/events";
+import { cancelEvent, createEvent, event } from "@/features/events";
 import { user } from "@/features/users";
 import { duty, dutyUser } from "./schema";
 import {
@@ -45,6 +45,18 @@ async function setup() {
       { id: "cupboard", name: "Cupboard", address: "x" },
     ])
     .returning();
+  // Past and Cancelled, so these Events stay out of upcoming lists, warnings and duty records.
+  await db.insert(event).values(
+    ["e1", "e2", "e3"].map((id) => ({
+      id,
+      title: id,
+      eventType: "training" as const,
+      start: new Date("2020-01-01T10:00:00Z"),
+      end: new Date("2020-01-01T11:00:00Z"),
+      venue: "x",
+      cancelled: true,
+    })),
+  );
   const made = await createEquipmentUnit(db, { name: "Balls", homeId: shed.id });
   if (!made.ok) throw new Error(made.error);
   const duties = await ensureDuties(db, "e1", [made.equipmentUnit.id]);

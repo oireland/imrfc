@@ -9,7 +9,7 @@ export default defineConfig({
   fullyParallel: true,
   // One `next dev` server compiles each route and server action on first hit; more
   // workers than this swamp it and specs time out rather than fail on what they test.
-  workers: 4,
+  workers: 2,
   // Head-room for that first compile of a server action.
   expect: { timeout: 10_000 },
   forbidOnly: !!process.env.CI,

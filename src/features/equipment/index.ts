@@ -343,6 +343,12 @@ async function setUnconfirmedLocked(db: Db, equipmentUnitId: string, lastSeenEve
   await savePortions(db, equipmentUnitId, nextPortions);
 }
 
+/** Whether any equipment is Unconfirmed, last seen at this Event. */
+export async function hasEquipmentUnconfirmedAt(db: Db, eventId: string): Promise<boolean> {
+  const rows = await db.select({ id: equipmentPortion.id }).from(equipmentPortion).where(eq(equipmentPortion.lastSeenEventId, eventId)).limit(1);
+  return rows.length > 0;
+}
+
 export async function getEquipmentUnit(db: Db, id: string): Promise<EquipmentUnit | undefined> {
   const [row] = await db.select().from(equipmentUnit).where(eq(equipmentUnit.id, id));
   return row;

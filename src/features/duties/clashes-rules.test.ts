@@ -57,6 +57,17 @@ describe("findClashes", () => {
     ]);
   });
 
+  it("warns about back-to-back Events even when a shorter Event started between them", () => {
+    const noFrom = [{ equipmentUnitId: "balls", direction: "to" as const, userIds: ["tom"] }];
+    const long = event({ id: "a", title: "Long", start: at("2026-10-20T09:00:00Z"), end: at("2026-10-20T17:00:00Z"), items: [{ equipmentUnitId: "balls", count: 5 }], duties: noFrom });
+    const short = event({ id: "b", title: "Short", start: at("2026-10-20T10:00:00Z"), end: at("2026-10-20T11:00:00Z"), items: [{ equipmentUnitId: "balls", count: 1 }], duties: noFrom });
+    const next = event({ id: "c", title: "Next", start: at("2026-10-20T17:30:00Z"), end: at("2026-10-20T19:00:00Z"), items: [{ equipmentUnitId: "balls", count: 5 }] });
+
+    const clashes = findClashes({ equipment: [equipment({ quantity: 8 })], events: [long, short, next] });
+
+    expect(clashes).toEqual([expect.objectContaining({ kind: "back_to_back", eventIds: ["a", "c"] })]);
+  });
+
   it("is fine with back-to-back Events when the first has a From Duty filled", () => {
     const a = event({ id: "a" });
     const b = event({ id: "b", start: at("2026-10-20T21:30:00Z"), end: at("2026-10-20T23:00:00Z") });
@@ -158,6 +169,7 @@ describe("findClashes", () => {
         start: at("2026-10-20T09:00:00Z"),
         end: at("2026-10-20T10:00:00Z"),
         items: [{ equipmentUnitId: "shields", count: 5 }],
+        duties: [{ equipmentUnitId: "shields", direction: "from", userIds: ["tom"] }],
       });
       const b = event({
         id: "b",
@@ -184,6 +196,7 @@ describe("findClashes", () => {
         start: at("2026-10-20T09:00:00Z"),
         end: at("2026-10-20T10:00:00Z"),
         items: [{ equipmentUnitId: "shields", count: 5 }],
+        duties: [{ equipmentUnitId: "shields", direction: "from", userIds: ["tom"] }],
       });
       const b = event({
         id: "b",

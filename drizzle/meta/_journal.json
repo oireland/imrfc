@@ -232,6 +232,13 @@
       "when": 1791656186834,
       "tag": "0032_injuries",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1794239080154,
+      "tag": "0033_event-foreign-keys",
+      "breakpoints": true
     }
   ]
 }

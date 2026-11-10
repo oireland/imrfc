@@ -1,15 +1,15 @@
 import { index, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { equipmentUnit } from "@/features/equipment";
 import { store } from "@/features/stores";
+import { event } from "@/features/events";
 import { user } from "@/features/users";
 
-// One To Duty and one From Duty per Equipment Unit per Event. The Event is referenced
-// by plain id so this feature never reaches into `events` internals.
+// One To Duty and one From Duty per Equipment Unit per Event.
 export const duty = pgTable(
   "duty",
   {
     id: text("id").primaryKey(),
-    eventId: text("event_id").notNull(),
+    eventId: text("event_id").notNull().references(() => event.id),
     equipmentUnitId: text("equipment_unit_id")
       .notNull()
       .references(() => equipmentUnit.id),
