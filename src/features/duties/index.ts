@@ -12,6 +12,7 @@ import {
   listPortionsFor,
   recordSplitMove,
   setUnconfirmed,
+  withUnitLock,
 } from "@/features/equipment";
 import { displayName, filterApprovedUserIds, isCommitteeOrAbove, listKnownUsers, type Role } from "@/features/users";
 import { findClashes, type Clash } from "./clashes-rules";
@@ -278,16 +279,34 @@ export async function confirmDuty(
     return { ok: false, error: "Only the person doing it or the committee can confirm it." };
   }
 
-  const equipment = await getEquipmentUnit(db, row.equipmentUnitId);
-  if (!equipment) return { ok: false, error: "That equipment no longer exists." };
+  // Under the Equipment Unit's lock, so the sources are picked from its Portions as they are now.
+  // The Duty is claimed as confirmed first: if someone else's Confirm got there, this one stops.
+  // The Move and "confirmed" go together: if the Move fails, both roll back and the Duty stays
+  // open to retry.
+  try {
+    return await withUnitLock(db, row.equipmentUnitId, async (tx: Db): Promise<Result> => {
+      const claimed: { id: string }[] = await tx
+        .update(duty)
+        .set({ confirmedAt: new Date() })
+        .where(and(eq(duty.id, dutyId), isNull(duty.confirmedAt)))
+        .returning({ id: duty.id });
+      if (claimed.length === 0) return { ok: false, error: "That's already confirmed." };
 
-  // The Move and "confirmed" go together: if the Move fails, the Duty stays open to retry.
-  return db.transaction(async (tx: Db) => {
-    const moved = await recordConfirmMove(tx, row, equipment, userIds, actor, options);
-    if (!moved.ok) return moved;
-    await tx.update(duty).set({ confirmedAt: new Date() }).where(eq(duty.id, dutyId));
-    return moved;
-  });
+      const equipment = await getEquipmentUnit(tx, row.equipmentUnitId);
+      if (!equipment) throw new Rollback({ ok: false, error: "That equipment no longer exists." });
+      const moved = await recordConfirmMove(tx, row, equipment, userIds, actor, options);
+      if (!moved.ok) throw new Rollback(moved);
+      return moved;
+    });
+  } catch (error) {
+    if (error instanceof Rollback) return error.result;
+    throw error;
+  }
+}
+
+/** Thrown inside a transaction to roll it back and return `result` instead. */
+class Rollback {
+  constructor(readonly result: Result) {}
 }
 
 async function recordConfirmMove(
