@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import postgres from "postgres";
 import { TEST_DATABASE_URL } from "./support/test-db";
 import { signIn } from "./support/sign-in";
+import { deleteEquipmentUnits, seedEquipmentUnit } from "./support/equipment";
 
 test("Committee add to, change and take things off an Event's kit list without losing the rest of it", async ({ page }) => {
   const sql = postgres(TEST_DATABASE_URL);
@@ -9,10 +10,10 @@ test("Committee add to, change and take things off an Event's kit list without l
   const [shed, bibs, cones, flags, series, event, seriesList, tom, tape] = Array.from({ length: 9 }, () => crypto.randomUUID());
   const [bibsName, conesName, flagsName, tomName, tapeName] = [`Bibs ${run}`, `Cones ${run}`, `Flags ${run}`, `Tom ${run}`, `Tape ${run}`];
   await sql`insert into store (id, name, address) values (${shed}, ${`Shed ${run}`}, 'x')`;
-  await sql`insert into equipment_unit (id, name, home_id) values (${bibs}, ${bibsName}, ${shed})`;
-  await sql`insert into equipment_unit (id, name, home_id, quantity) values (${cones}, ${conesName}, ${shed}, 4)`;
-  await sql`insert into equipment_unit (id, name, home_id) values (${flags}, ${flagsName}, ${shed})`;
-  await sql`insert into equipment_unit (id, name, home_id, quantity) values (${tape}, ${tapeName}, ${shed}, 3)`;
+  await seedEquipmentUnit(sql, { id: bibs, name: bibsName, homeId: shed });
+  await seedEquipmentUnit(sql, { id: cones, name: conesName, homeId: shed, quantity: 4 });
+  await seedEquipmentUnit(sql, { id: flags, name: flagsName, homeId: shed });
+  await seedEquipmentUnit(sql, { id: tape, name: tapeName, homeId: shed, quantity: 3 });
   await sql`insert into series (id, title, event_type, weekdays, start_time, end_time, venue, start_date, end_date)
     values (${series}, ${`Kit series ${run}`}, 'training', '{1}', '18:00', '20:00', 'Harlington', '2030-01-01', '2030-12-31')`;
   await sql`insert into event (id, title, event_type, start, "end", venue, series_id)
@@ -78,7 +79,7 @@ test("Committee add to, change and take things off an Event's kit list without l
   await sql`delete from checklist where scope_id in (${event}, ${series})`;
   await sql`delete from event where id = ${event}`;
   await sql`delete from series where id = ${series}`;
-  await sql`delete from equipment_unit where id in (${bibs}, ${cones}, ${flags}, ${tape})`;
+  await deleteEquipmentUnits(sql, [bibs, cones, flags, tape]);
   await sql`delete from store where id in (${shed}, 'Harlington')`;
   await sql`delete from "user" where id = ${tom}`;
   await sql.end();

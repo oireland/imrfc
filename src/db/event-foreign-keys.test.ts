@@ -1,6 +1,7 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { sql } from "drizzle-orm";
+import type { Db } from "@/db/types";
 import { describe, expect, it } from "vitest";
 import { createTestDb } from "@/test/db";
 import { migrate } from "@/test/migrate";
@@ -59,19 +60,20 @@ describe("Event foreign keys", () => {
     }
     await db.execute(sql`insert into "user" (id, name, email, email_verified) values ('u', 'U', 'u@example.com', true)`);
     await db.execute(sql`insert into store (id, name, address) values ('shed', 'Shed', 'x')`);
-    await db.execute(sql`insert into equipment_unit (id, name, home_id, quantity) values ('merged', 'Shields', 'shed', 8), ('alone', 'Ball bag', 'shed', 1)`);
-    await db.execute(sql`insert into equipment_portion (id, equipment_unit_id, count, whereabouts_type, store_id, last_seen_event_id) values
-      ('p1', 'merged', 5, 'store', 'shed', null),
-      ('p2', 'merged', 3, 'unconfirmed', null, 'gone'),
-      ('p3', 'alone', 1, 'unconfirmed', null, 'gone')`);
+    await db.transaction(async (tx: Db) => {
+      await tx.execute(sql`insert into equipment_unit (id, name, home_id, quantity) values ('merged', 'Shields', 'shed', 8), ('alone', 'Ball bag', 'shed', 1)`);
+      await tx.execute(sql`insert into equipment_portion (id, equipment_unit_id, count, whereabouts_type, store_id, last_seen_event_id) values
+        ('p1', 'merged', 5, 'store', 'shed', null),
+        ('p2', 'merged', 3, 'unconfirmed', null, 'gone'),
+        ('p3', 'alone', 1, 'unconfirmed', null, 'gone')`);
+    });
     await db.execute(sql`insert into duty (id, event_id, equipment_unit_id, direction) values ('d', 'gone', 'alone', 'to')`);
     await db.execute(sql`insert into duty_user (id, duty_id, user_id) values ('du', 'd', 'u')`);
     await db.execute(sql`insert into selection_pitch (event_id, shirt_count) values ('gone', 23)`);
     await db.execute(sql`insert into injury (id, user_id, area, happened_on, event_id, status, reported_by_id) values ('i', 'u', 'Knee', '2026-01-01', 'gone', 'out', 'u')`);
 
-    const folder = path.join(process.cwd(), "drizzle");
-    const latest = readdirSync(folder).filter((f) => f.endsWith(".sql")).sort().at(-1)!;
-    for (const statement of readFileSync(path.join(folder, latest), "utf8").split("--> statement-breakpoint")) {
+    const migration = path.join(process.cwd(), "drizzle", "0033_event-foreign-keys.sql");
+    for (const statement of readFileSync(migration, "utf8").split("--> statement-breakpoint")) {
       await db.execute(sql.raw(statement));
     }
 

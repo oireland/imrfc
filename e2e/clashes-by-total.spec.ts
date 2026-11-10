@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import postgres from "postgres";
 import { TEST_DATABASE_URL } from "./support/test-db";
 import { signIn } from "./support/sign-in";
+import { deleteEquipmentUnits, seedEquipmentUnit } from "./support/equipment";
 
 test("Clashes fire by total count, not just by overlap, once an Equipment Unit is counted", async ({ page }) => {
   const sql = postgres(TEST_DATABASE_URL);
@@ -11,8 +12,7 @@ test("Clashes fire by total count, not just by overlap, once an Equipment Unit i
   const titleA = `1st XV v Kings ${run}`;
   const titleB = `2nd XV v UCL ${run}`;
   await sql`insert into store (id, name, address) values (${store}, ${`Shed ${run}`}, 'x')`;
-  await sql`insert into equipment_unit (id, name, home_id, quantity) values (${equipment}, ${equipmentName}, ${store}, 8)`;
-  await sql`insert into equipment_portion (id, equipment_unit_id, count, whereabouts_type, store_id) values (${crypto.randomUUID()}, ${equipment}, 8, 'store', ${store})`;
+  await seedEquipmentUnit(sql, { id: equipment, name: equipmentName, homeId: store, quantity: 8 });
   // Two overlapping Matches, each asking for 4 of the 8 shields.
   await sql`insert into event (id, title, event_type, start, "end", venue)
     values (${eventA}, ${titleA}, 'training', now() + interval '1 hour', now() + interval '3 hours', 'Harlington')`;
@@ -53,8 +53,7 @@ test("Clashes fire by total count, not just by overlap, once an Equipment Unit i
   await sql`delete from checklist where id in (${listA}, ${listB})`;
   await sql`delete from event where id in (${eventA}, ${eventB})`;
   await sql`delete from movement_log_entry where equipment_unit_id = ${equipment}`;
-  await sql`delete from equipment_portion where equipment_unit_id = ${equipment}`;
-  await sql`delete from equipment_unit where id = ${equipment}`;
+  await deleteEquipmentUnits(sql, [equipment]);
   await sql`delete from store where id = ${store}`;
   await sql.end();
 });
