@@ -239,6 +239,20 @@
       "when": 1794239080154,
       "tag": "0033_event-foreign-keys",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1794306575719,
+      "tag": "0034_equipment-total-matches-quantity",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1794306904110,
+      "tag": "0035_equipment-checks",
+      "breakpoints": true
     }
   ]
 }

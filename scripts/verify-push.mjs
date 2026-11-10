@@ -53,8 +53,11 @@ if (!storeId) {
   await sql`insert into store (id, name, address) values (${storeId}, 'Verify Store', 'x')`;
 }
 const equipmentId = crypto.randomUUID();
-await sql`insert into equipment_unit (id, name, home_id, status, quantity) values (${equipmentId}, 'Verify Balls', ${storeId}, 'active', 1)`;
-await sql`insert into equipment_portion (id, equipment_unit_id, store_id, holder_id, count) values (${crypto.randomUUID()}, ${equipmentId}, ${storeId}, null, 1)`;
+// One transaction: the database checks at commit that the portions add up to the Quantity.
+await sql.begin(async (tx) => {
+  await tx`insert into equipment_unit (id, name, home_id, status, quantity) values (${equipmentId}, 'Verify Balls', ${storeId}, 'active', 1)`;
+  await tx`insert into equipment_portion (id, equipment_unit_id, count, whereabouts_type, store_id) values (${crypto.randomUUID()}, ${equipmentId}, 1, 'store', ${storeId})`;
+});
 
 const eventId = crypto.randomUUID();
 const now = new Date();

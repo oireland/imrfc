@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import postgres from "postgres";
 import { TEST_DATABASE_URL } from "./support/test-db";
 import { signIn } from "./support/sign-in";
+import { deleteEquipmentUnits, seedEquipmentUnit } from "./support/equipment";
 
 test("Two People join a To Duty, split where it comes from and who ends up with it, and Whereabouts follows", async ({ page }) => {
   const sql = postgres(TEST_DATABASE_URL);
@@ -11,12 +12,18 @@ test("Two People join a To Duty, split where it comes from and who ends up with 
   const tomName = `Tom ${run}`;
   const priyaName = `Priya ${run}`;
   await sql`insert into store (id, name, address) values (${shed}, ${`Shed ${run}`}, 'x')`;
-  await sql`insert into equipment_unit (id, name, home_id, quantity) values (${equipment}, ${equipmentName}, ${shed}, 4)`;
   // Split before the To Duty is Confirmed: 2 at the Shed, 2 with Priya (who isn't on the Duty).
   await sql`insert into "user" (id, name, email, access_state) values (${priya}, ${priyaName}, ${`priya-${run}@example.com`}, 'approved')`;
   await sql`insert into "user" (id, name, email, access_state) values (${tom}, ${tomName}, ${`tom-${run}@example.com`}, 'approved')`;
-  await sql`insert into equipment_portion (id, equipment_unit_id, count, whereabouts_type, store_id) values (${crypto.randomUUID()}, ${equipment}, 2, 'store', ${shed})`;
-  await sql`insert into equipment_portion (id, equipment_unit_id, count, whereabouts_type, holder_id) values (${crypto.randomUUID()}, ${equipment}, 2, 'holder', ${priya})`;
+  await seedEquipmentUnit(sql, {
+    id: equipment,
+    name: equipmentName,
+    homeId: shed,
+    portions: [
+      { count: 2, storeId: shed },
+      { count: 2, holderId: priya },
+    ],
+  });
   await sql`insert into event (id, title, event_type, start, "end", venue)
     values (${event}, ${`Shared duty training ${run}`}, 'training', now() + interval '5 days', now() + interval '5 days 2 hours', 'Harlington')`;
   await sql`insert into checklist (id, scope, scope_id) values (${list}, 'event', ${event})`;
@@ -67,8 +74,7 @@ test("Two People join a To Duty, split where it comes from and who ends up with 
   await sql`delete from checklist where id = ${list}`;
   await sql`delete from event where id = ${event}`;
   await sql`delete from movement_log_entry where equipment_unit_id = ${equipment}`;
-  await sql`delete from equipment_portion where equipment_unit_id = ${equipment}`;
-  await sql`delete from equipment_unit where id = ${equipment}`;
+  await deleteEquipmentUnits(sql, [equipment]);
   await sql`delete from store where id in (${shed}, 'Harlington')`;
   await sql`delete from "user" where id in (${tom}, ${priya})`;
   await sql.end();

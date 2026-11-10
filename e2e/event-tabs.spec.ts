@@ -2,13 +2,14 @@ import { expect, test } from "@playwright/test";
 import postgres from "postgres";
 import { TEST_DATABASE_URL } from "./support/test-db";
 import { signIn } from "./support/sign-in";
+import { seedEquipmentUnit } from "./support/equipment";
 
 test("Event detail splits Availability and Kit into tabs, and a Social has no Availability", async ({ page }) => {
   const sql = postgres(TEST_DATABASE_URL);
   const run = crypto.randomUUID().slice(0, 8);
   const [shed, bibs, training, social] = Array.from({ length: 4 }, () => crypto.randomUUID());
   await sql`insert into store (id, name, address) values (${shed}, ${`Shed ${run}`}, 'x')`;
-  await sql`insert into equipment_unit (id, name, home_id) values (${bibs}, ${`Bibs ${run}`}, ${shed})`;
+  await seedEquipmentUnit(sql, { id: bibs, name: `Bibs ${run}`, homeId: shed });
   for (const [id, type] of [[training, "training"], [social, "social"]]) {
     await sql`insert into event (id, title, event_type, start, "end", venue)
       values (${id}, ${`${type} ${run}`}, ${type}, now() + interval '5 days', now() + interval '5 days 2 hours', 'Harlington')`;

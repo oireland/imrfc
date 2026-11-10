@@ -1,0 +1,10 @@
+ALTER TABLE "equipment_portion" ADD CONSTRAINT "equipment_portion_count_positive" CHECK ("equipment_portion"."count" > 0);--> statement-breakpoint
+ALTER TABLE "equipment_portion" ADD CONSTRAINT "equipment_portion_one_place" CHECK (("equipment_portion"."whereabouts_type" = 'store' and "equipment_portion"."store_id" is not null and "equipment_portion"."holder_id" is null and "equipment_portion"."last_seen_event_id" is null)
+        or ("equipment_portion"."whereabouts_type" = 'holder' and "equipment_portion"."holder_id" is not null and "equipment_portion"."store_id" is null and "equipment_portion"."last_seen_event_id" is null)
+        or ("equipment_portion"."whereabouts_type" = 'unconfirmed' and "equipment_portion"."last_seen_event_id" is not null and "equipment_portion"."store_id" is null and "equipment_portion"."holder_id" is null));--> statement-breakpoint
+ALTER TABLE "equipment_unit" ADD CONSTRAINT "equipment_unit_quantity_positive" CHECK ("equipment_unit"."quantity" >= 1);--> statement-breakpoint
+ALTER TABLE "equipment_unit" ADD CONSTRAINT "equipment_unit_status_valid" CHECK ("equipment_unit"."status" in ('active', 'missing', 'retired'));--> statement-breakpoint
+ALTER TABLE "movement_log_entry" ADD CONSTRAINT "movement_log_entry_kind_valid" CHECK ("movement_log_entry"."kind" in ('move', 'condition_note'));--> statement-breakpoint
+ALTER TABLE "movement_log_entry" ADD CONSTRAINT "movement_log_entry_reason_valid" CHECK ("movement_log_entry"."reason" in ('ad_hoc', 'duty'));--> statement-breakpoint
+ALTER TABLE "movement_log_entry" ADD CONSTRAINT "movement_log_entry_from_type_valid" CHECK ("movement_log_entry"."from_type" in ('store', 'holder', 'unconfirmed'));--> statement-breakpoint
+ALTER TABLE "movement_log_entry" ADD CONSTRAINT "movement_log_entry_to_type_valid" CHECK ("movement_log_entry"."to_type" in ('store', 'holder'));

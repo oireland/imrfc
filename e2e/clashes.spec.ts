@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import postgres from "postgres";
 import { TEST_DATABASE_URL } from "./support/test-db";
 import { signIn } from "./support/sign-in";
+import { seedEquipmentUnit } from "./support/equipment";
 
 test("Unfilled Duties get a heads-up, not a Clash, on the Event and the Equipment Unit", async ({ page }) => {
   const sql = postgres(TEST_DATABASE_URL);
@@ -9,8 +10,7 @@ test("Unfilled Duties get a heads-up, not a Clash, on the Event and the Equipmen
   const [store, equipment, event, list] = Array.from({ length: 4 }, () => crypto.randomUUID());
   const equipmentName = `Cones ${run}`;
   await sql`insert into store (id, name, address) values (${store}, ${`Shed ${run}`}, 'x')`;
-  await sql`insert into equipment_unit (id, name, home_id) values (${equipment}, ${equipmentName}, ${store})`;
-  await sql`insert into equipment_portion (id, equipment_unit_id, count, whereabouts_type, store_id) values (${crypto.randomUUID()}, ${equipment}, 1, 'store', ${store})`;
+  await seedEquipmentUnit(sql, { id: equipment, name: equipmentName, homeId: store });
   await sql`insert into event (id, title, event_type, start, "end", venue)
     values (${event}, ${`Clash training ${run}`}, 'training', now() + interval '1 hour', now() + interval '3 hours', 'Harlington')`;
   await sql`insert into checklist (id, scope, scope_id) values (${list}, 'event', ${event})`;

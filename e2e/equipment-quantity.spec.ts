@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import postgres from "postgres";
 import { TEST_DATABASE_URL } from "./support/test-db";
 import { signIn } from "./support/sign-in";
+import { deleteEquipmentUnits, seedEquipmentUnit } from "./support/equipment";
 
 test("A split Equipment Unit shows its count in each Whereabouts group, and moving a portion updates it", async ({ page }) => {
   const sql = postgres(TEST_DATABASE_URL);
@@ -10,11 +11,17 @@ test("A split Equipment Unit shows its count in each Whereabouts group, and movi
   const equipmentName = `Tackle shields ${run}`;
   const teammateName = `Priya ${run}`;
   await sql`insert into store (id, name, address) values (${store}, ${`Shed ${run}`}, 'x')`;
-  await sql`insert into equipment_unit (id, name, home_id, quantity) values (${equipment}, ${equipmentName}, ${store}, 8)`;
   await sql`insert into "user" (id, name, email, access_state) values (${teammate}, ${teammateName}, ${`${run}@example.com`}, 'approved')`;
   // Split across two Places: 5 at the Shed, 3 with a teammate.
-  await sql`insert into equipment_portion (id, equipment_unit_id, count, whereabouts_type, store_id) values (${crypto.randomUUID()}, ${equipment}, 5, 'store', ${store})`;
-  await sql`insert into equipment_portion (id, equipment_unit_id, count, whereabouts_type, holder_id) values (${crypto.randomUUID()}, ${equipment}, 3, 'holder', ${teammate})`;
+  await seedEquipmentUnit(sql, {
+    id: equipment,
+    name: equipmentName,
+    homeId: store,
+    portions: [
+      { count: 5, storeId: store },
+      { count: 3, holderId: teammate },
+    ],
+  });
 
   await signIn(page);
 
@@ -53,8 +60,7 @@ test("A split Equipment Unit shows its count in each Whereabouts group, and movi
 
   // Test people would otherwise pile up in every person picker on the dev database.
   await sql`delete from movement_log_entry where equipment_unit_id = ${equipment}`;
-  await sql`delete from equipment_portion where equipment_unit_id = ${equipment}`;
-  await sql`delete from equipment_unit where id = ${equipment}`;
+  await deleteEquipmentUnits(sql, [equipment]);
   await sql`delete from store where id = ${store}`;
   await sql`delete from "user" where id = ${teammate}`;
   await sql.end();

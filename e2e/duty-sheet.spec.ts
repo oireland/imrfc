@@ -3,6 +3,7 @@ import { AxeBuilder } from "@axe-core/playwright";
 import postgres from "postgres";
 import { TEST_DATABASE_URL } from "./support/test-db";
 import { signIn } from "./support/sign-in";
+import { deleteEquipmentUnits, seedEquipmentUnit } from "./support/equipment";
 
 test("Committee give a Duty to a teammate and choose where the equipment goes back to, from the Duty sheet", async ({ page }) => {
   const sql = postgres(TEST_DATABASE_URL);
@@ -12,8 +13,7 @@ test("Committee give a Duty to a teammate and choose where the equipment goes ba
   const teammateName = `Tom ${run}`;
   await sql`insert into store (id, name, address) values (${store}, ${`Shed ${run}`}, 'x')`;
   await sql`insert into store (id, name, address) values (${otherStore}, ${`Locker ${run}`}, 'x')`;
-  await sql`insert into equipment_unit (id, name, home_id) values (${equipment}, ${equipmentName}, ${store})`;
-  await sql`insert into equipment_portion (id, equipment_unit_id, count, whereabouts_type, store_id) values (${crypto.randomUUID()}, ${equipment}, 1, 'store', ${store})`;
+  await seedEquipmentUnit(sql, { id: equipment, name: equipmentName, homeId: store });
   await sql`insert into event (id, title, event_type, start, "end", venue)
     values (${event}, ${`Sheet training ${run}`}, 'training', now() + interval '5 days', now() + interval '5 days 2 hours', 'Harlington')`;
   await sql`insert into checklist (id, scope, scope_id) values (${list}, 'event', ${event})`;
@@ -53,8 +53,7 @@ test("Committee give a Duty to a teammate and choose where the equipment goes ba
   await sql`delete from checklist_item where checklist_id = ${list}`;
   await sql`delete from checklist where id = ${list}`;
   await sql`delete from event where id = ${event}`;
-  await sql`delete from equipment_portion where equipment_unit_id = ${equipment}`;
-  await sql`delete from equipment_unit where id = ${equipment}`;
+  await deleteEquipmentUnits(sql, [equipment]);
   await sql`delete from store where id in (${store}, ${otherStore}, 'Harlington')`;
   await sql`delete from "user" where id = ${teammate}`;
   await sql.end();
