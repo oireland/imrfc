@@ -11,7 +11,21 @@ async function assertNoHorizontalScroll(page: Page) {
   expect(overflowing).toBe(false);
 }
 
+/**
+ * Waits for the page to stop changing before a scan: mid-fade, axe reads a blend of colours and reports
+ * contrast that no one ever sees settled (e.g. Profile's notifications toggle fading in once it knows
+ * whether this browser is subscribed). Endless animations, like spinners, are ignored.
+ */
+async function settle(page: Page) {
+  const notificationToggle = page.getByRole("button", { name: /^Turn notifications/ });
+  if (await notificationToggle.count()) await expect(notificationToggle).toBeEnabled();
+  await page.waitForFunction(() =>
+    document.getAnimations().every((a) => a.playState !== "running" || a.effect?.getComputedTiming().iterations === Infinity),
+  );
+}
+
 async function axeReport(page: Page, screen: string): Promise<string | null> {
+  await settle(page);
   const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   if (results.violations.length === 0) return null;
   const details = results.violations

@@ -37,9 +37,11 @@ export function BottomTabs({ showAdmin, pendingCount = 0 }: BottomTabsProps) {
   const tabs = showAdmin ? [TABS[0], TABS[1], TABS[2], COMMITTEE_TABS[0], COMMITTEE_TABS[1], TABS[3]] : TABS;
 
   return (
+    // 95% opaque, not less: at 90% near-black text scrolled underneath darkened the bar enough to drop the
+    // tab labels below 4.5:1 contrast (and white content did the same in dark mode).
     <nav
       aria-label="Main"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl"
     >
       <div className="mx-auto flex max-w-2xl items-stretch justify-around py-1.5">
         {tabs.map(({ href, label, icon: Icon, isActive }) => {
