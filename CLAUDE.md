@@ -20,6 +20,6 @@ Events and equipment-tracking app for Imperial Medicals RFC. Read before working
 ## Environment
 
 - WSL2, Node 24, pnpm.
-- Tests need no Docker (PGlite). `pnpm dev` needs Docker Postgres + Mailpit via `docker compose up`; if `docker` is missing in WSL, the user must enable Docker Desktop → Settings → Resources → WSL integration.
+- `pnpm test` needs no Docker (PGlite). `pnpm test:pg` runs the `*.pg.test.ts` files, which need real Postgres for lock contention: the Docker Compose one locally (or `TEST_DATABASE_URL`). `pnpm dev` needs Docker Postgres + Mailpit via `docker compose up`; if `docker` is missing in WSL, the user must enable Docker Desktop → Settings → Resources → WSL integration.
 
 @AGENTS.md

@@ -21,3 +21,33 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
+
+  postgres:
+    # Tests that need real lock contention, which PGlite's single connection can't produce.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: imrfc
+          POSTGRES_PASSWORD: imrfc
+          POSTGRES_DB: imrfc
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U imrfc"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://imrfc:imrfc@localhost:5432/imrfc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:pg
