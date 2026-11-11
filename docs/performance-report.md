@@ -1,6 +1,22 @@
 # Performance report — September 2026
 
-## Summary
+## November 2026: re-measured
+
+The same season, seeded the same way, after the P0 fixes and most of P1 landed. It's now a test that runs every page component against a seeded season on PGlite, counting queries through drizzle's `logger`: `src/app/(app)/query-budget.test.tsx`, with the seed in `src/test/season.ts`. Async server components inside a page (the Availability card on Event detail) are counted too. The session lookup is not, as before. The test fails if a page goes over its budget.
+
+| Page | Sept queries | Nov queries | Budget | Nov time (PGlite) |
+| --- | ---: | ---: | ---: | ---: |
+| Home `/` | 1,655 | **27** | 30 | ~70 ms |
+| Event detail `/events/[id]` | 1,088 | **39** | 43 | ~80 ms |
+| Equipment detail `/equipment/[id]` | 1,076 | **13** | 15 | ~35 ms |
+| Equipment `/equipment` | 576 | **5** | 6 | ~10 ms |
+| Events `/events` | 541 | **13** | 15 | ~35 ms |
+
+Home is inside the 20–30 this report predicted. The Caching section's preconditions about query counts are now met, so prefetching the tabs no longer multiplies a thousand-query page. The writes during render (`markUnconfirmed`, `ensureDuties`) are still there; PLAN L3 deals with them.
+
+Event detail is measured as a Committee User on the next upcoming Event, with the measured User's Duty on it.
+
+## Summary (September)
 
 The app feels slow for two reasons, and the second is much bigger than the first:
 
