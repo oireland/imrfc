@@ -29,6 +29,15 @@ BEGIN
 END;
 $$;
 --> statement-breakpoint
+-- An Equipment Unit with nothing anywhere and no Movement Log has never moved, so it's at its Home.
+-- (Before 16 Oct 2026, deleting a unit removed its log and portions and then failed on the unit row
+-- if a Duty referenced it, leaving exactly this.) Anything else that's wrong is refused below.
+INSERT INTO "equipment_portion" ("id", "equipment_unit_id", "count", "whereabouts_type", "store_id")
+SELECT gen_random_uuid()::text, u."id", u."quantity", 'store', u."home_id"
+FROM "equipment_unit" u
+WHERE NOT EXISTS (SELECT 1 FROM "equipment_portion" p WHERE p."equipment_unit_id" = u."id")
+  AND NOT EXISTS (SELECT 1 FROM "movement_log_entry" m WHERE m."equipment_unit_id" = u."id");
+--> statement-breakpoint
 -- A constraint trigger only checks rows changed from now on, so refuse to migrate over data that's already wrong.
 DO $$
 DECLARE

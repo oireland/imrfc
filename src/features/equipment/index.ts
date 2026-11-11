@@ -34,11 +34,16 @@ export type MoveSource = Place;
 /**
  * Runs `fn` in a transaction holding a row lock on the Equipment Unit, so two people changing
  * where it is (or its Quantity) at once take turns instead of overwriting each other's Portions.
+ * Anything that decides a change from the current Portions (e.g. Confirm picking its sources)
+ * should read them inside `fn`, or it may act on Portions that have since changed.
  * Re-entrant: inside an outer transaction the lock is simply taken again.
+ *
+ * `no key update`, not `update`: the id never changes, so rows elsewhere that reference the
+ * Equipment Unit (a new Duty, say) can still be written while it's locked.
  */
-async function withUnitLock<T>(db: Db, equipmentUnitId: string, fn: (tx: Db) => Promise<T>): Promise<T> {
+export async function withUnitLock<T>(db: Db, equipmentUnitId: string, fn: (tx: Db) => Promise<T>): Promise<T> {
   return db.transaction(async (tx: Db) => {
-    await tx.execute(sql`select id from equipment_unit where id = ${equipmentUnitId} for update`);
+    await tx.execute(sql`select id from equipment_unit where id = ${equipmentUnitId} for no key update`);
     return fn(tx);
   });
 }

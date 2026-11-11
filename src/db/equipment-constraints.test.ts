@@ -80,18 +80,51 @@ describe("Equipment rules enforced by the database", () => {
       expect((await db.execute(sql`select id from equipment_unit`)).rows).toEqual([]);
     });
 
-    it("the migration refuses to run over totals that are already wrong", async () => {
-      const db = await seedShields();
-      await db.execute(sql`drop trigger equipment_portion_total_matches_quantity on equipment_portion`);
-      await db.execute(sql`drop trigger equipment_unit_total_matches_quantity on equipment_unit`);
-      await db.execute(sql`drop function equipment_total_matches_quantity`);
-      await db.execute(sql`update equipment_portion set count = 7 where id = 'p1'`);
+    describe("the migration that adds this rule", () => {
+      /** Shields as `seedShields` makes them, with the rule taken out again so bad data can be written first. */
+      async function beforeMigration() {
+        const db = await seedShields();
+        await db.execute(sql`drop trigger equipment_portion_total_matches_quantity on equipment_portion`);
+        await db.execute(sql`drop trigger equipment_unit_total_matches_quantity on equipment_unit`);
+        await db.execute(sql`drop function equipment_total_matches_quantity`);
+        return db;
+      }
 
-      const migration = readFileSync(path.join(process.cwd(), "drizzle", "0034_equipment-total-matches-quantity.sql"), "utf8");
-      const statements = migration.split("--> statement-breakpoint");
-      await db.execute(sql.raw(statements[0]));
+      /** Runs migration 0034 in one transaction, as the migrator does. */
+      async function runMigration(db: Db) {
+        const migration = readFileSync(path.join(process.cwd(), "drizzle", "0034_equipment-total-matches-quantity.sql"), "utf8");
+        await db.transaction(async (tx: Db) => {
+          for (const statement of migration.split("--> statement-breakpoint")) await tx.execute(sql.raw(statement));
+        });
+      }
 
-      expect(await rejection(db.execute(sql.raw(statements[1])))).toMatch(/shields has 7 across its portions but a Quantity of 8/);
+      it("refuses to run over totals that are already wrong", async () => {
+        const db = await beforeMigration();
+        await db.execute(sql`update equipment_portion set count = 7 where id = 'p1'`);
+
+        expect(await rejection(runMigration(db))).toMatch(/shields has 7 across its portions but a Quantity of 8/);
+      });
+
+      it("puts an Equipment Unit that has nothing anywhere and has never moved back at its Home", async () => {
+        const db = await beforeMigration();
+        await db.execute(sql`insert into equipment_unit (id, name, home_id, quantity) values ('cones', 'Cones', 'shed', 1)`);
+
+        await runMigration(db);
+
+        const { rows } = await db.execute(
+          sql`select count, whereabouts_type, store_id from equipment_portion where equipment_unit_id = 'cones'`,
+        );
+        expect(rows).toEqual([{ count: 1, whereabouts_type: "store", store_id: "shed" }]);
+      });
+
+      it("still refuses one with nothing anywhere if it has moved, since it may not be at Home", async () => {
+        const db = await beforeMigration();
+        await db.execute(sql`insert into equipment_unit (id, name, home_id, quantity) values ('cones', 'Cones', 'shed', 1)`);
+        await db.execute(sql`insert into movement_log_entry (id, equipment_unit_id, kind, user_id, reason, count, to_type, to_holder_id)
+          values ('m1', 'cones', 'move', 'sam', 'ad_hoc', 1, 'holder', 'sam')`);
+
+        expect(await rejection(runMigration(db))).toMatch(/cones has 0 across its portions but a Quantity of 1/);
+      });
     });
   });
 

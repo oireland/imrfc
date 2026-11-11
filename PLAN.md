@@ -2,6 +2,38 @@
 
 Vertical slices, built in order, each test-first (red → green → refactor). A slice is done when its tests pass, it works end-to-end in `pnpm dev`, and the user has reviewed it. Spec: [SPEC.md](SPEC.md).
 
+## First: harden the equipment ledger
+
+Do these before the remaining v1 slices below. The invariant: for every Equipment Unit, the counts across its portions always equal its Quantity, and every change to Whereabouts can be explained by the Movement Log. Stay inside `equipment` and `duties`. No new features and no UI polish here.
+
+Already done: CI (#30), the clash sweep-line (#31), back-to-back Clashes and Event foreign keys (#32), the ledger rules enforced in Postgres (#33), the flaky contrast check (#34), the unit lock proven on real Postgres (#36), and property-based tests (#37; replay still waits for L3–L4).
+
+- [x] **L1. Make Confirm safe under concurrency** — `confirmDuty` checks `confirmedAt` before its transaction, so two simultaneous Confirms can both record a Move. Set it first inside the transaction (`update duty set confirmed_at = … where confirmed_at is null returning`); no row back means this Confirm lost the race. `recordConfirmMove` loads portions and picks sources before `recordSplitMove` takes the lock, so stale sources can fail a valid Confirm: take the unit lock first. `withUnitLock` uses `FOR UPDATE`, which also blocks foreign-key checks from other tables: use `FOR NO KEY UPDATE`. **Done when:** two concurrent Confirms of one Duty on real Postgres (`*.pg.test.ts`) record exactly one Move, and inserting a Duty for a locked unit doesn't wait.
+- [ ] **L2. Re-measure query counts** — `docs/performance-report.md` measured 1,655 queries for Home in September, and there's no verified "after" number. Re-run the same seeded measurement for each page in that report and add a regression test that caps Home's queries. **Done when:** the new counts are recorded and the cap is enforced by a test.
+- [ ] **L3. Stop writing during page loads** — `ensureDuties` runs on Event detail, and `markUnconfirmedOnce` runs on Home and Equipment. Move them to mutations or the cron job, or derive the state on read. Any write that stays on a page load needs its reason recorded in an ADR. **Done when:** rendering those pages writes nothing, or the ADR explains the exception.
+- [ ] **L4. Make the Movement Log the source of truth** — every change to Whereabouts appends a ledger entry. `equipment_portion` becomes a rebuildable view of the ledger, updated in the same transaction so reads stay fast. Today `savePortions` deletes and re-inserts the current state, and `movement_log_entry` is kept separately. **Done when:** replaying the ledger exactly reproduces the portions of every Equipment Unit.
+- [ ] **L5. Close the ledger's gaps** — `setUnconfirmedLocked` saves portions without logging, and `createEquipmentUnit` writes no entry for initial stock: log both, and migrate existing data with opening-balance entries. Also:
+  - `to_type` has no `unconfirmed` value.
+  - `logSource` drops `lastSeenEventId`.
+  - Bought and lost counts exist only as text in `conditionNote`. Give them their own entry kinds.
+  - `lowerQuantity` logs no source when it picks the Place automatically.
+  - A whole-Quantity Move of a split unit logs `storeId: ""` (`recordMoveLocked`), which would break the foreign key. All callers pass `from`, so delete that branch.
+  - `movement_log_entry.created_at` has no time zone, but `duty.confirmed_at` does, and `hasMoveSince` compares the two. Make it `timestamptz` first.
+  - Ledger entries keep a plain Event id with no foreign key, because replay needs the id after an Event is deleted.
+
+  **Done when:** the migration runs on seeded data, and replay matches. Add replay to the property tests (`duties/ledger.property.test.ts`).
+- [ ] **L6. Ledger ADR** — record the design and the alternatives rejected (e.g. full event sourcing with no portions table, and why ledger entries have no Event foreign key). **Done when:** the ADR is in `docs/adr/`.
+- [ ] **L7. Smaller fixes**
+  - **Handed-on From Duty:** when Tom takes over from Sam, Tom's Confirm is correctly refused, but "What's being moved doesn't add up" gives no next step. Offer "Tom has it from Sam" in the confirm sheet.
+  - **Boundary test:** it only scans `src/features`, and nine imports elsewhere reach into feature internals. Add a `client.ts` entry point for code that client components need, scan all of `src`, and add a cycle check.
+  - **Test speed:** `src/test/db.ts` clones an empty template, so each database test replays every migration. Migrate the template once.
+  - **Docs:** SPEC says the board polls every ~5s, but the code and ADR 0005 say 10s. CONTEXT still defines Sheet Default. ADR 0002 lists only six features.
+  - **Playwright in CI:** it only runs locally today.
+
+If L4–L5 overrun, they're the ones to cut.
+
+## v1 slices
+
 - [x] **0. Scaffold** — Next.js (App Router, TS, pnpm); Tailwind + shadcn with the crest palette theme file (SPEC → Look and feel); Drizzle; Vitest with a PGlite test-database helper; Playwright; `docker-compose.yml` (Postgres + Mailpit); feature folder layout; one passing test of each kind.
 - [x] **1. Sign-in & approval** — Better Auth (Google + magic link via pluggable mail sender); Pending → Approved; `ADMIN_EMAILS` bootstrap; Roles; route guards; Admin pending list + badge.
 - [x] **2. Users admin** — change Roles; block/unblock (sessions revoked). Duty/equipment side-effects come in slice 10.
