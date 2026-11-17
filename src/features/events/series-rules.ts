@@ -1,4 +1,5 @@
 import { LIMITS, firstTooLong } from "@/lib/text-limits";
+import type { Result } from "@/lib/result";
 // Match isn't a Series Event Type: it needs an opponent and other Match-only details a Series pattern doesn't model.
 export type SeriesEventType = "training" | "social";
 
@@ -13,48 +14,6 @@ export type SeriesPattern = {
   endDate: string;
   notes?: string;
 };
-
-const LONDON = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "Europe/London",
-  hour12: false,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-});
-
-function londonOffsetMs(instant: Date): number {
-  const parts = Object.fromEntries(LONDON.formatToParts(instant).map((p) => [p.type, p.value]));
-  const asUtc = Date.UTC(
-    +parts.year,
-    +parts.month - 1,
-    +parts.day,
-    +parts.hour % 24,
-    +parts.minute,
-    +parts.second,
-  );
-  return asUtc - Math.floor(instant.getTime() / 1000) * 1000;
-}
-
-/** The Europe/London calendar date and clock time of a UTC instant. */
-export function londonParts(instant: Date): { date: string; time: string } {
-  const parts = Object.fromEntries(LONDON.formatToParts(instant).map((p) => [p.type, p.value]));
-  return {
-    date: `${parts.year}-${parts.month}-${parts.day}`,
-    time: `${String(+parts.hour % 24).padStart(2, "0")}:${parts.minute}`,
-  };
-}
-
-/** Converts a Europe/London wall-clock date and time to the UTC instant. */
-export function londonToUtc(date: string, time: string): Date {
-  const [y, m, d] = date.split("-").map(Number);
-  const [hh, mm] = time.split(":").map(Number);
-  const naive = Date.UTC(y, m - 1, d, hh, mm);
-  const guess = naive - londonOffsetMs(new Date(naive));
-  return new Date(naive - londonOffsetMs(new Date(guess)));
-}
 
 /** Calendar dates (inclusive) between start and end that fall on one of the weekdays. */
 export function occurrenceDates(p: { weekdays: number[]; startDate: string; endDate: string }): string[] {
@@ -80,7 +39,7 @@ function isDate(value: string): boolean {
   return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === value;
 }
 
-export function checkOccurrenceCount(adding: number, existing: number): { ok: true } | { ok: false; error: string } {
+export function checkOccurrenceCount(adding: number, existing: number): Result {
   if (existing + adding <= MAX_OCCURRENCES) return { ok: true };
   return {
     ok: false,
@@ -88,7 +47,7 @@ export function checkOccurrenceCount(adding: number, existing: number): { ok: tr
   };
 }
 
-export function validateSeries(p: SeriesPattern): { ok: true } | { ok: false; error: string } {
+export function validateSeries(p: SeriesPattern): Result {
   const tooLong = firstTooLong([
     ["title", p.title, LIMITS.name],
     ["venue", p.venue, LIMITS.line],

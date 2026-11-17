@@ -1,18 +1,14 @@
 import Link from "next/link";
-import { revalidatePath } from "next/cache";
 import { ChevronRight, CircleHelp, User, Warehouse } from "lucide-react";
 import { db } from "@/db/client";
 import { AddEquipmentButton } from "@/components/add-equipment-button";
 import { Card } from "@/components/ui/card";
 import { QuickMoveRowButton } from "@/components/quick-move-button";
 import {
-  getEquipmentUnit,
-  getPortions,
   groupByWhereabouts,
   listEquipmentUnits,
   listPortionsFor,
   quickMoveFor,
-  recordMove,
   type EquipmentRow,
   type EquipmentUnit,
   type WhereaboutsGroup,
@@ -22,7 +18,7 @@ import { listEventTitles } from "@/features/events";
 import { displayName, isCommitteeOrAbove, listKnownUsers } from "@/features/users";
 import { listStores, type Store } from "@/features/stores";
 import { requireApprovedUser } from "@/lib/session";
-import { addEquipmentUnit } from "./actions";
+import { addEquipmentUnit, quickMove } from "./actions";
 
 export default async function EquipmentViewPage() {
   const user = await requireApprovedUser();
@@ -45,20 +41,6 @@ export default async function EquipmentViewPage() {
     .filter((p) => unitsById.has(p.equipmentUnitId))
     .map((p) => ({ unit: unitsById.get(p.equipmentUnitId)!, portion: p }));
   const groups = groupByWhereabouts(rows, user.id);
-
-  async function quickMove(formData: FormData) {
-    "use server";
-    const { id: userId } = await requireApprovedUser();
-    const equipmentUnitId = String(formData.get("equipmentUnitId"));
-    const portionId = String(formData.get("portionId"));
-    const [unit, unitPortions] = await Promise.all([getEquipmentUnit(db, equipmentUnitId), getPortions(db, equipmentUnitId)]);
-    const portion = unitPortions.find((p) => p.id === portionId);
-    if (!unit || !portion) return;
-    const count = formData.get("count");
-    const move = quickMoveFor({ unit, portion }, userId, count ? Number(count) : undefined);
-    await recordMove(db, equipmentUnitId, userId, move.to, "ad_hoc", { count: move.count, from: move.from });
-    revalidatePath("/equipment");
-  }
 
   function groupHeading(group: WhereaboutsGroup) {
     if (group.type === "store") {

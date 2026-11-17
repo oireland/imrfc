@@ -36,6 +36,11 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   };
 });
 
+/** The Viewer other features take: who is looking, and whether they're Committee or above. */
+export function viewerOf(user: Pick<CurrentUser, "id" | "role">) {
+  return { id: user.id, committee: isCommitteeOrAbove(user.role) };
+}
+
 /** Redirects to sign-in, the waiting screen, or the blocked screen; otherwise returns the Approved User. */
 export async function requireApprovedUser(): Promise<CurrentUser> {
   const user = await getCurrentUser();

@@ -9,8 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { Result } from "@/lib/result";
 
-type Result = { ok: true } | { ok: false; error: string };
 
 export type AwayItem = {
   id: string;

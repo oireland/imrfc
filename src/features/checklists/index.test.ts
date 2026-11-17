@@ -68,7 +68,7 @@ describe("Checklists", () => {
   it("resolves Event, then Series, then Default", async () => {
     const { db, balls, cones } = await setup();
     await addToChecklist(db, { scope: "event_type", scopeId: "training" }, balls.id);
-    const ref = { eventId: "e1", seriesId: "s1", eventType: "training" };
+    const ref = { id: "e1", seriesId: "s1", eventType: "training" };
 
     expect(await resolveEventChecklist(db, ref)).toEqual({
       source: "default",
@@ -90,7 +90,7 @@ describe("Checklists", () => {
 
   it("resolves an Event with no seriesId without a Series level", async () => {
     const { db } = await setup();
-    expect(await resolveEventChecklist(db, { eventId: "e", seriesId: null, eventType: "social" })).toEqual({
+    expect(await resolveEventChecklist(db, { id: "e", seriesId: null, eventType: "social" })).toEqual({
       source: "none",
       items: [],
     });
@@ -104,10 +104,10 @@ describe("Checklists", () => {
     await addToChecklist(db, { scope: "event", scopeId: "own" }, balls.id);
 
     const resolved = await resolveEventChecklists(db, [
-      { eventId: "plain", seriesId: null, eventType: "training" },
-      { eventId: "in-series", seriesId: "s1", eventType: "training" },
-      { eventId: "own", seriesId: "s1", eventType: "training" },
-      { eventId: "social", seriesId: null, eventType: "social" },
+      { id: "plain", seriesId: null, eventType: "training" },
+      { id: "in-series", seriesId: "s1", eventType: "training" },
+      { id: "own", seriesId: "s1", eventType: "training" },
+      { id: "social", seriesId: null, eventType: "social" },
     ]);
 
     expect(Object.fromEntries(resolved)).toEqual({
@@ -127,8 +127,8 @@ describe("Checklists", () => {
   it("resolves many Events in the same number of queries as one", async () => {
     const { db, balls } = await setup();
     await addToChecklist(db, { scope: "event_type", scopeId: "training" }, balls.id);
-    const events = Array.from({ length: 20 }, (_, i) => ({ eventId: `e${i}`, seriesId: `s${i}`, eventType: "training" }));
-    for (const e of events.slice(0, 10)) await addToChecklist(db, { scope: "event", scopeId: e.eventId }, balls.id);
+    const events = Array.from({ length: 20 }, (_, i) => ({ id: `e${i}`, seriesId: `s${i}`, eventType: "training" }));
+    for (const e of events.slice(0, 10)) await addToChecklist(db, { scope: "event", scopeId: e.id }, balls.id);
 
     const one = countSelects(db);
     await resolveEventChecklists(db, events.slice(0, 1));
@@ -148,19 +148,19 @@ describe("Checklists", () => {
 
     await setChecklistItemCount(db, scope, balls.id, 4);
     expect(await getChecklist(db, scope)).toEqual([{ equipmentUnitId: balls.id, count: 4 }]);
-    expect(await resolveEventChecklist(db, { eventId: "e1", seriesId: null, eventType: "training" })).toEqual({
+    expect(await resolveEventChecklist(db, { id: "e1", seriesId: null, eventType: "training" })).toEqual({
       source: "default",
       items: [{ equipmentUnitId: balls.id, count: 4 }],
     });
 
     await setChecklistItemCount(db, scope, balls.id, 20);
-    expect(await resolveEventChecklist(db, { eventId: "e1", seriesId: null, eventType: "training" })).toEqual({
+    expect(await resolveEventChecklist(db, { id: "e1", seriesId: null, eventType: "training" })).toEqual({
       source: "default",
       items: [{ equipmentUnitId: balls.id, count: 8 }],
     });
 
     await setChecklistItemCount(db, scope, balls.id, null);
-    expect(await resolveEventChecklist(db, { eventId: "e1", seriesId: null, eventType: "training" })).toEqual({
+    expect(await resolveEventChecklist(db, { id: "e1", seriesId: null, eventType: "training" })).toEqual({
       source: "default",
       items: [{ equipmentUnitId: balls.id, count: 8 }],
     });

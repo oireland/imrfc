@@ -4,8 +4,8 @@ import { useRef, useTransition } from "react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { Result } from "@/lib/result";
 
-type Result = { ok: true } | { ok: false; error: string };
 
 /** Profile's name field; saves when you leave it or press Enter, if it changed. */
 export function ProfileNameField({ initialName, save }: { initialName: string; save: (name: string) => Promise<Result> }) {

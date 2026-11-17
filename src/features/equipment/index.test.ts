@@ -5,7 +5,7 @@ import { user } from "@/features/users";
 import { event } from "@/features/events";
 import {
   createEquipmentUnit,
-  getPortions,
+  loadPortions,
   hasEquipmentUnconfirmedAt,
   listEquipmentHeldBy,
   listEquipmentUnits,
@@ -64,7 +64,7 @@ describe("createEquipmentUnit", () => {
     const units = await listEquipmentUnits(db);
     expect(units).toMatchObject([{ name: "Ball bag A", status: "active", homeId: home.id, quantity: 1 }]);
     if (!result.ok) return;
-    expect(await getPortions(db, result.equipmentUnit.id)).toMatchObject([
+    expect(await loadPortions(db, result.equipmentUnit.id)).toMatchObject([
       { count: 1, whereaboutsType: "store", storeId: home.id },
     ]);
   });
@@ -78,7 +78,7 @@ describe("createEquipmentUnit", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.equipmentUnit.quantity).toBe(8);
-    expect(await getPortions(db, result.equipmentUnit.id)).toMatchObject([
+    expect(await loadPortions(db, result.equipmentUnit.id)).toMatchObject([
       { count: 8, whereaboutsType: "store", storeId: home.id },
     ]);
   });
@@ -148,7 +148,7 @@ describe("retireEquipmentUnit", () => {
 
     expect(await listEquipmentUnits(db)).toEqual([]);
     expect(await listEquipmentUnits(db, { includeRetired: true })).toMatchObject([{ status: "retired" }]);
-    expect(await getPortions(db, created.equipmentUnit.id)).toMatchObject([{ count: 1, storeId: home.id }]);
+    expect(await loadPortions(db, created.equipmentUnit.id)).toMatchObject([{ count: 1, storeId: home.id }]);
     expect((await listMovementLog(db, created.equipmentUnit.id)).map((e) => e.kind)).toEqual(["condition_note", "added"]);
   });
 
@@ -175,7 +175,7 @@ describe("Moves in a hurry", () => {
       expect(result.ok).toBe(false);
     }
 
-    expect((await getPortions(db, id)).reduce((n, p) => n + p.count, 0)).toBe(1);
+    expect((await loadPortions(db, id)).reduce((n, p) => n + p.count, 0)).toBe(1);
     expect((await listMovementLog(db, id)).map((e) => e.kind)).toEqual(["added"]);
   });
 
@@ -198,7 +198,7 @@ describe("Moves in a hurry", () => {
     );
 
     expect(results.every((r) => r.ok)).toBe(true);
-    const portions = await getPortions(db, id);
+    const portions = await loadPortions(db, id);
     expect(portions.reduce((n, p) => n + p.count, 0)).toBe(8);
     for (const p of people) expect(portions.find((x) => x.holderId === p.id)?.count).toBe(2);
   });
@@ -235,7 +235,7 @@ describe("recordMove", () => {
 
     await recordMove(db, created.equipmentUnit.id, alex.id, { type: "holder", holderId: alex.id });
 
-    const portions = await getPortions(db, created.equipmentUnit.id);
+    const portions = await loadPortions(db, created.equipmentUnit.id);
     expect(portions).toMatchObject([{ whereaboutsType: "holder", holderId: alex.id, storeId: null }]);
 
     const log = await listMovementLog(db, created.equipmentUnit.id);
@@ -259,7 +259,7 @@ describe("recordMove", () => {
       storeId: otherStore.id,
     });
 
-    const portions = await getPortions(db, created.equipmentUnit.id);
+    const portions = await loadPortions(db, created.equipmentUnit.id);
     expect(portions).toMatchObject([{ whereaboutsType: "store", storeId: otherStore.id, holderId: null }]);
   });
 
@@ -281,7 +281,7 @@ describe("recordMove", () => {
       from: { type: "holder", holderId: sam.id },
     });
 
-    const portions = await getPortions(db, equipmentUnitId);
+    const portions = await loadPortions(db, equipmentUnitId);
     expect(portions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ count: 4, whereaboutsType: "store", storeId: home.id }),
@@ -321,7 +321,7 @@ describe("recordSplitMove", () => {
     });
 
     expect(result).toEqual({ ok: true });
-    const portions = await getPortions(db, equipmentUnitId);
+    const portions = await loadPortions(db, equipmentUnitId);
     expect(portions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ count: 2, whereaboutsType: "holder", holderId: sam.id }),
@@ -363,7 +363,7 @@ describe("setUnconfirmed", () => {
     await seedEvent(db);
     await setUnconfirmed(db, created.equipmentUnit.id, "event-1");
 
-    const portions = await getPortions(db, created.equipmentUnit.id);
+    const portions = await loadPortions(db, created.equipmentUnit.id);
     expect(portions).toMatchObject([{ whereaboutsType: "unconfirmed", lastSeenEventId: "event-1", count: 1 }]);
   });
 });
@@ -381,7 +381,7 @@ describe("raiseQuantity", () => {
     expect(result.ok).toBe(true);
     const units = await listEquipmentUnits(db);
     expect(units[0].quantity).toBe(8);
-    const portions = await getPortions(db, created.equipmentUnit.id);
+    const portions = await loadPortions(db, created.equipmentUnit.id);
     expect(portions).toMatchObject([{ count: 8, whereaboutsType: "store", storeId: home.id }]);
     const log = await listMovementLog(db, created.equipmentUnit.id);
     expect(log[0]).toMatchObject({ kind: "bought", count: 2, conditionNote: null });
@@ -401,7 +401,7 @@ describe("lowerQuantity", () => {
     expect(result.ok).toBe(true);
     const units = await listEquipmentUnits(db);
     expect(units[0].quantity).toBe(6);
-    const portions = await getPortions(db, created.equipmentUnit.id);
+    const portions = await loadPortions(db, created.equipmentUnit.id);
     expect(portions).toMatchObject([{ count: 6 }]);
     const log = await listMovementLog(db, created.equipmentUnit.id);
     expect(log[0]).toMatchObject({ kind: "lost", count: 2, conditionNote: null });
@@ -579,7 +579,7 @@ describe("the Movement Log is the source of truth", () => {
   async function expectReplayMatches(db: Awaited<ReturnType<typeof createTestDb>>, equipmentUnitId: string) {
     const replayed = await replayWhereabouts(db, equipmentUnitId);
     if (!replayed.ok) throw new Error(replayed.error);
-    expect(sameWhereabouts(replayed.portions, await getPortions(db, equipmentUnitId))).toBe(true);
+    expect(sameWhereabouts(replayed.portions, await loadPortions(db, equipmentUnitId))).toBe(true);
   }
 
   it("replays to the same Portions after every kind of change to the Whereabouts", async () => {

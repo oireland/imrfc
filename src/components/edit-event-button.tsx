@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Pencil } from "lucide-react";
 import { EditEventSheet, type EditEventInitial } from "@/components/edit-event-sheet";
 import type { QuickEventInput } from "@/features/events";
+import type { Result } from "@/lib/result";
 
 type EventType = QuickEventInput["type"];
 
@@ -21,7 +22,7 @@ export function EditEventButton({
   venues: string[];
   teams: { id: string; name: string }[];
   initial: EditEventInitial;
-  action: (input: QuickEventInput & { scope: "this" | "future" }) => Promise<{ ok: true } | { ok: false; error: string }>;
+  action: (input: QuickEventInput & { scope: "this" | "future" }) => Promise<Result>;
 }) {
   const [open, setOpen] = useState(false);
   return (

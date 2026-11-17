@@ -1,6 +1,6 @@
 // Heads-up rules: pure functions over plain data, no database or Next.js.
 import { startsAt } from "@/features/events";
-import { joinNames } from "./names-rules";
+import { joinList } from "@/lib/join-names";
 import { byStart, dutyUsers, heldBy, inStores, itemCount, needsUnit, HOUR, type PlanEvent, type PlanEquipment } from "./plan";
 
 /** A Duty still unfilled this close to its Event is worth a heads-up. */
@@ -57,7 +57,7 @@ export function findHeadsUps({
             kind: "pass_on",
             equipmentUnitId: unit.id,
             eventIds: [next.id],
-            message: `${personName(holder)} needs to pass ${unit.name} to ${joinNames(bringers.map(personName))} before ${next.title}.`,
+            message: `${personName(holder)} needs to pass ${unit.name} to ${joinList(bringers.map(personName))} before ${next.title}.`,
           });
         }
       }

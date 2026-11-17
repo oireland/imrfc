@@ -9,8 +9,8 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { BODY_AREAS, type BodyArea, type OpenStatus, type ReportInput, type UpdateInput } from "@/features/injuries/client";
 import { cn } from "cn";
+import type { Result } from "@/lib/result";
 
-type Result = { ok: true } | { ok: false; error: string };
 
 export type InjuryActions = {
   report: (input: ReportInput) => Promise<Result>;

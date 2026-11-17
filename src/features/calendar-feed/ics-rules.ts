@@ -1,5 +1,5 @@
 // ICS (RFC 5545) rendering for the Calendar Feed. Pure, no database or Next.js.
-import { londonParts } from "@/features/events";
+import { addDays, londonParts } from "@/lib/london";
 
 export type FeedEvent = {
   id: string;
@@ -18,7 +18,7 @@ const escapeText = (s: string) =>
 
 /** The day after a YYYY-MM-DD date, as YYYYMMDD. */
 function nextDay(date: string): string {
-  return new Date(Date.parse(`${date}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10).replace(/-/g, "");
+  return addDays(date, 1).replace(/-/g, "");
 }
 
 const utc = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");

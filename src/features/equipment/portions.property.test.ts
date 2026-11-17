@@ -26,8 +26,9 @@ import {
   type Model,
   type SourceChoice,
 } from "@/test/whereabouts-model";
-import { lowerQuantity, moveMultiple, toPlace, totalQuantity, type Place, type Portion } from "./portions";
+import { lowerQuantity, moveMultiple, placeOf as portionPlace, totalQuantity, type Place, type Portion } from "./portions";
 import { applyEntry, replay } from "./ledger";
+import type { Result } from "@/lib/result";
 
 const count = fc.integer({ min: 1, max: 6 });
 
@@ -48,7 +49,7 @@ const op: fc.Arbitrary<Op> = fc.oneof(
   fc.record({ kind: fc.constant("lower" as const), count, from: fc.option(sourceArb, { nil: undefined }) }),
 );
 
-type Step = { ok: true; portions: Portion[] } | { ok: false; error: string };
+type Step = Result<{ portions: Portion[] }>;
 
 /** Runs one operation through the rules, and works out from the model alone what should happen. */
 function apply(portions: Portion[], model: Model, o: Op): { result: Step; expected: Model | "rejected" } {
@@ -61,7 +62,7 @@ function apply(portions: Portion[], model: Model, o: Op): { result: Step; expect
     case "moveAll": {
       // One entry for each Place it's at, as recordMove logs a whole-Quantity Move.
       let result: Step = { ok: true, portions };
-      for (const p of portions) if (result.ok) result = applyEntry(result.portions, { kind: "move", count: p.count, from: toPlace(p), to: o.to });
+      for (const p of portions) if (result.ok) result = applyEntry(result.portions, { kind: "move", count: p.count, from: portionPlace(p), to: o.to });
       return { result, expected: allAt(o.to, modelTotal(model)) };
     }
     case "split": {

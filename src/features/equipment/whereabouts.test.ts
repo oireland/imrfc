@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { groupByWhereabouts, quickMoveFor, type EquipmentRow } from "./whereabouts";
+import { groupByWhereabouts, historyLine, quickMoveFor, type EquipmentRow, type HistoryNames } from "./whereabouts";
+import type { movementLogEntry } from "./schema";
 import type { EquipmentUnit } from "./index";
 import type { Portion } from "./portions";
 
@@ -128,5 +129,74 @@ describe("quickMoveFor", () => {
     expect(quickMoveFor(inShed, "me", 9).count).toBe(5);
     expect(quickMoveFor(inShed, "me", 0).count).toBe(1);
     expect(quickMoveFor(inShed, "me", Number.NaN).count).toBe(5);
+  });
+});
+
+describe("historyLine", () => {
+  const names: HistoryNames = {
+    storeName: (id) => (id ? `the ${id}` : "a store"),
+    personName: (id) => (id === "me" ? "you" : id ? id : "someone"),
+    eventName: (id) => id ?? "an event",
+  };
+  function entry(overrides: Partial<typeof movementLogEntry.$inferSelect>) {
+    return {
+      id: "e1",
+      seq: 1,
+      equipmentUnitId: "equipment-1",
+      kind: "move",
+      userId: "Tom",
+      reason: "ad_hoc",
+      count: null,
+      fromType: null,
+      fromStoreId: null,
+      fromHolderId: null,
+      fromLastSeenEventId: null,
+      toType: null,
+      toStoreId: null,
+      toHolderId: null,
+      toLastSeenEventId: null,
+      conditionNote: null,
+      createdAt: new Date(),
+      ...overrides,
+    } as typeof movementLogEntry.$inferSelect;
+  }
+  const line = (o: Partial<typeof movementLogEntry.$inferSelect>, split = false) => historyLine(entry(o), names, split);
+
+  it("words a Condition Note", () => {
+    expect(line({ kind: "condition_note", conditionNote: "torn" })).toBe("Tom noted: “torn”");
+  });
+  it("words added stock, with or without a known user", () => {
+    expect(line({ kind: "added", toStoreId: "shed" })).toBe("Tom added it to the shed");
+    expect(line({ kind: "added", userId: null, toStoreId: "shed", count: 4 }, true)).toBe("Someone added 4 to the shed");
+  });
+  it("words an opening balance in a Store, with a Holder and unconfirmed", () => {
+    expect(line({ kind: "opening", toType: "store", toStoreId: "shed" })).toBe("Where it was when this log began: in the shed");
+    expect(line({ kind: "opening", toType: "holder", toHolderId: "Sam" })).toBe("Where it was when this log began: with Sam");
+    expect(line({ kind: "opening", toType: "unconfirmed", toLastSeenEventId: "Cup final" }, false)).toBe(
+      "Where it was when this log began: unconfirmed after Cup final",
+    );
+  });
+  it("words bought and lost", () => {
+    expect(line({ kind: "bought", count: 3 })).toBe("Tom bought 3");
+    expect(line({ kind: "lost", userId: "me", count: 2 })).toBe("You lost 2");
+  });
+  it("words unconfirmed", () => {
+    expect(line({ kind: "unconfirmed", userId: null, toLastSeenEventId: "Cup final", count: 3 }, true)).toBe(
+      "Nobody confirmed where 3 went after Cup final",
+    );
+  });
+  it("words ad hoc moves", () => {
+    expect(line({ toType: "store", toStoreId: "shed" })).toBe("Tom put it in the shed");
+    expect(line({ toType: "holder", toHolderId: "Tom" })).toBe("Tom took it");
+    expect(line({ toType: "holder", toHolderId: "Priya" })).toBe("Tom gave it to Priya");
+    expect(line({ toType: "store", toStoreId: "shed", count: 2 }, true)).toBe("Tom put 2 in the shed");
+  });
+  it("words moves made by finishing a Duty", () => {
+    expect(line({ reason: "duty", toType: "store", toStoreId: "shed" })).toBe("Tom put it back in the shed (duty done)");
+    expect(line({ reason: "duty", toType: "holder", toHolderId: "Tom" })).toBe("Tom brought it along (duty done)");
+    expect(line({ reason: "duty", toType: "holder", toHolderId: "Priya" })).toBe("Tom confirmed it's with Priya (duty done)");
+    expect(line({ reason: "duty", toType: "holder", toHolderId: "Priya", count: 3 }, true)).toBe(
+      "Tom confirmed 3 is with Priya (duty done)",
+    );
   });
 });

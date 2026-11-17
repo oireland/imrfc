@@ -1,3 +1,4 @@
+import type { Result } from "@/lib/result";
 // Whereabouts as portions: pure functions over plain data, no database or Next.js.
 // An Equipment Unit's Whereabouts is one or more Portions, each a count at exactly one Place.
 // Portion counts always add up to the Equipment Unit's Quantity.
@@ -17,12 +18,27 @@ export type Portion = {
   lastSeenEventId: string | null;
 };
 
-/** A key identifying a Portion's Place, so Portions at the same Place can be found and merged. */
-export function placeKey(p: Pick<Portion, "whereaboutsType" | "storeId" | "holderId" | "lastSeenEventId">): string {
-  if (p.whereaboutsType === "store") return `store:${p.storeId}`;
-  if (p.whereaboutsType === "holder") return `holder:${p.holderId}`;
-  return `unconfirmed:${p.lastSeenEventId}`;
+/** The Place a Portion is at. */
+export function placeOf(p: Portion): Place {
+  if (p.whereaboutsType === "store") return { type: "store", storeId: p.storeId! };
+  if (p.whereaboutsType === "holder") return { type: "holder", holderId: p.holderId! };
+  return { type: "unconfirmed", lastSeenEventId: p.lastSeenEventId! };
 }
+
+/** A key identifying a Place ("store:<id>", "holder:<id>", "unconfirmed:<id>"), so Portions at the same Place can be found and merged. */
+export function placeKey(place: Place): string {
+  if (place.type === "store") return `store:${place.storeId}`;
+  if (place.type === "holder") return `holder:${place.holderId}`;
+  return `unconfirmed:${place.lastSeenEventId}`;
+}
+
+export function parsePlaceKey(value: string): Place {
+  if (value.startsWith("store:")) return { type: "store", storeId: value.slice("store:".length) };
+  if (value.startsWith("unconfirmed:")) return { type: "unconfirmed", lastSeenEventId: value.slice("unconfirmed:".length) };
+  return { type: "holder", holderId: value.slice("holder:".length) };
+}
+
+export const samePlace = (a: Place, b: Place): boolean => placeKey(a) === placeKey(b);
 
 export function placeFields(place: Place): Pick<Portion, "whereaboutsType" | "storeId" | "holderId" | "lastSeenEventId"> {
   if (place.type === "store") return { whereaboutsType: "store", storeId: place.storeId, holderId: null, lastSeenEventId: null };
@@ -37,20 +53,14 @@ export function totalQuantity(portions: Portion[]): number {
 /** The single Place an Equipment Unit is at, or undefined when it is split across several. */
 export function singlePlace(portions: Portion[]): Place | undefined {
   if (portions.length !== 1) return undefined;
-  return toPlace(portions[0]);
-}
-
-export function toPlace(p: Portion): Place {
-  if (p.whereaboutsType === "store") return { type: "store", storeId: p.storeId! };
-  if (p.whereaboutsType === "holder") return { type: "holder", holderId: p.holderId! };
-  return { type: "unconfirmed", lastSeenEventId: p.lastSeenEventId! };
+  return placeOf(portions[0]);
 }
 
 /** Merges Portions at the same Place into one and drops any whose count has fallen to zero (or below). */
 export function mergePortions(portions: Portion[]): Portion[] {
   const byPlace = new Map<string, Portion>();
   for (const p of portions) {
-    const key = placeKey(p);
+    const key = placeKey(placeOf(p));
     const existing = byPlace.get(key);
     byPlace.set(key, existing ? { ...existing, count: existing.count + p.count } : p);
   }
@@ -58,8 +68,8 @@ export function mergePortions(portions: Portion[]): Portion[] {
 }
 
 export function countAt(portions: Portion[], place: Place): number {
-  const key = placeKey(placeFields(place));
-  return portions.find((p) => placeKey(p) === key)?.count ?? 0;
+  const key = placeKey(place);
+  return portions.find((p) => placeKey(placeOf(p)) === key)?.count ?? 0;
 }
 
 
@@ -74,7 +84,7 @@ export function countAt(portions: Portion[], place: Place): number {
 export function moveMultiple(
   portions: Portion[],
   { sources, targets }: { sources: { from: Place; count: number }[]; targets: { to: Place; count: number }[] },
-): { ok: true; portions: Portion[] } | { ok: false; error: string } {
+): Result<{ portions: Portion[] }> {
   const counts = [...sources.map((s) => s.count), ...targets.map((t) => t.count)];
   if (counts.some((c) => !Number.isInteger(c) || c < 0)) return { ok: false, error: "Enter how many to move." };
   const sourceTotal = sources.reduce((sum, s) => sum + s.count, 0);
@@ -86,8 +96,8 @@ export function moveMultiple(
     if (count <= 0) continue;
     const available = countAt(working, from);
     if (count > available) return { ok: false, error: `There aren't ${count} there to move.` };
-    const key = placeKey(placeFields(from));
-    working = working.map((p) => (placeKey(p) === key ? { ...p, count: p.count - count } : p));
+    const key = placeKey(from);
+    working = working.map((p) => (placeKey(placeOf(p)) === key ? { ...p, count: p.count - count } : p));
   }
   const added = targets
     .filter(({ count }) => count > 0)
@@ -100,7 +110,7 @@ export function moveMultiple(
 export function lowerQuantity(
   portions: Portion[],
   { removeCount, from }: { removeCount: number; from?: Place },
-): { ok: true; portions: Portion[] } | { ok: false; error: string } {
+): Result<{ portions: Portion[] }> {
   const total = totalQuantity(portions);
   if (total - removeCount < 1) return { ok: false, error: "Can't lower an equipment unit's quantity below 1." };
 
@@ -110,7 +120,7 @@ export function lowerQuantity(
   const available = countAt(portions, place);
   if (removeCount > available) return { ok: false, error: `There aren't ${removeCount} there to remove.` };
 
-  const key = placeKey(placeFields(place));
-  const reduced = portions.map((p) => (placeKey(p) === key ? { ...p, count: p.count - removeCount } : p));
+  const key = placeKey(place);
+  const reduced = portions.map((p) => (placeKey(placeOf(p)) === key ? { ...p, count: p.count - removeCount } : p));
   return { ok: true, portions: mergePortions(reduced) };
 }

@@ -36,7 +36,7 @@ export async function deleteAccount(
   }
 
   // All or nothing: a failure partway must not leave someone half-erased.
-  await db.transaction(async (tx: Db) => {
+  await db.transaction(async (tx) => {
     await releaseUpcomingDuties(tx, userId);
     await deleteFeedToken(tx, userId);
     await unsubscribeEverywhere(tx, userId);

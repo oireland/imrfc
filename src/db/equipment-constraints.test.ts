@@ -10,7 +10,7 @@ async function seedShields() {
   const db = await createTestDb();
   await db.execute(sql`insert into "user" (id, name, email, email_verified) values ('sam', 'Sam', 'sam@example.com', true)`);
   await db.execute(sql`insert into store (id, name, address) values ('shed', 'Shed', 'x')`);
-  await db.transaction(async (tx: Db) => {
+  await db.transaction(async (tx) => {
     await tx.execute(sql`insert into equipment_unit (id, name, home_id, quantity) values ('shields', 'Shields', 'shed', 8)`);
     await tx.execute(sql`insert into equipment_portion (id, equipment_unit_id, count, whereabouts_type, store_id) values ('p1', 'shields', 8, 'store', 'shed')`);
   });
@@ -57,7 +57,7 @@ describe("Equipment rules enforced by the database", () => {
     it("checks at commit, so replacing every portion inside one transaction is allowed", async () => {
       const db = await seedShields();
 
-      await db.transaction(async (tx: Db) => {
+      await db.transaction(async (tx) => {
         await tx.execute(sql`delete from equipment_portion where equipment_unit_id = 'shields'`);
         await tx.execute(sql`insert into equipment_portion (id, equipment_unit_id, count, whereabouts_type, store_id) values ('p2', 'shields', 5, 'store', 'shed')`);
         await tx.execute(sql`insert into equipment_portion (id, equipment_unit_id, count, whereabouts_type, holder_id) values ('p3', 'shields', 3, 'holder', 'sam')`);
@@ -70,7 +70,7 @@ describe("Equipment rules enforced by the database", () => {
     it("allows removing an Equipment Unit together with its portions, as test clean-up does", async () => {
       const db = await seedShields();
 
-      await db.transaction(async (tx: Db) => {
+      await db.transaction(async (tx) => {
         await tx.execute(sql`delete from equipment_portion where equipment_unit_id = 'shields'`);
         await tx.execute(sql`delete from equipment_unit where id = 'shields'`);
       });
@@ -91,7 +91,7 @@ describe("Equipment rules enforced by the database", () => {
       /** Runs migration 0034 in one transaction, as the migrator does. */
       async function runMigration(db: Db) {
         const migration = readFileSync(path.join(process.cwd(), "drizzle", "0034_equipment-total-matches-quantity.sql"), "utf8");
-        await db.transaction(async (tx: Db) => {
+        await db.transaction(async (tx) => {
           for (const statement of migration.split("--> statement-breakpoint")) await tx.execute(sql.raw(statement));
         });
       }
@@ -133,7 +133,7 @@ describe("Equipment rules enforced by the database", () => {
     it("rejects a portion with a count of zero or less", async () => {
       const db = await seedShields();
 
-      const write = db.transaction(async (tx: Db) => {
+      const write = db.transaction(async (tx) => {
         await tx.execute(sql`update equipment_portion set count = 8 where id = 'p1'`);
         await tx.execute(portion(`('p0', 'shields', 0, 'store', 'shed', null, null)`));
       });

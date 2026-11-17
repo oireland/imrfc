@@ -1,9 +1,10 @@
-import { londonToUtc } from "@/features/events";
+import { londonParts, londonToUtc } from "@/lib/london";
 
 /** The season (1 Sep–31 Aug, Europe/London) containing `now`, as its start instant. */
 export function seasonStart(now: Date): Date {
-  const londonYear = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", year: "numeric" }).format(now));
-  const londonMonth = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", month: "numeric" }).format(now));
+  const { date } = londonParts(now);
+  const londonYear = Number(date.slice(0, 4));
+  const londonMonth = Number(date.slice(5, 7));
   const year = londonMonth >= 9 ? londonYear : londonYear - 1;
   return londonToUtc(`${year}-09-01`, "00:00");
 }

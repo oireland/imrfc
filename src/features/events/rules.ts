@@ -1,5 +1,6 @@
 import { LIMITS, firstTooLong } from "@/lib/text-limits";
-import { londonParts, londonToUtc } from "./series-rules";
+import { londonParts, londonToUtc } from "@/lib/london";
+import type { Result } from "@/lib/result";
 
 export type EventType = "training" | "match" | "social";
 export type HomeAway = "home" | "away";
@@ -36,9 +37,7 @@ export type NewEvent =
   | (NewEventCommon & { eventType: "training" })
   | (NewEventCommon & { eventType: "social"; title: string });
 
-export type ValidationResult = { ok: true } | { ok: false; error: string };
-
-export function validateEvent(input: NewEvent): ValidationResult {
+export function validateEvent(input: NewEvent): Result {
   const m = input.eventType === "match" ? input.matchDetails : undefined;
   const tooLong = firstTooLong([
     ["title", input.eventType === "social" ? input.title : undefined, LIMITS.name],

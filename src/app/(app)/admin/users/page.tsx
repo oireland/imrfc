@@ -11,7 +11,7 @@ import {
   listKnownUsers,
   listPendingUsers,
   unblockUser,
-  type PendingUser,
+  type User,
   type Role,
 } from "@/features/users";
 import { requireAdmin } from "@/lib/session";
@@ -21,7 +21,7 @@ import { ConfirmSubmit } from "@/components/confirm-submit";
 import { SubmitButton } from "@/components/submit-button";
 import { RoleSelect } from "./role-select";
 
-function DeleteAccountButton({ person, action }: { person: PendingUser; action: (formData: FormData) => Promise<void> }) {
+function DeleteAccountButton({ person, action }: { person: User; action: (formData: FormData) => Promise<void> }) {
   const formId = `delete-${person.id}`;
   return (
     <>
@@ -45,7 +45,7 @@ export default async function UsersAdminPage() {
   await requireAdmin();
 
   const [pending, everyone] = await Promise.all([listPendingUsers(db), listKnownUsers(db)]);
-  const approved = everyone.filter((p: PendingUser) => p.accessState !== "deleted");
+  const approved = everyone.filter((p: User) => p.accessState !== "deleted");
 
   async function approve(formData: FormData) {
     "use server";
@@ -99,7 +99,7 @@ export default async function UsersAdminPage() {
         <Card className="py-0">
           <div className="divide-y divide-border">
             {pending.length === 0 && <p className="p-4 text-muted-foreground">Nobody waiting.</p>}
-            {pending.map((p: PendingUser) => {
+            {pending.map((p: User) => {
               const blockFormId = `block-pending-${p.id}`;
               return (
                 <div key={p.id} className="flex items-center justify-between gap-3 p-4">
@@ -137,7 +137,7 @@ export default async function UsersAdminPage() {
         <Card className="py-0">
           <div className="divide-y divide-border">
             {approved.length === 0 && <p className="p-4 text-muted-foreground">Nobody yet.</p>}
-            {approved.map((p: PendingUser) => {
+            {approved.map((p: User) => {
               const blockFormId = `block-approved-${p.id}`;
               return (
                 <div key={p.id} className="flex items-center justify-between gap-3 p-4">

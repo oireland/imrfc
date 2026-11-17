@@ -2,12 +2,14 @@ import type { Db } from "@/db/types";
 import { LIMITS, firstTooLong } from "@/lib/text-limits";
 import { and, eq, inArray } from "drizzle-orm";
 import { getAvailability } from "@/features/availability";
-import { getEvent, getEvents, listEventsBetween, londonParts, londonToUtc, startsAt, type Event, type EventWithDetails } from "@/features/events";
+import { getEvent, getEvents, listMatchDay, matchLabel, startsAt, type Event, type EventWithDetails } from "@/features/events";
 import { listPlayers } from "@/features/players";
-import { displayName, listKnownUsers, type RugbyPosition } from "@/features/users";
+import { listKnownUsers, nameLookup, type RugbyPosition } from "@/features/users";
+import { refuseMatchChange } from "./guard";
 import { DEFAULT_SHIRTS, fitFor, positionOfShirt, type Candidate, type Fit } from "./shirts";
 import { selectionNotice, selectionPitch, selectionSent, selectionShirt, teamNaming } from "./schema";
 import type { Role } from "./sheet";
+import type { Result, Failure } from "@/lib/result";
 
 export { DEFAULT_SHIRTS, fitFor, positionOfShirt, sortForShirt, STARTING_SHIRTS } from "./shirts";
 export type { Candidate, Fit } from "./shirts";
@@ -18,7 +20,6 @@ export type { Role, SheetFields, SheetLayout } from "./sheet";
 
 
 type Viewer = { id: string; committee: boolean };
-type Result = { ok: true } | { ok: false; error: string };
 type ShirtRef = { eventId: string; shirt: number };
 
 export type Replied = "available" | "not_available" | "no_reply";
@@ -52,15 +53,9 @@ export type BoardCandidate = Candidate & { availability: Replied };
 
 export type Board = { pitches: Pitch[]; candidates: BoardCandidate[] };
 
-const labelOf = (e: { title: string; teams?: { name: string }[] }) => e.teams?.[0]?.name ?? e.title;
-
 /** Every Match on the London day of `event`, soonest first, with their Teams. */
 async function matchDay(db: Db, event: Event): Promise<EventWithDetails[]> {
-  const dayStart = londonToUtc(londonParts(event.start).date, "00:00");
-  const sameDay: Event[] = await listEventsBetween(db, dayStart, new Date(dayStart.getTime() + 26 * 3_600_000));
-  const day = new Set(
-    sameDay.filter((e) => e.eventType === "match" && londonParts(e.start).date === londonParts(event.start).date).map((e) => e.id),
-  );
+  const day = new Set((await listMatchDay(db, event)).map((e) => e.id));
   day.add(event.id);
   return (await getEvents(db, [...day])).sort((a, b) => a.start.getTime() - b.start.getTime());
 }
@@ -88,12 +83,12 @@ export async function getBoard(db: Db, eventId: string, viewer: Viewer, now: Dat
     getAvailability(db, eventId, viewer, now),
   ]);
 
-  const names = new Map<string, string>(people.map((u: Parameters<typeof displayName>[0] & { id: string }) => [u.id, displayName(u)]));
+  const name = nameLookup(people);
   const replied = new Map<string, Replied>();
   for (const r of availability.summary.available) replied.set(r.userId, "available");
   for (const r of availability.summary.notAvailable) replied.set(r.userId, "not_available");
   const candidates: BoardCandidate[] = listing.playing.map((p) => {
-    const person = people.find((u: { id: string }) => u.id === p.id);
+    const person = people.find((u) => u.id === p.id);
     return {
       id: p.id,
       name: p.name,
@@ -116,7 +111,7 @@ export async function getBoard(db: Db, eventId: string, viewer: Viewer, now: Dat
         occupant = {
           kind: "player",
           userId: row.userId,
-          name: names.get(row.userId) ?? "Someone",
+          name: name(row.userId),
           fit: candidate ? fitFor(shirt, candidate) : "rest",
           availability: candidate?.availability ?? "no_reply",
         };
@@ -128,23 +123,20 @@ export async function getBoard(db: Db, eventId: string, viewer: Viewer, now: Dat
         position: positionOfShirt(shirt),
         occupant,
         roles: (row?.roles ?? []) as Role[],
-        changedBy: row ? (names.get(row.updatedById) ?? "Someone") : null,
+        changedBy: row ? name(row.updatedById) : null,
         changedAt: row?.updatedAt ?? null,
       };
     });
-    return { eventId: e.id, label: labelOf(e), title: e.title, start: e.start, readOnly: isReadOnly(e, now), shirts };
+    return { eventId: e.id, label: matchLabel(e), title: e.title, start: e.start, readOnly: isReadOnly(e, now), shirts };
   });
 
   return { pitches, candidates };
 }
 
 /** Why `viewer` can't change this Shirt, or the Match it's on; null when they can. */
-async function refuse(db: Db, ref: ShirtRef, viewer: Viewer, now: Date): Promise<{ ok: false; error: string } | null> {
-  if (!viewer.committee) return { ok: false, error: "Only committee can pick the team." };
-  const event = await getEvent(db, ref.eventId);
-  if (!event || event.eventType !== "match") return { ok: false, error: "That match doesn't exist." };
-  if (event.cancelled) return { ok: false, error: "This match is cancelled." };
-  if (startsAt(event) <= now) return { ok: false, error: "This match has already started." };
+async function refuse(db: Db, ref: ShirtRef, viewer: Viewer, now: Date): Promise<Failure | null> {
+  const denied = await refuseMatchChange(db, ref.eventId, viewer, now, "Only committee can pick the team.");
+  if (denied) return denied;
   const count = (await pitchSizes(db, [ref.eventId])).get(ref.eventId) ?? DEFAULT_SHIRTS;
   if (!Number.isInteger(ref.shirt) || ref.shirt < 1 || ref.shirt > count) return { ok: false, error: `There's no shirt ${ref.shirt}.` };
   return null;
@@ -169,7 +161,7 @@ export async function pickPlayer(
   db: Db,
   input: ShirtRef & { userId: string; viewer: Viewer },
   now: Date = new Date(),
-): Promise<{ ok: true; movedFrom?: string } | { ok: false; error: string }> {
+): Promise<Result<{ movedFrom?: string }>> {
   const denied = await refuse(db, input, input.viewer, now);
   if (denied) return denied;
   const players = (await listPlayers(db)).playing;
@@ -177,7 +169,7 @@ export async function pickPlayer(
 
   const event = (await getEvent(db, input.eventId))!;
   const day = await matchDay(db, event);
-  const existing: (typeof selectionShirt.$inferSelect)[] = await db
+  const existing = await db
     .select()
     .from(selectionShirt)
     .where(and(inArray(selectionShirt.eventId, day.map((e) => e.id)), eq(selectionShirt.userId, input.userId)));
@@ -186,7 +178,7 @@ export async function pickPlayer(
   for (const old of existing) {
     if (old.eventId === input.eventId && old.shirt === input.shirt) continue;
     await empty(db, old);
-    movedFrom = `${labelOf(day.find((e) => e.id === old.eventId)!)} ${old.shirt}`;
+    movedFrom = `${matchLabel(day.find((e) => e.id === old.eventId)!)} ${old.shirt}`;
   }
   await fill(db, input, { userId: input.userId, guestName: null }, input.viewer, now);
   return movedFrom ? { ok: true, movedFrom } : { ok: true };
@@ -229,7 +221,7 @@ export async function swapShirts(db: Db, input: { from: ShirtRef; to: ShirtRef; 
   const [a, b] = await Promise.all([occupantRow(db, input.from), occupantRow(db, input.to)]);
   const asWho = (row?: typeof selectionShirt.$inferSelect) => (row ? { userId: row.userId, guestName: row.guestName, roles: row.roles } : null);
   const [whoA, whoB] = [asWho(a), asWho(b)];
-  await db.transaction(async (tx: Db) => {
+  await db.transaction(async (tx) => {
     if (whoB) await fill(tx, input.from, whoB, input.viewer, now);
     else await empty(tx, input.from);
     if (whoA) await fill(tx, input.to, whoA, input.viewer, now);
@@ -263,7 +255,7 @@ export async function removeShirt(db: Db, input: { eventId: string; viewer: View
 
 /** The Players (not Guests) on a Match's Shirts right now. */
 export async function listPickedPlayerIds(db: Db, eventId: string): Promise<string[]> {
-  const rows: { userId: string | null }[] = await db.select({ userId: selectionShirt.userId }).from(selectionShirt).where(eq(selectionShirt.eventId, eventId));
+  const rows = await db.select({ userId: selectionShirt.userId }).from(selectionShirt).where(eq(selectionShirt.eventId, eventId));
   return rows.flatMap((r) => (r.userId ? [r.userId] : []));
 }
 

@@ -5,6 +5,7 @@ import { Plus } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { QuickAddSheet } from "@/components/quick-add-sheet";
 import type { QuickEventInput } from "@/features/events";
+import type { Result } from "@/lib/result";
 
 /** The full-width "+ Add event" button: opens the New event sheet, with a date to choose. */
 export function AddEventButton({
@@ -14,7 +15,7 @@ export function AddEventButton({
 }: {
   venues: string[];
   teams: { id: string; name: string }[];
-  action: (input: QuickEventInput) => Promise<{ ok: true; id: string } | { ok: false; error: string }>;
+  action: (input: QuickEventInput) => Promise<Result<{ id: string }>>;
 }) {
   const [open, setOpen] = useState(false);
   return (

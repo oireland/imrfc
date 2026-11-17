@@ -3,6 +3,8 @@ import {
   lowerQuantity,
   mergePortions,
   moveMultiple,
+  parsePlaceKey,
+  placeKey,
   singlePlace,
   totalQuantity,
   type Portion,
@@ -184,3 +186,15 @@ describe("lowerQuantity", () => {
   });
 });
 
+
+describe("place keys", () => {
+  it("round-trips every kind of Place, keeping Unconfirmed apart from the Store", () => {
+    const places = [
+      { type: "store", storeId: "shed" },
+      { type: "holder", holderId: "tom" },
+      { type: "unconfirmed", lastSeenEventId: "e1" },
+    ] as const;
+    for (const place of places) expect(parsePlaceKey(placeKey(place))).toEqual(place);
+    expect(new Set(places.map(placeKey)).size).toBe(3);
+  });
+});

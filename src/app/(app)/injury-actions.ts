@@ -4,12 +4,12 @@ import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { clearInjury, logByMistake, reportInjury, updateInjury, type InjuryAlert, type ReportInput, type UpdateInput } from "@/features/injuries";
-import { londonToday } from "@/features/players";
+import { londonDay } from "@/lib/london";
 import { sendToUser } from "@/features/push";
 import { getPushSender } from "@/lib/push";
 import { requireApprovedUser } from "@/lib/session";
+import type { Result } from "@/lib/result";
 
-type Result = { ok: true } | { ok: false; error: string };
 
 /** Push Committee once the response has gone ("Jo King is now Out"), opening the Player's page. */
 function alertCommittee(alert: InjuryAlert | null) {
@@ -25,7 +25,7 @@ function refresh() {
 }
 
 export async function reportInjuryAction(userId: string, input: ReportInput): Promise<Result> {
-  const result = await reportInjury(db, await requireApprovedUser(), userId, input, londonToday());
+  const result = await reportInjury(db, await requireApprovedUser(), userId, input, londonDay());
   if (!result.ok) return result;
   alertCommittee(result.alert);
   refresh();
@@ -33,7 +33,7 @@ export async function reportInjuryAction(userId: string, input: ReportInput): Pr
 }
 
 export async function updateInjuryAction(id: string, input: UpdateInput): Promise<Result> {
-  const result = await updateInjury(db, await requireApprovedUser(), id, input, londonToday());
+  const result = await updateInjury(db, await requireApprovedUser(), id, input, londonDay());
   if (!result.ok) return result;
   alertCommittee(result.alert);
   refresh();

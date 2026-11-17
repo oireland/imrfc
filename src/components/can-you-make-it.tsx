@@ -7,9 +7,9 @@ import { Check, Loader2, X } from "lucide-react";
 import type { ReplyStatus, WaitingAsk } from "@/features/availability";
 import { formatWhen } from "@/lib/format-time";
 import { ReplySheet } from "./availability-card";
+import type { Result } from "@/lib/result";
 
 type Answer = { status: ReplyStatus; note: string; reason: string };
-type Result = { ok: true } | { ok: false; error: string };
 
 /**
  * Home's "Can you make it?": one card per announced Training or Match day you haven't

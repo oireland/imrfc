@@ -7,7 +7,8 @@ import { CopySummary } from "@/components/copy-summary";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { formatPhysioList, listFitness, listPhysioNeeds } from "@/features/injuries";
-import { listPlayers, londonToday } from "@/features/players";
+import { listPlayers } from "@/features/players";
+import { londonDay } from "@/lib/london";
 import type { PlayerRow } from "@/features/players";
 import { formatDay } from "@/lib/format-time";
 import { requireCommittee } from "@/lib/session";
@@ -19,7 +20,7 @@ export default async function PlayersPage({ searchParams }: PageProps<"/players"
   const search = typeof q === "string" ? q : "";
   const awayOnly = away === "1";
   const injuredOnly = injured === "1";
-  const today = londonToday();
+  const today = londonDay();
   const [listing, physioNeeds] = await Promise.all([
     listPlayers(db, search, { today, awayOnly, injuredOnly, fitness: await listFitness(db, today) }),
     listPhysioNeeds(db),

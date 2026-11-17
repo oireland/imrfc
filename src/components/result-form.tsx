@@ -2,8 +2,8 @@
 
 import { createContext, useContext, useTransition } from "react";
 import { toast } from "sonner";
+import type { Result } from "@/lib/result";
 
-type Result = { ok: true } | { ok: false; error: string };
 
 const ResultFormPending = createContext(false);
 

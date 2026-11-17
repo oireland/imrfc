@@ -9,6 +9,9 @@ import {
   changeRole,
   listApprovedUsers,
   listKnownUsers,
+  listCommitteeIds,
+  loadNames,
+  nameLookup,
   countPendingUsers,
   eraseUser,
   listPendingUsers,
@@ -322,5 +325,46 @@ describe("setName length limit", () => {
 
     const [row] = await db.select().from(user).where(eq(user.id, u.id));
     expect(row.name).toBe("Kept");
+  });
+});
+
+describe("loadNames", () => {
+  it("names everyone but Pending Users, and says Someone for anyone else", async () => {
+    const db = await createTestDb();
+    const ann = await seedUser(db, { accessState: "approved", name: "Ann" });
+    const bo = await seedUser(db, { accessState: "blocked", name: "Bo" });
+    const pat = await seedUser(db, { accessState: "pending", name: "Pat" });
+
+    const name = await loadNames(db);
+
+    expect([name(ann.id), name(bo.id), name(pat.id), name("nope"), name(null), name(undefined)]).toEqual([
+      "Ann",
+      "Bo",
+      "Someone",
+      "Someone",
+      "Someone",
+      "Someone",
+    ]);
+  });
+});
+
+describe("nameLookup", () => {
+  it("falls back to the email's local part for a blank name", () => {
+    expect(nameLookup([{ id: "u1", name: " ", email: "sam@example.com" }])("u1")).toBe("sam");
+  });
+});
+
+describe("listCommitteeIds", () => {
+  it("lists Approved Committee and Admins by id, leaving out `except`", async () => {
+    const db = await createTestDb();
+    await seedUser(db, { id: "c", role: "committee", accessState: "approved" });
+    await seedUser(db, { id: "a", role: "admin", accessState: "approved" });
+    await seedUser(db, { id: "B", role: "committee", accessState: "approved" });
+    await seedUser(db, { id: "m", role: "member", accessState: "approved" });
+    await seedUser(db, { id: "x", role: "committee", accessState: "blocked" });
+    await seedUser(db, { id: "p", role: "admin", accessState: "pending" });
+
+    expect(await listCommitteeIds(db)).toEqual(["B", "a", "c"]);
+    expect(await listCommitteeIds(db, { except: "a" })).toEqual(["B", "c"]);
   });
 });

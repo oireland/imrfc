@@ -1,5 +1,6 @@
 // The words for Announce and Nudge emails and the WhatsApp chase message. Pure, no
 // database or Next.js.
+import { joinList } from "@/lib/join-names";
 import { emailLayout } from "@/lib/email-layout";
 import { formatDay, formatWhen } from "@/lib/format-time";
 
@@ -7,12 +8,7 @@ export type AskedEvent = { title: string; start: Date };
 
 /** "Sat 4 Oct — 1st XV v Barts & 2nd XV v UCL": one line for the Events one reply covers. */
 function heading(events: AskedEvent[]): string {
-  return `${formatDay(events[0].start)} — ${titlesOf(events)}`;
-}
-
-function titlesOf(events: AskedEvent[]): string {
-  const titles = events.map((e) => e.title);
-  return titles.length > 1 ? `${titles.slice(0, -1).join(", ")} & ${titles[titles.length - 1]}` : titles[0];
+  return `${formatDay(events[0].start)} — ${joinList(events.map((e) => e.title))}`;
 }
 
 /** The email Announce (first ask) or Nudge (a reminder) sends each Player with No reply. */
@@ -48,7 +44,7 @@ export function askEmail({
   const html = emailLayout({
     preview: kind === "announce" ? `Can you make it? ${what}` : `Still need your answer for ${what}`,
     eyebrow: kind === "announce" ? "Can you make it?" : "Still need your answer",
-    heading: titlesOf(events),
+    heading: joinList(events.map((e) => e.title)),
     paragraphs: [
       `Hi ${name},`,
       kind === "announce"
@@ -77,5 +73,5 @@ export function chaseMessage({ events, names, url }: { events: AskedEvent[]; nam
 
 /** The personal WhatsApp message Committee send one Player with No reply, prefilled in the chat. */
 export function whatsappMessage({ events, name, url }: { events: AskedEvent[]; name: string; url: string }): string {
-  return `Hi ${name.split(" ")[0]}, can you make ${formatDay(events[0].start)} (${titlesOf(events)})? Let us know on the app: ${url}`;
+  return `Hi ${name.split(" ")[0]}, can you make ${formatDay(events[0].start)} (${joinList(events.map((e) => e.title))})? Let us know on the app: ${url}`;
 }

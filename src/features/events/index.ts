@@ -1,7 +1,7 @@
 import type { Db } from "@/db/types";
 import { and, asc, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import { event, matchDetails, team } from "./schema";
-import { classifyEvent, eventTitle, validateEvent, type NewEvent } from "./rules";
+import { eventTitle, validateEvent, type NewEvent } from "./rules";
 
 export { event } from "./schema";
 export { validateEvent, classifyEvent, eventTitle, trainingTitle, matchTitle, startsAt } from "./rules";
@@ -16,7 +16,6 @@ export {
   type OccurrenceChanges,
   type Series,
 } from "./series";
-export { londonParts, londonToUtc } from "./series-rules";
 export { buildQuickEvent, buildQuickSeries, type QuickEventInput } from "./quick-add";
 export {
   EVENT_CSV_COLUMNS,
@@ -25,42 +24,38 @@ export {
   readEventsCsv,
   type EventCsvResult,
 } from "./csv-import";
+import { londonParts, londonToUtc } from "@/lib/london";
+import type { Result } from "@/lib/result";
 export type { EventType, HomeAway, Competition, NewEvent, NewMatchDetails } from "./rules";
 
 
 export type Event = typeof event.$inferSelect;
 export type MatchDetails = typeof matchDetails.$inferSelect;
 export type Team = typeof team.$inferSelect;
-export type EventWithDetails = Event & { matchDetails: MatchDetails | null; teams: Team[] };
+export type EventWithDetails = Event & { matchDetails: MatchDetails | null; team: Team | null };
 
-const SEED_TEAMS = ["1st XV", "2nd XV"] as const;
+/** What a Match is called on a board or sheet: its Team's name, or the Event's title when it has none. */
+export const matchLabel = (e: { title: string; team: Team | null }): string => e.team?.name ?? e.title;
 
-/** Ensures the seeded Teams exist; safe to call repeatedly. */
-export async function listTeams(db: Db): Promise<Team[]> {
-  const load = (): Promise<Team[]> => db.select().from(team).orderBy(asc(team.name));
-  const existing = await load();
-  // Usually they're all there already, so viewing a page stays read-only.
-  const missing = SEED_TEAMS.filter((name) => !existing.some((t) => t.name === name));
-  if (missing.length === 0) return existing;
-  await db.insert(team).values(missing.map((name) => ({ id: name, name }))).onConflictDoNothing();
-  return load();
+export function listTeams(db: Db): Promise<Team[]> {
+  return db.select().from(team).orderBy(asc(team.name));
 }
 
 export async function createEvent(
   db: Db,
   input: NewEvent,
-): Promise<{ ok: true; event: Event } | { ok: false; error: string }> {
+): Promise<Result<{ event: Event }>> {
   const result = validateEvent(input);
   if (!result.ok) return result;
   const title = await titleFor(db, input);
   if (!title.ok) return title;
-  return { ok: true, event: await db.transaction((tx: Db) => insertEvent(tx, input, title.title)) };
+  return { ok: true, event: await db.transaction((tx) => insertEvent(tx, input, title.title)) };
 }
 
 /** The Event's derived title; a Match's needs its Team's name, so an unknown Team is an error. */
-async function titleFor(db: Db, input: NewEvent): Promise<{ ok: true; title: string } | { ok: false; error: string }> {
+async function titleFor(db: Db, input: NewEvent): Promise<Result<{ title: string }>> {
   if (input.eventType !== "match") return { ok: true, title: eventTitle(input) };
-  const [row]: Team[] = await db.select().from(team).where(eq(team.id, input.matchDetails.teamId));
+  const [row] = await db.select().from(team).where(eq(team.id, input.matchDetails.teamId));
   if (!row) return { ok: false, error: "That team doesn't exist." };
   return { ok: true, title: eventTitle(input, row.name) };
 }
@@ -72,7 +67,7 @@ async function titleFor(db: Db, input: NewEvent): Promise<{ ok: true; title: str
 export async function createEvents(
   db: Db,
   inputs: NewEvent[],
-): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+): Promise<Result<{ count: number }>> {
   const titles: string[] = [];
   for (const input of inputs) {
     const result = validateEvent(input);
@@ -82,7 +77,7 @@ export async function createEvents(
     titles.push(title.title);
   }
   try {
-    await db.transaction(async (tx: Db) => {
+    await db.transaction(async (tx) => {
       for (const [i, input] of inputs.entries()) await insertEvent(tx, input, titles[i]);
     });
   } catch {
@@ -145,9 +140,20 @@ export async function listEventsBetween(db: Db, from: Date, to: Date): Promise<E
     .orderBy(asc(event.start));
 }
 
+/** Longer than the longest London day (25 hours when the clocks go back), so one window covers any day. */
+const LONGEST_DAY_MS = 26 * 3_600_000;
+
+/** Every Match on the London day of `event` (itself included when it is one), soonest first. */
+export async function listMatchDay(db: Db, event: Pick<Event, "start">): Promise<Event[]> {
+  const date = londonParts(event.start).date;
+  const dayStart = londonToUtc(date, "00:00");
+  const sameDay = await listEventsBetween(db, dayStart, new Date(dayStart.getTime() + LONGEST_DAY_MS));
+  return sameDay.filter((e) => e.eventType === "match" && londonParts(e.start).date === date);
+}
+
 /** Venues already used, each once, most recently used first — suggestions for typing a new one. */
 export async function listVenues(db: Db): Promise<string[]> {
-  const rows: { venue: string }[] = await db.select({ venue: event.venue }).from(event).orderBy(desc(event.start));
+  const rows = await db.select({ venue: event.venue }).from(event).orderBy(desc(event.start));
   return [...new Set(rows.map((r) => r.venue.trim()).filter(Boolean))];
 }
 
@@ -165,7 +171,7 @@ export async function listNextEvents(db: Db, limit: number): Promise<Event[]> {
 /** Each of `ids`' titles, by Event id, in one query. Ids with no Event are left out. */
 export async function listEventTitles(db: Db, ids: string[]): Promise<Map<string, string>> {
   if (ids.length === 0) return new Map();
-  const rows: { id: string; title: string }[] = await db
+  const rows = await db
     .select({ id: event.id, title: event.title })
     .from(event)
     .where(inArray(event.id, [...new Set(ids)]));
@@ -173,29 +179,20 @@ export async function listEventTitles(db: Db, ids: string[]): Promise<Map<string
 }
 
 export async function getEvent(db: Db, id: string): Promise<EventWithDetails | undefined> {
-  const [row] = await db.select().from(event).where(eq(event.id, id));
-  if (!row) return undefined;
-
-  const details: MatchDetails | null =
-    row.eventType === "match"
-      ? ((await db.select().from(matchDetails).where(eq(matchDetails.eventId, id)))[0] ?? null)
-      : null;
-  const teams: Team[] = details ? await db.select().from(team).where(eq(team.id, details.teamId)) : [];
-
-  return { ...row, matchDetails: details, teams };
+  return (await getEvents(db, [id]))[0];
 }
 
 /** Several Events with their match details and Teams, in three queries however many there are. Ids with no Event are left out. */
 export async function getEvents(db: Db, ids: string[]): Promise<EventWithDetails[]> {
   if (ids.length === 0) return [];
-  const rows: Event[] = await db.select().from(event).where(inArray(event.id, [...new Set(ids)]));
+  const rows = await db.select().from(event).where(inArray(event.id, [...new Set(ids)]));
   const matchIds = rows.filter((r) => r.eventType === "match").map((r) => r.id);
   const details: MatchDetails[] = matchIds.length ? await db.select().from(matchDetails).where(inArray(matchDetails.eventId, matchIds)) : [];
   const teamIds = [...new Set(details.map((d) => d.teamId))];
   const teams: Team[] = teamIds.length ? await db.select().from(team).where(inArray(team.id, teamIds)) : [];
   return rows.map((row) => {
     const mine = details.find((d) => d.eventId === row.id) ?? null;
-    return { ...row, matchDetails: mine, teams: mine ? teams.filter((t) => t.id === mine.teamId) : [] };
+    return { ...row, matchDetails: mine, team: (mine && teams.find((t) => t.id === mine.teamId)) || null };
   });
 }
 
@@ -207,8 +204,8 @@ export async function editEvent(
   db: Db,
   id: string,
   input: NewEvent,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const [stored]: Event[] = await db.select().from(event).where(eq(event.id, id));
+): Promise<Result> {
+  const [stored] = await db.select().from(event).where(eq(event.id, id));
   if (!stored) return { ok: false, error: "That event no longer exists." };
   if (stored.eventType !== input.eventType) return { ok: false, error: "An event's type can't be changed." };
   const result = validateEvent(input);
@@ -216,7 +213,7 @@ export async function editEvent(
   const title = await titleFor(db, input);
   if (!title.ok) return title;
 
-  await db.transaction(async (tx: Db) => {
+  await db.transaction(async (tx) => {
     await tx
       .update(event)
       .set({
@@ -250,7 +247,3 @@ export async function deleteEvent(db: Db, id: string) {
   await db.delete(event).where(eq(event.id, id));
 }
 
-// Re-exported for classification in read paths that already have an Event row.
-export function eventStatus(row: { end: Date }): "upcoming" | "past" {
-  return classifyEvent(row, new Date());
-}

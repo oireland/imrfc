@@ -2,10 +2,11 @@ import type { Db } from "@/db/types";
 import { eq, and } from "drizzle-orm";
 import { listDutyUserIdsByEvent } from "@/features/duties";
 import { listAvailableUserIds } from "@/features/availability";
-import { listEventsBetween, londonParts, londonToUtc } from "@/features/events";
+import { listEventsBetween } from "@/features/events";
 import { PushSubscriptionGoneError, type PushSender, type PushSubscriptionKeys } from "@/lib/push";
 import { morningOfMessage, morningOfRecipients } from "./rules";
 import { pushSubscription } from "./schema";
+import { londonParts, londonToUtc } from "@/lib/london";
 
 
 /** Records a device's subscription; re-subscribing the same endpoint replaces its keys. */
@@ -46,7 +47,7 @@ export async function sendToUser(
   message: { title: string; body: string; url: string },
   push: PushSender,
 ): Promise<void> {
-  const subscriptions: (typeof pushSubscription.$inferSelect)[] = await db
+  const subscriptions = await db
     .select()
     .from(pushSubscription)
     .where(eq(pushSubscription.userId, userId));

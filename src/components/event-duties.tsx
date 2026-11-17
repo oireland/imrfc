@@ -1,11 +1,14 @@
 "use client";
 
+import { joinList } from "@/lib/join-names";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { ArrowDownLeft, ArrowUpRight, Check, ChevronLeft, ChevronRight, CircleAlert, Loader2, Star, X } from "lucide-react";
 import { cn } from "cn";
 import { AddEquipmentButton, EditToggle, KitRow, ResetLink, useKitEditing, type KitEditing } from "@/components/kit-editing";
+import { parsePlaceKey } from "@/features/equipment/client";
 import type { DutyAction, DutyRequest, HolderPart, SourcePart } from "@/features/duties";
+import type { Result } from "@/lib/result";
 
 /** A candidate Place the confirm sheet's "where from" step can move counts between. */
 export type SourceOption = { value: string; label: string; count: number };
@@ -55,7 +58,6 @@ export type DutyEquipment = {
 };
 
 type Place = { value: string; label: string };
-type Result = { ok: true } | { ok: false; error: string };
 
 /** Search appears in the person picker once the list is longer than this. */
 const SEARCH_FROM = 6;
@@ -68,12 +70,6 @@ const initials = (name: string) =>
     .slice(0, 2)
     .join("")
     .toUpperCase();
-const joinNames = (names: string[]): string => {
-  if (names.length === 0) return "";
-  if (names.length === 1) return names[0];
-  if (names.length === 2) return `${names[0]} & ${names[1]}`;
-  return `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`;
-};
 
 function Avatar({ mine, people }: { mine: boolean; people: string[] }) {
   return (
@@ -222,7 +218,7 @@ export function EventDuties({
 
 function Slot({ slot, equipmentName, soon, onOpen }: { slot: DutySlot; equipmentName: string; soon: boolean; onOpen: () => void }) {
   const Icon = slot.direction === "to" ? ArrowUpRight : ArrowDownLeft;
-  const personLabel = joinNames(slot.people);
+  const personLabel = joinList(slot.people);
   const soloYou = slot.mine && slot.people.length === 1;
   const label = `${verb(slot)} ${equipmentName}: ${slot.voided ? "cancelled" : soloYou ? "you" : personLabel || "nobody yet"}${slot.confirmed ? ", done" : ""}`;
   return (
@@ -288,7 +284,7 @@ function DutySheet({
   );
   const [pending, startTransition] = useTransition();
   const can = (a: DutyAction) => slot.actions.includes(a);
-  const personLabel = joinNames(slot.people);
+  const personLabel = joinList(slot.people);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -322,7 +318,7 @@ function DutySheet({
 
   function submitConfirm() {
     const from: SourcePart[] | undefined = slot.needsSourceChoice
-      ? slot.sourceOptions.map((s) => ({ place: toPlace(s.value), count: sources[s.value] ?? 0 }))
+      ? slot.sourceOptions.map((s) => ({ place: parsePlaceKey(s.value), count: sources[s.value] ?? 0 }))
       : undefined;
     const holderParts: HolderPart[] | undefined = slot.needsHolderChoice
       ? slot.holderOptions.map((h) => ({ userId: h.userId, count: holders[h.userId] ?? 0 }))
@@ -605,13 +601,6 @@ function toDestination(value: string): Extract<DutyRequest, { action: "setDestin
   if (value === "holder") return { type: "holder" };
   if (value.startsWith("store:")) return { type: "store", storeId: value.slice("store:".length) };
   return { type: "home" };
-}
-
-/** Source option values come from the duties feature's `sourceValue`: "store:<id>", "holder:<id>" or "unconfirmed:<event id>". */
-function toPlace(value: string): SourcePart["place"] {
-  if (value.startsWith("store:")) return { type: "store", storeId: value.slice("store:".length) };
-  if (value.startsWith("unconfirmed:")) return { type: "unconfirmed", lastSeenEventId: value.slice("unconfirmed:".length) };
-  return { type: "holder", holderId: value.slice("holder:".length) };
 }
 
 function PrimaryButton({ pending, onClick, children }: { pending: boolean; onClick: () => void; children: React.ReactNode }) {

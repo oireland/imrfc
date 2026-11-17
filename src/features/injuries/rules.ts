@@ -1,5 +1,6 @@
 import { LIMITS, firstTooLong } from "@/lib/text-limits";
-import { formatDay } from "@/lib/day-string";
+import { formatDate } from "@/lib/format-time";
+import type { Result } from "@/lib/result";
 
 export const BODY_AREAS = [
   "Head",
@@ -32,7 +33,8 @@ export const STATUS_LABEL: Record<InjuryStatus | "fit", string> = {
   fit: "Fit",
 };
 
-const severity = (status: OpenStatus) => OPEN_STATUSES.indexOf(status);
+/** How bad a status is: its position in OPEN_STATUSES (Cleared is -1, below them all). */
+export const severity = (status: InjuryStatus) => OPEN_STATUSES.indexOf(status as OpenStatus);
 
 /** A Player's Fitness: the worst of their open Injuries. */
 export function worstFitness(statuses: OpenStatus[]): Fitness {
@@ -66,7 +68,7 @@ export type UpdateInput = {
   note: string;
 };
 
-type Checked<T> = { ok: true; value: T } | { ok: false; error: string };
+type Checked<T> = Result<{ value: T }>;
 
 /** Expected Return is a visible choice: a date still to come, or Not sure yet. */
 function checkReturn(input: { expectedReturn: string | null; notSure: boolean }, today: string): Checked<string | null> {
@@ -136,7 +138,7 @@ export function checkInFlag(
   today: string,
 ): string | null {
   if (injury.expectedReturn) {
-    return injury.expectedReturn < today ? `Due back ${formatDay(injury.expectedReturn)}, check in` : null;
+    return injury.expectedReturn < today ? `Due back ${formatDate(injury.expectedReturn)}, check in` : null;
   }
   const days = daysBetween(injury.happenedOn, today);
   if (days <= CHECK_IN_AFTER_DAYS) return null;

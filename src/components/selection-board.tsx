@@ -11,18 +11,19 @@ import { applyOptimistic, ROLES, ROLE_NAMES, rolesText, sortForShirt, STARTING_S
 import { BottomSheet } from "@/components/bottom-sheet";
 import { NameTheTeam, type NamingActions } from "@/components/name-the-team";
 import { TeamSheetDialog } from "@/components/team-sheet-dialog";
+import type { Result } from "@/lib/result";
 
-type Result = { ok: true; movedFrom?: string } | { ok: false; error: string };
+type MoveResult = Result<{ movedFrom?: string }>;
 type Ref = { eventId: string; shirt: number };
 
 type Actions = {
-  pick: (eventId: string, shirt: number, userId: string) => Promise<Result>;
-  guest: (eventId: string, shirt: number, name: string) => Promise<Result>;
-  clear: (eventId: string, shirt: number) => Promise<Result>;
-  swap: (from: Ref, to: Ref) => Promise<Result>;
-  roles: (eventId: string, shirt: number, roles: Role[]) => Promise<Result>;
-  add: (eventId: string) => Promise<Result>;
-  remove: (eventId: string) => Promise<Result>;
+  pick: (eventId: string, shirt: number, userId: string) => Promise<MoveResult>;
+  guest: (eventId: string, shirt: number, name: string) => Promise<MoveResult>;
+  clear: (eventId: string, shirt: number) => Promise<MoveResult>;
+  swap: (from: Ref, to: Ref) => Promise<MoveResult>;
+  roles: (eventId: string, shirt: number, roles: Role[]) => Promise<MoveResult>;
+  add: (eventId: string) => Promise<MoveResult>;
+  remove: (eventId: string) => Promise<MoveResult>;
 };
 
 const POLL_MS = 10_000;
@@ -93,7 +94,7 @@ export function SelectionBoard({
   }, [flashes]);
 
   // The server actions revalidate the page, so the fresh board arrives with the response.
-  function run(save: () => Promise<Result>, options: { change?: OptimisticChange; success?: (r: Extract<Result, { ok: true }>) => string | null } = {}) {
+  function run(save: () => Promise<MoveResult>, options: { change?: OptimisticChange; success?: (r: Extract<MoveResult, { ok: true }>) => string | null } = {}) {
     startTransition(async () => {
       if (options.change) addOptimistic(options.change);
       const result = await save();

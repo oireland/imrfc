@@ -1,4 +1,5 @@
 import { LIMITS, firstTooLong } from "@/lib/text-limits";
+import type { Result } from "@/lib/result";
 export type NewEquipmentUnit = {
   name: string;
   homeId: string;
@@ -8,9 +9,7 @@ export type NewEquipmentUnit = {
   addedBy?: string;
 };
 
-export type ValidationResult = { ok: true } | { ok: false; error: string };
-
-export function validateEquipmentUnit(equipmentUnit: NewEquipmentUnit): ValidationResult {
+export function validateEquipmentUnit(equipmentUnit: NewEquipmentUnit): Result {
   const tooLong = firstTooLong([["name", equipmentUnit.name, LIMITS.name]]);
   if (tooLong) return { ok: false, error: tooLong };
   if (!equipmentUnit.name.trim()) return { ok: false, error: "Give the equipment a name." };

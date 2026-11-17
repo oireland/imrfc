@@ -9,18 +9,20 @@ import {
   lowerQuantity as lowerQuantityRule,
   moveMultiple,
   singlePlace,
-  toPlace,
+  placeOf,
+  samePlace,
   type Place,
   type Portion,
 } from "./portions";
 import { applyEntry, replay, type LedgerEntry } from "./ledger";
+import type { Result } from "@/lib/result";
 
 export { equipmentUnit, equipmentPortion, movementLogEntry } from "./schema";
 export { validateEquipmentUnit } from "./rules";
 export type { NewEquipmentUnit } from "./rules";
-export { describeWhereabouts, groupByWhereabouts, quickMoveFor } from "./whereabouts";
-export type { EquipmentRow, QuickMove, WhereaboutsGroup, WhereaboutsNames } from "./whereabouts";
-export { singlePlace, totalQuantity } from "./portions";
+export { describeWhereabouts, groupByWhereabouts, historyLine, quickMoveFor } from "./whereabouts";
+export type { EquipmentRow, HistoryNames, QuickMove, WhereaboutsGroup, WhereaboutsNames } from "./whereabouts";
+export { parsePlaceKey, placeKey, placeOf, singlePlace, totalQuantity } from "./portions";
 export type { Place, Portion } from "./portions";
 export { sameWhereabouts } from "./ledger";
 export type { LedgerEntry } from "./ledger";
@@ -43,13 +45,14 @@ export type MoveSource = Place;
  * Equipment Unit (a new Duty, say) can still be written while it's locked.
  */
 export async function withUnitLock<T>(db: Db, equipmentUnitId: string, fn: (tx: Db) => Promise<T>): Promise<T> {
-  return db.transaction(async (tx: Db) => {
+  return db.transaction(async (tx) => {
     await tx.execute(sql`select id from equipment_unit where id = ${equipmentUnitId} for no key update`);
     return fn(tx);
   });
 }
 
-async function loadPortions(db: Db, equipmentUnitId: string): Promise<Portion[]> {
+/** An Equipment Unit's Portions: where it is right now, split by count. */
+export async function loadPortions(db: Db, equipmentUnitId: string): Promise<Portion[]> {
   return db.select().from(equipmentPortion).where(eq(equipmentPortion.equipmentUnitId, equipmentUnitId));
 }
 
@@ -121,7 +124,7 @@ async function appendToLedger(
   userId: string | null,
   entries: LedgerEntry[],
   reason?: "ad_hoc" | "duty",
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<Result> {
   if (entries.length === 0) return { ok: true };
   let portions = await loadPortions(db, equipmentUnitId);
   for (const entry of entries) {
@@ -147,8 +150,8 @@ async function appendToLedger(
 }
 
 /** An Equipment Unit's Portions rebuilt from nothing but its Movement Log. */
-export async function replayWhereabouts(db: Db, equipmentUnitId: string): Promise<{ ok: true; portions: Portion[] } | { ok: false; error: string }> {
-  const rows: MovementLogEntry[] = await db
+export async function replayWhereabouts(db: Db, equipmentUnitId: string): Promise<Result<{ portions: Portion[] }>> {
+  const rows = await db
     .select()
     .from(movementLogEntry)
     .where(eq(movementLogEntry.equipmentUnitId, equipmentUnitId))
@@ -174,12 +177,12 @@ export async function listEquipmentUnits(
 export async function createEquipmentUnit(
   db: Db,
   input: NewEquipmentUnit,
-): Promise<{ ok: true; equipmentUnit: EquipmentUnit } | { ok: false; error: string }> {
+): Promise<Result<{ equipmentUnit: EquipmentUnit }>> {
   const result = validateEquipmentUnit(input);
   if (!result.ok) return result;
 
   const quantity = input.quantity ?? 1;
-  const row: EquipmentUnit = await db.transaction(async (tx: Db) => {
+  const row = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(equipmentUnit)
       .values({
@@ -205,8 +208,8 @@ export async function setEquipmentStatus(db: Db, id: string, status: EquipmentSt
  * Takes an Equipment Unit out of circulation (Retired), e.g. one added by mistake. Equipment Units
  * are never deleted: its Portions, Movement Log and Duties stay, so history still reads.
  */
-export async function retireEquipmentUnit(db: Db, id: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  const retired: { id: string }[] = await db
+export async function retireEquipmentUnit(db: Db, id: string): Promise<Result> {
+  const retired = await db
     .update(equipmentUnit)
     .set({ status: "retired" })
     .where(eq(equipmentUnit.id, id))
@@ -242,7 +245,7 @@ export async function setConditionNote(
   id: string,
   userId: string,
   conditionNote: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<Result> {
   const tooLong = firstTooLong([["note", conditionNote, LIMITS.note]]);
   if (tooLong) return { ok: false, error: tooLong };
   await db.update(equipmentUnit).set({ conditionNote }).where(eq(equipmentUnit.id, id));
@@ -269,36 +272,20 @@ export async function recordMove(
   target: MoveTarget,
   reason: "ad_hoc" | "duty" = "ad_hoc",
   options?: { count?: number; from?: Place },
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<Result> {
   if (options?.count !== undefined && (!Number.isInteger(options.count) || options.count < 1)) {
     return { ok: false, error: "Enter how many to move." };
   }
-  return withUnitLock(db, equipmentUnitId, (tx) => recordMoveLocked(tx, equipmentUnitId, userId, target, reason, options));
-}
-
-async function recordMoveLocked(
-  db: Db,
-  equipmentUnitId: string,
-  userId: string,
-  target: MoveTarget,
-  reason: "ad_hoc" | "duty",
-  options?: { count?: number; from?: Place },
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (options?.from) {
-    const portions = await loadPortions(db, equipmentUnitId);
-    const count = options.count ?? countAt(portions, options.from);
-    return appendToLedger(db, equipmentUnitId, userId, [{ kind: "move", count, from: options.from, to: target }], reason);
-  }
-  // Every Place it's at, the target included, so "I've got it" still logs a Move when it's already there.
-  const portions = await loadPortions(db, equipmentUnitId);
-  const entries: LedgerEntry[] = portions.map((p) => ({ kind: "move", count: p.count, from: toPlace(p), to: target }));
-  return appendToLedger(db, equipmentUnitId, userId, entries, reason);
-}
-
-function samePlace(a: Place, b: MoveTarget): boolean {
-  if (a.type === "store" && b.type === "store") return a.storeId === b.storeId;
-  if (a.type === "holder" && b.type === "holder") return a.holderId === b.holderId;
-  return false;
+  return withUnitLock(db, equipmentUnitId, async (tx) => {
+    const portions = await loadPortions(tx, equipmentUnitId);
+    if (options?.from) {
+      const count = options.count ?? countAt(portions, options.from);
+      return appendToLedger(tx, equipmentUnitId, userId, [{ kind: "move", count, from: options.from, to: target }], reason);
+    }
+    // Every Place it's at, the target included, so "I've got it" still logs a Move when it's already there.
+    const entries: LedgerEntry[] = portions.map((p) => ({ kind: "move", count: p.count, from: placeOf(p), to: target }));
+    return appendToLedger(tx, equipmentUnitId, userId, entries, reason);
+  });
 }
 
 /** Pairs sources with targets into loggable flows (the pairing is arbitrary — see `moveMultiple`). */
@@ -334,28 +321,21 @@ export async function recordSplitMove(
   userId: string,
   reason: "ad_hoc" | "duty",
   moves: { sources: { from: Place; count: number }[]; targets: { to: MoveTarget; count: number }[] },
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  return withUnitLock(db, equipmentUnitId, (tx) => recordSplitMoveLocked(tx, equipmentUnitId, userId, reason, moves));
-}
-
-async function recordSplitMoveLocked(
-  db: Db,
-  equipmentUnitId: string,
-  userId: string,
-  reason: "ad_hoc" | "duty",
-  { sources, targets }: { sources: { from: Place; count: number }[]; targets: { to: MoveTarget; count: number }[] },
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  // Checks the whole Move adds up and each source has enough, with the messages people see.
-  const checked = moveMultiple(await loadPortions(db, equipmentUnitId), { sources, targets });
-  if (!checked.ok) return checked;
-  const flows = pairFlows(sources, targets).filter((f) => !samePlace(f.from, f.to));
-  return appendToLedger(
-    db,
-    equipmentUnitId,
-    userId,
-    flows.map((f) => ({ kind: "move", count: f.count, from: f.from, to: f.to })),
-    reason,
-  );
+): Promise<Result> {
+  const { sources, targets } = moves;
+  return withUnitLock(db, equipmentUnitId, async (tx) => {
+    // Checks the whole Move adds up and each source has enough, with the messages people see.
+    const checked = moveMultiple(await loadPortions(tx, equipmentUnitId), { sources, targets });
+    if (!checked.ok) return checked;
+    const flows = pairFlows(sources, targets).filter((f) => !samePlace(f.from, f.to));
+    return appendToLedger(
+      tx,
+      equipmentUnitId,
+      userId,
+      flows.map((f) => ({ kind: "move", count: f.count, from: f.from, to: f.to })),
+      reason,
+    );
+  });
 }
 
 /**
@@ -364,24 +344,22 @@ async function recordSplitMoveLocked(
  * a Move: nobody did this.
  */
 export async function setUnconfirmed(db: Db, equipmentUnitId: string, lastSeenEventId: string, from?: Place, count?: number) {
-  return withUnitLock(db, equipmentUnitId, (tx) => setUnconfirmedLocked(tx, equipmentUnitId, lastSeenEventId, from, count));
-}
-
-async function setUnconfirmedLocked(db: Db, equipmentUnitId: string, lastSeenEventId: string, from?: Place, count?: number) {
-  const portions = await loadPortions(db, equipmentUnitId);
-  const to: Place = { type: "unconfirmed", lastSeenEventId };
-  let entries: LedgerEntry[];
-  if (from) {
-    const available = countAt(portions, from);
-    const moveCount = count !== undefined ? Math.min(count, available) : available;
-    if (moveCount < 1) return;
-    entries = [{ kind: "unconfirmed", count: moveCount, from, to }];
-  } else {
-    entries = portions
-      .filter((p) => p.lastSeenEventId !== lastSeenEventId)
-      .map((p) => ({ kind: "unconfirmed", count: p.count, from: toPlace(p), to }));
-  }
-  await appendToLedger(db, equipmentUnitId, null, entries);
+  return withUnitLock(db, equipmentUnitId, async (tx) => {
+    const portions = await loadPortions(tx, equipmentUnitId);
+    const to: Place = { type: "unconfirmed", lastSeenEventId };
+    let entries: LedgerEntry[];
+    if (from) {
+      const available = countAt(portions, from);
+      const moveCount = count !== undefined ? Math.min(count, available) : available;
+      if (moveCount < 1) return;
+      entries = [{ kind: "unconfirmed", count: moveCount, from, to }];
+    } else {
+      entries = portions
+        .filter((p) => p.lastSeenEventId !== lastSeenEventId)
+        .map((p) => ({ kind: "unconfirmed", count: p.count, from: placeOf(p), to }));
+    }
+    await appendToLedger(tx, equipmentUnitId, null, entries);
+  });
 }
 
 /** Whether any equipment is Unconfirmed, last seen at this Event. */
@@ -401,11 +379,6 @@ export async function listEquipmentUnitsByIds(db: Db, ids: string[]): Promise<Eq
   return db.select().from(equipmentUnit).where(inArray(equipmentUnit.id, ids));
 }
 
-/** An Equipment Unit's Portions: where it is right now, split by count. */
-export async function getPortions(db: Db, equipmentUnitId: string): Promise<Portion[]> {
-  return loadPortions(db, equipmentUnitId);
-}
-
 /** Every Portion of the given Equipment Units, for building the Equipment view in one query. */
 export async function listPortionsFor(db: Db, equipmentUnitIds: string[]): Promise<Portion[]> {
   if (equipmentUnitIds.length === 0) return [];
@@ -418,22 +391,9 @@ export async function raiseQuantity(
   equipmentUnitId: string,
   userId: string,
   addCount: number,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<Result> {
   if (!Number.isInteger(addCount) || addCount < 1) return { ok: false, error: "Enter how many were bought." };
-  return withUnitLock(db, equipmentUnitId, (tx) => raiseQuantityLocked(tx, equipmentUnitId, userId, addCount));
-}
-
-async function raiseQuantityLocked(
-  db: Db,
-  equipmentUnitId: string,
-  userId: string,
-  addCount: number,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const unit = await getEquipmentUnit(db, equipmentUnitId);
-  if (!unit) return { ok: false, error: "That equipment no longer exists." };
-
-  await db.update(equipmentUnit).set({ quantity: unit.quantity + addCount }).where(eq(equipmentUnit.id, equipmentUnitId));
-  return appendToLedger(db, equipmentUnitId, userId, [{ kind: "bought", count: addCount, to: { type: "store", storeId: unit.homeId } }]);
+  return withUnitLock(db, equipmentUnitId, (tx) => buy(tx, equipmentUnitId, userId, addCount));
 }
 
 /** Lowers an Equipment Unit's Quantity; Committee picks the Place when split. Logged in the Movement Log. */
@@ -443,28 +403,9 @@ export async function lowerQuantity(
   userId: string,
   removeCount: number,
   from?: Place,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<Result> {
   if (!Number.isInteger(removeCount) || removeCount < 1) return { ok: false, error: "Enter how many were lost." };
-  return withUnitLock(db, equipmentUnitId, (tx) => lowerQuantityLocked(tx, equipmentUnitId, userId, removeCount, from));
-}
-
-async function lowerQuantityLocked(
-  db: Db,
-  equipmentUnitId: string,
-  userId: string,
-  removeCount: number,
-  from?: Place,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const [unit, portions] = await Promise.all([getEquipmentUnit(db, equipmentUnitId), loadPortions(db, equipmentUnitId)]);
-  if (!unit) return { ok: false, error: "That equipment no longer exists." };
-
-  const result = lowerQuantityRule(portions, { removeCount, from });
-  if (!result.ok) return result;
-  // The rule only succeeds with a `from` or a unit at a single Place.
-  const place = (from ?? singlePlace(portions))!;
-
-  await db.update(equipmentUnit).set({ quantity: unit.quantity - removeCount }).where(eq(equipmentUnit.id, equipmentUnitId));
-  return appendToLedger(db, equipmentUnitId, userId, [{ kind: "lost", count: removeCount, from: place }]);
+  return withUnitLock(db, equipmentUnitId, (tx) => lose(tx, equipmentUnitId, userId, removeCount, from));
 }
 
 /**
@@ -477,25 +418,49 @@ export async function setQuantity(
   userId: string,
   quantity: number,
   from?: Place,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<Result> {
   if (!Number.isInteger(quantity)) return { ok: false, error: "Enter how many there are now." };
   if (quantity < 1) return { ok: false, error: "Can't lower an equipment unit's quantity below 1." };
-  return withUnitLock(db, equipmentUnitId, (tx) => setQuantityLocked(tx, equipmentUnitId, userId, quantity, from));
+  return withUnitLock(db, equipmentUnitId, async (tx) => {
+    const unit = await getEquipmentUnit(tx, equipmentUnitId);
+    if (!unit) return { ok: false, error: "That equipment no longer exists." };
+    if (quantity > unit.quantity) return buy(tx, equipmentUnitId, userId, quantity - unit.quantity);
+    if (quantity < unit.quantity) return lose(tx, equipmentUnitId, userId, unit.quantity - quantity, from);
+    return { ok: true };
+  });
 }
 
-async function setQuantityLocked(
-  db: Db,
+// `buy` and `lose` expect to run inside `withUnitLock`: `tx` is the locked transaction.
+async function buy(
+  tx: Db,
   equipmentUnitId: string,
   userId: string,
-  quantity: number,
-  from?: Place,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const unit = await getEquipmentUnit(db, equipmentUnitId);
+  addCount: number,
+): Promise<Result> {
+  const unit = await getEquipmentUnit(tx, equipmentUnitId);
   if (!unit) return { ok: false, error: "That equipment no longer exists." };
 
-  if (quantity > unit.quantity) return raiseQuantity(db, equipmentUnitId, userId, quantity - unit.quantity);
-  if (quantity < unit.quantity) return lowerQuantity(db, equipmentUnitId, userId, unit.quantity - quantity, from);
-  return { ok: true };
+  await tx.update(equipmentUnit).set({ quantity: unit.quantity + addCount }).where(eq(equipmentUnit.id, equipmentUnitId));
+  return appendToLedger(tx, equipmentUnitId, userId, [{ kind: "bought", count: addCount, to: { type: "store", storeId: unit.homeId } }]);
+}
+
+async function lose(
+  tx: Db,
+  equipmentUnitId: string,
+  userId: string,
+  removeCount: number,
+  from?: Place,
+): Promise<Result> {
+  const [unit, portions] = await Promise.all([getEquipmentUnit(tx, equipmentUnitId), loadPortions(tx, equipmentUnitId)]);
+  if (!unit) return { ok: false, error: "That equipment no longer exists." };
+
+  const result = lowerQuantityRule(portions, { removeCount, from });
+  if (!result.ok) return result;
+  // The rule only succeeds with a `from` or a unit at a single Place.
+  const place = (from ?? singlePlace(portions))!;
+
+  await tx.update(equipmentUnit).set({ quantity: unit.quantity - removeCount }).where(eq(equipmentUnit.id, equipmentUnitId));
+  return appendToLedger(tx, equipmentUnitId, userId, [{ kind: "lost", count: removeCount, from: place }]);
 }
 
 export async function listMovementLog(db: Db, equipmentUnitId: string): Promise<MovementLogEntry[]> {
@@ -508,12 +473,12 @@ export async function listMovementLog(db: Db, equipmentUnitId: string): Promise<
 
 /** Equipment Units currently with this User as Holder (Retired ones are out of circulation), with the count held. */
 export async function listEquipmentHeldBy(db: Db, userId: string): Promise<(EquipmentUnit & { count: number })[]> {
-  const held: (Portion & { equipmentUnitId: string })[] = await db
+  const held = await db
     .select()
     .from(equipmentPortion)
     .where(and(eq(equipmentPortion.whereaboutsType, "holder"), eq(equipmentPortion.holderId, userId)));
   if (held.length === 0) return [];
-  const units: EquipmentUnit[] = await db
+  const units = await db
     .select()
     .from(equipmentUnit)
     .where(and(inArray(equipmentUnit.id, held.map((p) => p.equipmentUnitId)), ne(equipmentUnit.status, "retired")));
@@ -523,7 +488,7 @@ export async function listEquipmentHeldBy(db: Db, userId: string): Promise<(Equi
 
 /** Whether anyone has recorded a Move of this Equipment Unit after the given moment. */
 export async function hasMoveSince(db: Db, equipmentUnitId: string, since: Date): Promise<boolean> {
-  const rows: { id: string }[] = await db
+  const rows = await db
     .select({ id: movementLogEntry.id })
     .from(movementLogEntry)
     .where(

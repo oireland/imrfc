@@ -1,6 +1,6 @@
 import type { Db } from "@/db/types";
 import { and, eq, inArray, isNull, ne } from "drizzle-orm";
-import { displayName, isCommitteeOrAbove, listKnownUsers, type Role } from "@/features/users";
+import { isCommitteeOrAbove, listCommitteeIds, loadNames, type Role } from "@/features/users";
 import { injury, injuryChange } from "./schema";
 import type { PhysioNeed } from "./physio-list-rules";
 import {
@@ -12,12 +12,13 @@ import {
   validateReport,
   validateUpdate,
   worstFitness,
-  OPEN_STATUSES,
+  severity,
   type InjuryStatus,
   type OpenStatus,
   type ReportInput,
   type UpdateInput,
 } from "./rules";
+import type { Result } from "@/lib/result";
 
 export { BODY_AREAS, OPEN_STATUSES, STATUS_LABEL, notChasedFor, worstFitness, injuryAppliesOn } from "./rules";
 export { formatPhysioList } from "./physio-list-rules";
@@ -39,17 +40,28 @@ async function findOpen(db: Db, id: string): Promise<Row | undefined> {
   return row;
 }
 
-async function alertFor(db: Db, row: Row, actorId: string, status: OpenStatus): Promise<InjuryAlert> {
-  const people = await listKnownUsers(db);
-  const player = people.find((p) => p.id === row.userId);
+type ChangeKind = (typeof injuryChange.$inferInsert)["kind"];
+
+async function logChange(
+  db: Db,
+  injuryId: string,
+  kind: ChangeKind,
+  from: InjuryStatus | null,
+  to: InjuryStatus | null,
+  byId: string,
+  at: Date,
+  note?: string,
+) {
+  await db.insert(injuryChange).values({ id: crypto.randomUUID(), injuryId, kind, fromStatus: from, toStatus: to, note, byId, at });
+}
+
+async function alertFor(db: Db, userId: string, actorId: string, status: OpenStatus): Promise<InjuryAlert> {
+  const name = await loadNames(db);
   return {
-    userIds: people
-      .filter((p) => p.accessState === "approved" && isCommitteeOrAbove(p.role as Role) && p.id !== actorId)
-      .map((p) => p.id)
-      .sort(),
-    title: statusAlert(player ? displayName(player) : "Someone", status),
+    userIds: await listCommitteeIds(db, { except: actorId }),
+    title: statusAlert(name(userId), status),
     body: "",
-    playerId: row.userId,
+    playerId: userId,
   };
 }
 
@@ -61,24 +73,15 @@ export async function reportInjury(
   input: ReportInput,
   today: string,
   now: Date = new Date(),
-): Promise<{ ok: true; id: string; alert: InjuryAlert | null } | { ok: false; error: string }> {
+): Promise<Result<{ id: string; alert: InjuryAlert | null }>> {
   if (!mayManage(actor, userId)) return { ok: false, error: "Only Committee can report someone else's injury." };
   const valid = validateReport(input, today);
   if (!valid.ok) return valid;
   const fields = valid.value;
   const id = crypto.randomUUID();
   await db.insert(injury).values({ id, userId, ...fields, reportedById: actor.id, createdAt: now, updatedAt: now });
-  await db.insert(injuryChange).values({
-    id: crypto.randomUUID(),
-    injuryId: id,
-    kind: "reported",
-    fromStatus: null,
-    toStatus: fields.status,
-    byId: actor.id,
-    at: now,
-  });
-  const [row] = await db.select().from(injury).where(eq(injury.id, id));
-  return { ok: true, id, alert: await alertFor(db, row, actor.id, fields.status) };
+  await logChange(db, id, "reported", null, fields.status, actor.id, now);
+  return { ok: true, id, alert: await alertFor(db, userId, actor.id, fields.status) };
 }
 
 /** One Update: any open status to any other, with Expected Return, Needs physio and a progress note. */
@@ -89,58 +92,33 @@ export async function updateInjury(
   input: UpdateInput,
   today: string,
   now: Date = new Date(),
-): Promise<{ ok: true; alert: InjuryAlert | null } | { ok: false; error: string }> {
+): Promise<Result<{ alert: InjuryAlert | null }>> {
   const row = await findOpen(db, id);
   if (!row || !mayManage(actor, row.userId)) return { ok: false, error: "You can't change that." };
   const valid = validateUpdate(input, today);
   if (!valid.ok) return valid;
   const { note, ...fields } = valid.value;
   await db.update(injury).set({ ...fields, updatedAt: now }).where(eq(injury.id, id));
-  await db.insert(injuryChange).values({
-    id: crypto.randomUUID(),
-    injuryId: id,
-    kind: "updated",
-    fromStatus: row.status,
-    toStatus: fields.status,
-    note,
-    byId: actor.id,
-    at: now,
-  });
-  const worse = isWorse(row.status, fields.status) && row.status !== fields.status;
-  return { ok: true, alert: worse ? await alertFor(db, row, actor.id, fields.status) : null };
+  await logChange(db, id, "updated", row.status, fields.status, actor.id, now, note);
+  const worse = isWorse(row.status, fields.status);
+  return { ok: true, alert: worse ? await alertFor(db, row.userId, actor.id, fields.status) : null };
 }
 
 /** It's over: the Injury moves to history and out of Fitness. */
-export async function clearInjury(db: Db, actor: Actor, id: string, now: Date = new Date()): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function clearInjury(db: Db, actor: Actor, id: string, now: Date = new Date()): Promise<Result> {
   const row = await findOpen(db, id);
   if (!row || !mayManage(actor, row.userId)) return { ok: false, error: "You can't change that." };
   await db.update(injury).set({ status: "cleared", clearedAt: now, updatedAt: now }).where(eq(injury.id, id));
-  await db.insert(injuryChange).values({
-    id: crypto.randomUUID(),
-    injuryId: id,
-    kind: "cleared",
-    fromStatus: row.status,
-    toStatus: "cleared",
-    byId: actor.id,
-    at: now,
-  });
+  await logChange(db, id, "cleared", row.status, "cleared", actor.id, now);
   return { ok: true };
 }
 
 /** Logged in error: by whoever logged it, or Committee. The Injury disappears everywhere but is kept. */
-export async function logByMistake(db: Db, actor: Actor, id: string, now: Date = new Date()): Promise<{ ok: true } | { ok: false; error: string }> {
-  const [row]: Row[] = await db.select().from(injury).where(and(eq(injury.id, id), isNull(injury.mistakeAt)));
+export async function logByMistake(db: Db, actor: Actor, id: string, now: Date = new Date()): Promise<Result> {
+  const [row] = await db.select().from(injury).where(and(eq(injury.id, id), isNull(injury.mistakeAt)));
   if (!row || !(actor.id === row.reportedById || isCommitteeOrAbove(actor.role))) return { ok: false, error: "You can't change that." };
   await db.update(injury).set({ mistakeAt: now, updatedAt: now }).where(eq(injury.id, id));
-  await db.insert(injuryChange).values({
-    id: crypto.randomUUID(),
-    injuryId: id,
-    kind: "mistake",
-    fromStatus: row.status,
-    toStatus: null,
-    byId: actor.id,
-    at: now,
-  });
+  await logChange(db, id, "mistake", row.status, null, actor.id, now);
   return { ok: true };
 }
 
@@ -171,39 +149,28 @@ export type InjuryView = {
   history: InjuryChange[];
 };
 
-const severityRank = (status: InjuryStatus) => OPEN_STATUSES.indexOf(status as OpenStatus);
-
 /** A Player's Injuries — only the Player and Committee can see them: open ones most urgent first, then Cleared. */
 export async function listInjuries(db: Db, viewer: Actor, userId: string, today: string): Promise<{ open: InjuryView[]; history: InjuryView[] }> {
   if (!mayManage(viewer, userId)) return { open: [], history: [] };
-  const rows: Row[] = await db.select().from(injury).where(and(eq(injury.userId, userId), isNull(injury.mistakeAt)));
+  const rows = await db.select().from(injury).where(and(eq(injury.userId, userId), isNull(injury.mistakeAt)));
   if (rows.length === 0) return { open: [], history: [] };
-  const [changes, people]: [(typeof injuryChange.$inferSelect)[], Awaited<ReturnType<typeof listKnownUsers>>] = await Promise.all([
+  const [changes, name]: [(typeof injuryChange.$inferSelect)[], (id: string) => string] = await Promise.all([
     db.select().from(injuryChange).where(inArray(injuryChange.injuryId, rows.map((r) => r.id))),
-    listKnownUsers(db),
+    loadNames(db),
   ]);
-  const names = new Map(people.map((p) => [p.id, displayName(p)]));
-  const views = rows.map<InjuryView>((r) => ({
-    id: r.id,
-    userId: r.userId,
-    area: r.area,
-    description: r.description,
-    happenedOn: r.happenedOn,
-    eventId: r.eventId,
-    status: r.status,
-    expectedReturn: r.expectedReturn,
-    needsPhysio: r.needsPhysio,
-    physioNote: r.physioNote,
+  // The row has columns the view must not carry (Cleared/mistake stamps, audit fields): destructure them out.
+  const views = rows.map<InjuryView>(({ reportedById, createdAt, updatedAt, clearedAt, mistakeAt, ...r }) => ({
+    ...r,
     stillExpecting: r.status !== "cleared" && !!r.expectedReturn && r.expectedReturn < today,
     checkIn: r.status === "cleared" ? null : checkInFlag({ status: r.status, expectedReturn: r.expectedReturn, happenedOn: r.happenedOn }, today),
     history: changes
       .filter((c) => c.injuryId === r.id)
       .sort((a, b) => a.at.getTime() - b.at.getTime())
-      .map((c) => ({ kind: c.kind, from: c.fromStatus, to: c.toStatus, note: c.note, by: names.get(c.byId) ?? "Someone", at: c.at })),
+      .map((c) => ({ kind: c.kind, from: c.fromStatus, to: c.toStatus, note: c.note, by: name(c.byId), at: c.at })),
   }));
   const open = views
     .filter((v) => v.status !== "cleared")
-    .sort((a, b) => Number(b.stillExpecting) - Number(a.stillExpecting) || severityRank(b.status) - severityRank(a.status) || a.happenedOn.localeCompare(b.happenedOn));
+    .sort((a, b) => Number(b.stillExpecting) - Number(a.stillExpecting) || severity(b.status) - severity(a.status) || a.happenedOn.localeCompare(b.happenedOn));
   const history = views.filter((v) => v.status === "cleared").sort((a, b) => b.happenedOn.localeCompare(a.happenedOn));
   return { open, history };
 }
@@ -224,7 +191,7 @@ export type PlayerFitness = {
  * check-in flag. Players who are Fit have no entry. For Committee screens and the availability feature.
  */
 export async function listFitness(db: Db, today: string, onDate: string = today): Promise<Map<string, PlayerFitness>> {
-  const all: Row[] = await db.select().from(injury).where(and(isNull(injury.mistakeAt), isNull(injury.clearedAt)));
+  const all = await db.select().from(injury).where(and(isNull(injury.mistakeAt), isNull(injury.clearedAt)));
   // Fitness on `onDate`: Injuries that haven't started yet, or that will be over by then, don't count.
   const rows = all.filter((r) => injuryAppliesOn(r, onDate, today));
   const byUser = Map.groupBy(rows, (r) => r.userId);
@@ -239,7 +206,7 @@ export async function listFitness(db: Db, today: string, onDate: string = today)
       detail: main.area,
       checkIn:
         [...open]
-          .sort((a, b) => OPEN_STATUSES.indexOf(b.status) - OPEN_STATUSES.indexOf(a.status))
+          .sort((a, b) => severity(b.status) - severity(a.status))
           .map((r) => checkInFlag(r, today))
           .find(Boolean) ?? null,
       changedAt: new Date(Math.max(...open.map((r) => r.updatedAt.getTime()))),
@@ -254,7 +221,7 @@ export async function listFitness(db: Db, today: string, onDate: string = today)
  */
 export async function listPhysioNeeds(db: Db, userIds?: string[]): Promise<PhysioNeed[]> {
   if (userIds && userIds.length === 0) return [];
-  const rows: Row[] = await db
+  const rows = await db
     .select()
     .from(injury)
     .where(
@@ -267,14 +234,13 @@ export async function listPhysioNeeds(db: Db, userIds?: string[]): Promise<Physi
       ),
     );
   if (rows.length === 0) return [];
-  const people = await listKnownUsers(db);
-  const names = new Map(people.map((p) => [p.id, displayName(p)]));
-  return rows.map((r) => ({ name: names.get(r.userId) ?? "Someone", area: r.area, physioNote: r.physioNote }));
+  const name = await loadNames(db);
+  return rows.map((r) => ({ name: name(r.userId), area: r.area, physioNote: r.physioNote }));
 }
 
 /** Removes a User's Injuries and their history. Not permission-checked: used by account deletion. */
 export async function clearInjuries(db: Db, userId: string) {
-  const rows: { id: string }[] = await db.select({ id: injury.id }).from(injury).where(eq(injury.userId, userId));
+  const rows = await db.select({ id: injury.id }).from(injury).where(eq(injury.userId, userId));
   if (rows.length === 0) return;
   await db.delete(injuryChange).where(inArray(injuryChange.injuryId, rows.map((r) => r.id)));
   await db.delete(injury).where(eq(injury.userId, userId));

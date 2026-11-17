@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { getPortions, listEquipmentUnits, movementLogEntry, replayWhereabouts, sameWhereabouts, setUnconfirmed } from "@/features/equipment";
+import { loadPortions, listEquipmentUnits, movementLogEntry, replayWhereabouts, sameWhereabouts, setUnconfirmed } from "@/features/equipment";
 import { createTestDb } from "@/test/db";
 import { seedSeason } from "@/test/season";
 
@@ -16,7 +16,7 @@ async function replaysEveryUnit(db: Awaited<ReturnType<typeof createTestDb>>) {
   const mismatched: string[] = [];
   for (const unit of await listEquipmentUnits(db)) {
     const replayed = await replayWhereabouts(db, unit.id);
-    if (!replayed.ok || !sameWhereabouts(replayed.portions, await getPortions(db, unit.id))) mismatched.push(unit.name);
+    if (!replayed.ok || !sameWhereabouts(replayed.portions, await loadPortions(db, unit.id))) mismatched.push(unit.name);
   }
   return mismatched;
 }

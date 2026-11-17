@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "@/test/db";
 import { store } from "@/features/stores";
-import { createEquipmentUnit, getPortions, listMovementLog, raiseQuantity, recordMove } from "@/features/equipment";
+import { createEquipmentUnit, loadPortions, listMovementLog, raiseQuantity, recordMove } from "@/features/equipment";
 import { addToChecklist, setChecklistItemCount } from "@/features/checklists";
 import { cancelEvent, createEvent, event } from "@/features/events";
 import { user } from "@/features/users";
@@ -15,19 +15,16 @@ import {
   ensureDuties,
   handOnDuty,
   leaveDuty,
-  listClashes,
   listDutyRecordForUser,
   listDutyUserIdsByEvent,
-  listHeadsUps,
   listPeopleOnEquipment,
-  dropDutiesFor,
   listPlanWarnings,
   listUpcomingDutiesForUser,
   setDestination,
   markUnconfirmed,
   releaseUpcomingDuties,
   voidDutiesForEvent,
-  deleteDutiesForEvent,
+  deleteDuties,
   type Duty,
 } from "./index";
 
@@ -67,7 +64,7 @@ async function setup() {
 }
 
 async function whereaboutsOf(db: Awaited<ReturnType<typeof setup>>["db"], equipmentUnitId: string) {
-  const [portion] = await getPortions(db, equipmentUnitId);
+  const [portion] = await loadPortions(db, equipmentUnitId);
   return portion;
 }
 
@@ -305,7 +302,7 @@ describe("Duties", () => {
 
       expect(await confirmDuty(db, to.id, { id: "tom", role: "member" })).toEqual({ ok: true });
 
-      const portions = await getPortions(db, equipment.id);
+      const portions = await loadPortions(db, equipment.id);
       expect(portions).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ whereaboutsType: "store", storeId: shed.id, count: 4 }),
@@ -321,7 +318,7 @@ describe("Duties", () => {
 
       expect(await confirmDuty(db, from.id, { id: "tom", role: "member" })).toEqual({ ok: true });
 
-      expect(await getPortions(db, equipment.id)).toEqual([
+      expect(await loadPortions(db, equipment.id)).toEqual([
         expect.objectContaining({ whereaboutsType: "store", storeId: shed.id, count: 8 }),
       ]);
     });
@@ -333,7 +330,7 @@ describe("Duties", () => {
 
       expect(await confirmDuty(db, to.id, { id: "sam", role: "member" })).toEqual({ ok: true });
 
-      expect(await getPortions(db, equipment.id)).toEqual(
+      expect(await loadPortions(db, equipment.id)).toEqual(
         expect.arrayContaining([expect.objectContaining({ whereaboutsType: "holder", holderId: "sam", count: 4 })]),
       );
     });
@@ -347,7 +344,7 @@ describe("Duties", () => {
         await confirmDuty(db, to.id, { id: "sam", role: "member" }, { holders: [{ userId: "tom", count: 3 }, { userId: "sam", count: 1 }] }),
       ).toEqual({ ok: true });
 
-      expect(await getPortions(db, equipment.id)).toEqual(
+      expect(await loadPortions(db, equipment.id)).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ whereaboutsType: "holder", holderId: "tom", count: 3 }),
           expect.objectContaining({ whereaboutsType: "holder", holderId: "sam", count: 1 }),
@@ -388,7 +385,7 @@ describe("Duties", () => {
       );
 
       expect(result).toEqual({ ok: true });
-      expect(await getPortions(db, equipment.id)).toEqual([expect.objectContaining({ whereaboutsType: "holder", holderId: "tom", count: 4 })]);
+      expect(await loadPortions(db, equipment.id)).toEqual([expect.objectContaining({ whereaboutsType: "holder", holderId: "tom", count: 4 })]);
     });
 
     it("gathers a From Duty's count from each of the Duty's People, when the Destination is a Store", async () => {
@@ -399,7 +396,7 @@ describe("Duties", () => {
 
       expect(await confirmDuty(db, from.id, { id: "tom", role: "member" })).toEqual({ ok: true });
 
-      expect(await getPortions(db, equipment.id)).toEqual([expect.objectContaining({ whereaboutsType: "store", storeId: shed.id, count: 8 })]);
+      expect(await loadPortions(db, equipment.id)).toEqual([expect.objectContaining({ whereaboutsType: "store", storeId: shed.id, count: 8 })]);
     });
 
     it("sets final Holders on a From Duty staying with them, defaulting and given a split", async () => {
@@ -413,7 +410,7 @@ describe("Duties", () => {
         await confirmDuty(db, from.id, { id: "tom", role: "member" }, { holders: [{ userId: "tom", count: 4 }, { userId: "sam", count: 0 }] }),
       ).toEqual({ ok: true });
 
-      expect(await getPortions(db, equipment.id)).toEqual([expect.objectContaining({ whereaboutsType: "holder", holderId: "tom", count: 4 })]);
+      expect(await loadPortions(db, equipment.id)).toEqual([expect.objectContaining({ whereaboutsType: "holder", holderId: "tom", count: 4 })]);
     });
   });
 
@@ -427,12 +424,12 @@ describe("Duties", () => {
     expect(await whereaboutsOf(db, equipment.id)).toMatchObject({ whereaboutsType: "store" });
   });
 
-  it("deleteDutiesForEvent removes an Event's Duties and who was on them, leaving other Events' alone", async () => {
+  it("deleteDuties removes an Event's Duties and who was on them, leaving other Events' alone", async () => {
     const { db, equipment, to } = await setup();
     await claimDuty(db, to.id, "tom");
     await ensureDuties(db, "e2", [equipment.id]);
 
-    await deleteDutiesForEvent(db, "e1");
+    await deleteDuties(db, "e1");
 
     expect(await db.select({ eventId: duty.eventId }).from(duty).where(eq(duty.eventId, "e1"))).toEqual([]);
     expect(await db.select().from(dutyUser)).toEqual([]);
@@ -516,7 +513,7 @@ describe("Duties", () => {
 
       await markUnconfirmed(db);
 
-      const portions = await getPortions(db, made.equipmentUnit.id);
+      const portions = await loadPortions(db, made.equipmentUnit.id);
       expect(portions).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ whereaboutsType: "store", storeId: shed.id, count: 4 }),
@@ -539,7 +536,7 @@ describe("Duties", () => {
 
       await markUnconfirmed(db);
 
-      const portions = await getPortions(db, made.equipmentUnit.id);
+      const portions = await loadPortions(db, made.equipmentUnit.id);
       expect(portions).toEqual([expect.objectContaining({ whereaboutsType: "unconfirmed", lastSeenEventId: ev.id, count: 4 })]);
     });
 
@@ -705,13 +702,13 @@ describe("Clashes and heads-ups", () => {
   it("doesn't count unfilled Duties as Clashes", async () => {
     const { db } = await soonEventNeedingEquipment();
 
-    expect(await listClashes(db)).toEqual([]);
+    expect((await listPlanWarnings(db)).clashes).toEqual([]);
   });
 
   it("gives a heads-up about unfilled Duties across upcoming Events from the database", async () => {
     const { db, equipment, event } = await soonEventNeedingEquipment();
 
-    expect(await listHeadsUps(db)).toEqual([
+    expect((await listPlanWarnings(db)).headsUps).toEqual([
       {
         kind: "unfilled_duty",
         equipmentUnitId: equipment.id,
@@ -728,7 +725,7 @@ describe("Clashes and heads-ups", () => {
     await recordMove(db, equipment.id, "sam", { type: "holder", holderId: "sam" });
     await assignDuty(db, duties.find((d) => d.direction === "to")!.id, ["tom"]);
 
-    expect((await listHeadsUps(db)).map((h) => h.message)).toEqual([
+    expect((await listPlanWarnings(db)).headsUps.map((h) => h.message)).toEqual([
       "Sam Okafor needs to pass Balls to Tom Reed before Training @ Harlington.",
     ]);
   });
@@ -762,12 +759,12 @@ describe("Query efficiency", () => {
     };
 
     const fewSelects = countSelects(db);
-    await listClashes(db);
+    await listPlanWarnings(db);
     const selectsWithOneUnit = fewSelects();
 
     for (let i = 0; i < 8; i++) await addUnit(`Bulk ${i}`);
     const manySelects = countSelects(db);
-    await listClashes(db);
+    await listPlanWarnings(db);
     expect(manySelects()).toBe(selectsWithOneUnit);
   });
 
@@ -920,15 +917,11 @@ describe("Query efficiency", () => {
     await addToChecklist(db, { scope: "event_type", scopeId: "training" }, equipment.id);
     await addTraining(db, 24);
 
-    const clashesOnly = countSelects(db);
-    const clashes = await listClashes(db);
-    const selectsForOnePlan = clashesOnly();
-
     const both = countSelects(db);
     const warnings = await listPlanWarnings(db);
-    // One plan, plus the people named in heads-ups.
-    expect(both()).toBe(selectsForOnePlan + 1);
-    expect(warnings).toEqual({ clashes, headsUps: await listHeadsUps(db) });
+    // One load of the plan (6 selects), plus the people named in heads-ups.
+    expect(both()).toBe(7);
+    expect(warnings.clashes).toEqual([]);
   });
 
   it("scoped to one Equipment Unit or one Event, gives exactly that part of the full warnings", async () => {
@@ -1113,7 +1106,7 @@ describe("Taking Equipment off an Event's list", () => {
     const people = await listPeopleOnEquipment(db, "e1", [equipment.id]);
     expect([...people.get(equipment.id)!].sort()).toEqual(["priya", "sam", "tom"]);
 
-    await dropDutiesFor(db, "e1", [equipment.id]);
+    await deleteDuties(db, "e1", [equipment.id]);
 
     expect((await listPeopleOnEquipment(db, "e1", [equipment.id])).size).toBe(0);
     const [again] = await ensureDuties(db, "e1", [equipment.id]);
@@ -1124,7 +1117,7 @@ describe("Taking Equipment off an Event's list", () => {
 describe("Equipment integrity", () => {
   const member = (id: string) => ({ id, role: "member" as const });
   const total = async (db: Awaited<ReturnType<typeof setup>>["db"], id: string) =>
-    (await getPortions(db, id)).reduce((n, p) => n + p.count, 0);
+    (await loadPortions(db, id)).reduce((n, p) => n + p.count, 0);
 
   async function pastEvent(db: Awaited<ReturnType<typeof setup>>["db"], hoursAgo = 1) {
     const made = await createEvent(db, {
@@ -1257,7 +1250,7 @@ describe("Equipment integrity", () => {
       await markUnconfirmed(db);
       await markUnconfirmed(db);
 
-      expect(await getPortions(db, made.equipmentUnit.id)).toEqual(
+      expect(await loadPortions(db, made.equipmentUnit.id)).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ whereaboutsType: "store", storeId: shed.id, count: 4 }),
           expect.objectContaining({ whereaboutsType: "unconfirmed", count: 4 }),

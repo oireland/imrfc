@@ -5,12 +5,12 @@ import { event, series } from "./schema";
 import { trainingTitle } from "./rules";
 import {
   checkOccurrenceCount,
-  londonParts,
-  londonToUtc,
   occurrenceDates,
   validateSeries,
   type SeriesPattern,
 } from "./series-rules";
+import { addDays, londonParts, londonToUtc } from "@/lib/london";
+import type { Failure } from "@/lib/result";
 
 export type NewSeries = SeriesPattern;
 export type Series = typeof series.$inferSelect;
@@ -19,7 +19,6 @@ export type OccurrenceChanges = Partial<
   Pick<SeriesPattern, "title" | "venue" | "notes" | "startTime" | "endTime">
 >;
 
-type Failure = { ok: false; error: string };
 
 async function insertOccurrences(db: Db, s: Series, dates: string[]) {
   if (dates.length === 0) return;
@@ -52,7 +51,7 @@ export async function createSeries(
   const size = checkOccurrenceCount(dates.length, 0);
   if (!size.ok) return size;
 
-  const row: Series = await db.transaction(async (tx: Db) => {
+  const row = await db.transaction(async (tx) => {
     const [created] = await tx
     .insert(series)
     .values({
@@ -87,7 +86,7 @@ export async function extendSeries(
   seriesId: string,
   newEndDate: string,
 ): Promise<{ ok: true } | Failure> {
-  const [row]: Series[] = await db.select().from(series).where(eq(series.id, seriesId));
+  const [row] = await db.select().from(series).where(eq(series.id, seriesId));
   if (!row) return { ok: false, error: "That series no longer exists." };
   const valid = validateSeries({ ...row, eventType: row.eventType as SeriesPattern["eventType"], endDate: newEndDate });
   if (!valid.ok) return valid;
@@ -95,15 +94,13 @@ export async function extendSeries(
     return { ok: false, error: "Pick a date after the current last date." };
   }
 
-  const nextDay = new Date(Date.parse(`${row.endDate}T00:00:00Z`) + 86_400_000)
-    .toISOString()
-    .slice(0, 10);
+  const nextDay = addDays(row.endDate, 1);
   const dates = occurrenceDates({ weekdays: row.weekdays, startDate: nextDay, endDate: newEndDate });
   const [{ existing }] = await db.select({ existing: count() }).from(event).where(eq(event.seriesId, seriesId));
   const size = checkOccurrenceCount(dates.length, Number(existing));
   if (!size.ok) return size;
 
-  await db.transaction(async (tx: Db) => {
+  await db.transaction(async (tx) => {
     await insertOccurrences(tx, row, dates);
     await tx.update(series).set({ endDate: newEndDate }).where(eq(series.id, seriesId));
   });
@@ -116,7 +113,7 @@ export async function editOccurrence(
   changes: OccurrenceChanges,
   scope: "this" | "future",
 ): Promise<{ ok: true } | Failure> {
-  const [target]: Occurrence[] = await db.select().from(event).where(eq(event.id, eventId));
+  const [target] = await db.select().from(event).where(eq(event.id, eventId));
   if (!target?.seriesId) return { ok: false, error: "That event isn't part of a series." };
 
   const tooLong = firstTooLong([
@@ -159,7 +156,7 @@ export async function editOccurrence(
     return { ok: true };
   }
 
-  const later: Occurrence[] = await db
+  const later = await db
     .select()
     .from(event)
     .where(and(eq(event.seriesId, target.seriesId), gte(event.start, target.start)));

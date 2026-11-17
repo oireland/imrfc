@@ -1,10 +1,10 @@
 import type { Db } from "@/db/types";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { seasonStart } from "@/features/duties";
-import { getEvent, listEventsBetween, londonParts, londonToUtc, type Event, type EventType } from "@/features/events";
+import { getEvent, listEventsBetween, listMatchDay, type Event, type EventType } from "@/features/events";
 import { listFitness, notChasedFor } from "@/features/injuries";
 import { listAwayOn, listPlayers } from "@/features/players";
-import { displayName, listApprovedUsers, listKnownUsers } from "@/features/users";
+import { displayName, listApprovedUsers, loadNames } from "@/features/users";
 import type { MailSender } from "@/lib/mail";
 import { askEmail, type AskedEvent } from "./announce-rules";
 import { availabilityAnnouncement, availabilityAsk, availabilityMessaged, availabilityNudge, availabilityReply } from "./schema";
@@ -28,6 +28,8 @@ import {
   type SeasonRecord,
   type WaitingAsk,
 } from "./rules";
+import { londonParts, londonToUtc } from "@/lib/london";
+import type { Result } from "@/lib/result";
 
 export { askStatus, takesReplies } from "./rules";
 export { askPush, chaseMessage, whatsappMessage } from "./announce-rules";
@@ -67,8 +69,7 @@ export type AskNotice = { id: string; kind: AskKind; by: string; status: AskStat
  */
 async function groupFor(db: Db, event: Event) {
   if (event.eventType !== "match") return { ...replyGroup(event, []), events: [event] };
-  const dayStart = londonToUtc(londonParts(event.start).date, "00:00");
-  const sameDay: Event[] = await listEventsBetween(db, dayStart, new Date(dayStart.getTime() + 26 * 3_600_000));
+  const sameDay = await listMatchDay(db, event);
   const group = replyGroup(event, sameDay);
   const byId = new Map([event, ...sameDay].map((e) => [e.id, e]));
   return { ...group, events: group.eventIds.map((id) => byId.get(id)!) };
@@ -86,7 +87,7 @@ async function repliesFor(db: Db, eventIds: string[]): Promise<Reply[]> {
 /** Players by id, leaving out Blocked Users. */
 async function playersById(db: Db) {
   const [listing, people] = await Promise.all([listPlayers(db), listApprovedUsers(db)]);
-  const approved = new Set(people.map((u: { id: string }) => u.id));
+  const approved = new Set(people.map((u) => u.id));
   return new Map([...listing.playing, ...listing.notPlaying].filter((p) => approved.has(p.id)).map((p) => [p.id, p]));
 }
 
@@ -129,7 +130,7 @@ async function notChasedOn(
 
 async function announcementFor(db: Db, eventIds: string[]) {
   const rows = await db.select().from(availabilityAnnouncement).where(inArray(availabilityAnnouncement.eventId, eventIds));
-  return rows.sort((a: { createdAt: Date }, b: { createdAt: Date }) => a.createdAt.getTime() - b.createdAt.getTime())[0] as
+  return rows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0] as
     | typeof availabilityAnnouncement.$inferSelect
     | undefined;
 }
@@ -140,7 +141,7 @@ async function asksFor(db: Db, eventIds: string[]): Promise<(typeof availability
     .select()
     .from(availabilityAsk)
     .where(and(inArray(availabilityAsk.eventId, eventIds), isNull(availabilityAsk.dismissedAt)));
-  return rows.sort((a: { createdAt: Date }, b: { createdAt: Date }) => a.createdAt.getTime() - b.createdAt.getTime());
+  return rows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 }
 
 async function nudgesFor(db: Db, eventIds: string[]): Promise<Nudge[]> {
@@ -148,7 +149,7 @@ async function nudgesFor(db: Db, eventIds: string[]): Promise<Nudge[]> {
 }
 
 async function messagesFor(db: Db, eventIds: string[]) {
-  const rows: (typeof availabilityMessaged.$inferSelect)[] = await db
+  const rows = await db
     .select()
     .from(availabilityMessaged)
     .where(inArray(availabilityMessaged.eventId, eventIds));
@@ -163,7 +164,7 @@ export async function saveReply(
   db: Db,
   input: { eventId: string; playerId: string; viewer: Viewer; status: ReplyStatus; note: string; reason: string },
   now: Date = new Date(),
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<Result> {
   const event = await getEvent(db, input.eventId);
   if (!event) return { ok: false, error: "That event doesn't exist." };
   const player = (await playersById(db)).get(input.playerId);
@@ -211,21 +212,20 @@ export async function getAvailability(db: Db, eventId: string, viewer: Viewer, n
   }
 
   const { eventIds, closesAt, events } = await groupFor(db, event);
-  const [replies, players, people, announcement, nudges, asks, messages] = await Promise.all([
+  const [replies, players, name, announcement, nudges, asks, messages] = await Promise.all([
     repliesFor(db, eventIds),
     playersById(db),
-    listKnownUsers(db),
+    loadNames(db),
     announcementFor(db, eventIds),
     nudgesFor(db, eventIds),
     viewer.committee ? asksFor(db, eventIds) : [],
     viewer.committee ? messagesFor(db, eventIds) : [],
   ]);
-  const names = new Map<string, string>(people.map((u: Parameters<typeof displayName>[0] & { id: string }) => [u.id, displayName(u)]));
   const summary = summarizeAvailability({
     players: [...players.values()],
     replies,
     viewer,
-    nameOf: (id) => names.get(id),
+    nameOf: name,
     replyBy: announcement?.replyBy ?? null,
     nudges,
     messages,
@@ -246,21 +246,21 @@ export async function getAvailability(db: Db, eventId: string, viewer: Viewer, n
     summary,
     events: asked(events),
     announcement: announcement
-      ? { at: announcement.createdAt, by: names.get(announcement.announcedById) ?? "Someone", replyBy: announcement.replyBy }
+      ? { at: announcement.createdAt, by: name(announcement.announcedById), replyBy: announcement.replyBy }
       : null,
     canAnnounce: open && viewer.committee && !announcement,
     canNudge: open && viewer.committee && summary.noReply.length + summary.notChased.length > 0,
     canMessage: open && viewer.committee && summary.noReply.length > 0,
-    asks: asks.map((row) => askNotice(row, names, now)).filter((ask) => ask.status !== "sent"),
+    asks: asks.map((row) => askNotice(row, name, now)).filter((ask) => ask.status !== "sent"),
   };
 }
 
-type AskResult = { ok: true; askId: string; sending: number } | { ok: false; error: string };
+type AskResult = Result<{ askId: string; sending: number }>;
 
 /** Who is being emailed: Approved Users among `playerIds`. */
 async function reachable(db: Db, playerIds: string[]): Promise<string[]> {
   const people = await listApprovedUsers(db);
-  return people.filter((p: { id: string }) => playerIds.includes(p.id)).map((p: { id: string }) => p.id);
+  return people.filter((p) => playerIds.includes(p.id)).map((p) => p.id);
 }
 
 /** Records an Announce or Nudge whose emails are still to send (see `deliverAsk`). */
@@ -289,7 +289,7 @@ export async function announce(
   // Two Committee pressing Announce together must send once: serialise on the day's group, then
   // look again for an announcement the other press may have just made.
   const { eventIds } = await groupFor(db, (await getEvent(db, input.eventId))!);
-  return db.transaction(async (tx: Db) => {
+  return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${[...eventIds].sort()[0]}))`);
     if (await announcementFor(tx, eventIds)) return { ok: false, error: "This has already been announced." } as const;
     await tx.insert(availabilityAnnouncement).values({
@@ -330,7 +330,7 @@ export async function markMessaged(
   db: Db,
   input: { eventId: string; playerId: string; viewer: Viewer },
   now: Date = new Date(),
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<Result> {
   if (!input.viewer.committee) return { ok: false, error: "Only committee can do that." };
   const availability = await getAvailability(db, input.eventId, input.viewer, now);
   if (!availability.canMessage) return { ok: false, error: "You can't message anyone for this one." };
@@ -372,7 +372,7 @@ export async function deliverAsk(
   try {
     const availability = await getAvailability(db, ask.eventId, { id: ask.askedById, committee: true }, now);
     const people = await listApprovedUsers(db);
-    for (const u of people.filter((p: { id: string }) => ask.playerIds.includes(p.id) && !before.includes(p.id))) {
+    for (const u of people.filter((p) => ask.playerIds.includes(p.id) && !before.includes(p.id))) {
       const email = askEmail({
         kind: ask.kind,
         events: availability.events,
@@ -407,35 +407,30 @@ export async function deliverAsk(
   return { reachedUserIds: reached };
 }
 
-function askNotice(row: typeof availabilityAsk.$inferSelect, names: Map<string, string>, now: Date): AskNotice {
+function askNotice(row: typeof availabilityAsk.$inferSelect, name: (id: string) => string, now: Date): AskNotice {
   const status = askStatus({ createdAt: row.createdAt, finishedAt: row.finishedAt, missed: row.missedIds.length }, now);
   // A send that was cut off never recorded who it missed: count everyone not reached.
   const missed = status === "failed" && !row.finishedAt ? row.playerIds.filter((id) => !row.reachedIds.includes(id)) : row.missedIds;
   return {
     id: row.id,
     kind: row.kind,
-    by: names.get(row.askedById) ?? "Someone",
+    by: name(row.askedById),
     status,
     total: row.playerIds.length,
     sent: row.reachedIds.length,
-    missed: missed.map((id) => names.get(id) ?? "Someone"),
+    missed: missed.map(name),
   };
-}
-
-async function namesById(db: Db): Promise<Map<string, string>> {
-  const people = await listKnownUsers(db);
-  return new Map(people.map((u: Parameters<typeof displayName>[0] & { id: string }) => [u.id, displayName(u)]));
 }
 
 /** How an Announce or Nudge's emails are going, for Committee; null for anyone else. */
 export async function getAsk(db: Db, askId: string, viewer: Viewer, now: Date = new Date()): Promise<AskNotice | null> {
   if (!viewer.committee) return null;
   const row = await askRow(db, askId);
-  return row ? askNotice(row, await namesById(db), now) : null;
+  return row ? askNotice(row, await loadNames(db), now) : null;
 }
 
 /** Takes a failed Announce or Nudge off the card (Committee). */
-export async function dismissAsk(db: Db, askId: string, viewer: Viewer, now: Date = new Date()): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function dismissAsk(db: Db, askId: string, viewer: Viewer, now: Date = new Date()): Promise<Result> {
   if (!viewer.committee) return { ok: false, error: "Only committee can do that." };
   await db.update(availabilityAsk).set({ dismissedAt: now }).where(eq(availabilityAsk.id, askId));
   return { ok: true };

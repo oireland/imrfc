@@ -3,7 +3,8 @@
 // applying every entry in order, starting from nothing. The `equipment_portion` table is that
 // result kept up to date in the same transaction, so reads stay fast.
 
-import { countAt, mergePortions, placeFields, placeKey, type Place, type Portion } from "./portions";
+import { countAt, mergePortions, placeFields, placeKey, placeOf, type Place, type Portion } from "./portions";
+import type { Result } from "@/lib/result";
 
 export type LedgerEntry =
   /** A new Equipment Unit's starting stock. */
@@ -23,7 +24,7 @@ export type LedgerEntry =
   /** Doesn't change the Whereabouts. */
   | { kind: "condition_note" };
 
-type Applied = { ok: true; portions: Portion[] } | { ok: false; error: string };
+type Applied = Result<{ portions: Portion[] }>;
 
 function credit(portions: Portion[], equipmentUnitId: string, place: Place, count: number): Portion[] {
   return mergePortions([...portions, { id: crypto.randomUUID(), equipmentUnitId, count, ...placeFields(place) }]);
@@ -32,8 +33,8 @@ function credit(portions: Portion[], equipmentUnitId: string, place: Place, coun
 function debit(portions: Portion[], place: Place, count: number): Applied {
   const available = countAt(portions, place);
   if (count > available) return { ok: false, error: `There aren't ${count} there to move.` };
-  const key = placeKey(placeFields(place));
-  return { ok: true, portions: mergePortions(portions.map((p) => (placeKey(p) === key ? { ...p, count: p.count - count } : p))) };
+  const key = placeKey(place);
+  return { ok: true, portions: mergePortions(portions.map((p) => (placeKey(placeOf(p)) === key ? { ...p, count: p.count - count } : p))) };
 }
 
 /** Applies one entry to an Equipment Unit's current Portions. */
@@ -73,7 +74,7 @@ export function replay(equipmentUnitId: string, entries: LedgerEntry[]): Applied
 
 /** Whether two sets of Portions put the same counts at the same Places (ids and order don't matter). */
 export function sameWhereabouts(a: Portion[], b: Portion[]): boolean {
-  const counts = (portions: Portion[]) => new Map(mergePortions(portions).map((p) => [placeKey(p), p.count]));
+  const counts = (portions: Portion[]) => new Map(mergePortions(portions).map((p) => [placeKey(placeOf(p)), p.count]));
   const left = counts(a);
   const right = counts(b);
   return left.size === right.size && [...left].every(([key, count]) => right.get(key) === count);
