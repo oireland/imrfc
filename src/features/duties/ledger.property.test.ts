@@ -9,7 +9,6 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { createTestDb } from "@/test/db";
-import { migrate } from "@/test/migrate";
 import {
   EVENTS,
   HOLDERS,
@@ -94,7 +93,6 @@ const PAST = { eventType: "training" as const, start: new Date("2020-01-01T10:00
 /** One database for every run (migrating one per run is most of the cost); each run gets its own Equipment Unit. */
 async function setup() {
   const db = await createTestDb();
-  await migrate(db);
   await db.insert(user).values(HOLDERS.map((id) => ({ id, name: id, email: `${id}@example.com`, accessState: "approved" as const })));
   await db.insert(store).values([HOME, OTHER_STORE].map((id) => ({ id, name: id, address: "x" })));
   // Past and Cancelled, so nothing else (warnings, heads-ups) reacts to them.

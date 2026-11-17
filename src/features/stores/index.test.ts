@@ -1,12 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { archiveStore, createStore, listStores } from "./index";
 
 describe("createStore", () => {
   it("creates an unarchived Store", async () => {
     const db = await createTestDb();
-    await migrate(db);
 
     const result = await createStore(db, { name: "Equipment shed", address: "Ethos, SW7" });
 
@@ -16,7 +14,6 @@ describe("createStore", () => {
 
   it("rejects a Store without a name", async () => {
     const db = await createTestDb();
-    await migrate(db);
 
     const result = await createStore(db, { name: "  ", address: "SW7" });
 
@@ -28,7 +25,6 @@ describe("createStore", () => {
 describe("listStores", () => {
   it("excludes archived Stores by default", async () => {
     const db = await createTestDb();
-    await migrate(db);
     await createStore(db, { name: "Equipment shed", address: "SW7" });
     const created = await createStore(db, { name: "Old cupboard", address: "SW7" });
     if (!created.ok) throw new Error("expected Store to be created");
@@ -43,7 +39,6 @@ describe("listStores", () => {
 describe("archiveStore", () => {
   it("never hard-deletes a Store", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const created = await createStore(db, { name: "Old cupboard", address: "SW7" });
     if (!created.ok) throw new Error("expected Store to be created");
 
@@ -56,7 +51,6 @@ describe("archiveStore", () => {
 describe("createStore length limits", () => {
   it("rejects a name or address that's far too long", async () => {
     const db = await createTestDb();
-    await migrate(db);
 
     expect((await createStore(db, { name: "a".repeat(101), address: "SW7" })).ok).toBe(false);
     expect((await createStore(db, { name: "Shed", address: "a".repeat(201) })).ok).toBe(false);

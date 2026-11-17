@@ -15,7 +15,7 @@ import {
 } from "./portions";
 import { applyEntry, replay, type LedgerEntry } from "./ledger";
 
-export { equipmentUnit, equipmentPortion } from "./schema";
+export { equipmentUnit, equipmentPortion, movementLogEntry } from "./schema";
 export { validateEquipmentUnit } from "./rules";
 export type { NewEquipmentUnit } from "./rules";
 export { describeWhereabouts, groupByWhereabouts, quickMoveFor } from "./whereabouts";

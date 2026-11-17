@@ -144,10 +144,6 @@ _Avoid_: Ringer, external player
 The club's pre-match document made from a Selection: the Match's details, then each filled Shirt with its name and Match Day Roles. Downloaded as a PDF.
 _Avoid_: Teamsheet, lineup
 
-**Sheet Default**:
-A Team Sheet field remembered per Team (Travel Attire, Warm Up Attire, Post Match Activity, the message), used unless overridden for one Match.
-_Avoid_: Template
-
 **Match Day Role**:
 A job on a Team Sheet given to someone in the Selection: C (captain) and VC (vice captain), at most one each; LM (linesman), HT (hydration technician), NT (nutrition technician), SGC (shower gel captain) and KD (kit duty), any number.
 _Avoid_: Role on its own (that is a permission level), duty (that is carrying equipment)

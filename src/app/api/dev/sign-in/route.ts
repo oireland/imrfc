@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/db/client";
-import { user } from "@/features/users/schema";
+import { user } from "@/features/users";
 import { devSignInEnabled } from "@/lib/dev-sign-in";
 import { safeNextPath } from "@/lib/next-path";
 

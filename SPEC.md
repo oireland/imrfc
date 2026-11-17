@@ -282,7 +282,7 @@ Lets Committee pick each Match's team on a shared board, turn it into the club's
 - **Guests**: Committee can type a name onto a Shirt for someone who isn't a User (a ringer, a fresher on day one). A Guest lives on that Selection only: no reply, no Positions, no history, never notified.
 - Picking a Player already on the other pitch that day **moves** them, leaving their old Shirt empty, with a toast ("Moved from 2nd XV 12").
 - **One pitch at a time at every width, with a tab per Match** (1st and 2nd XV on the same day). Tap a Shirt and tap a name to pick; a filled Shirt also offers Roles, **Swap** (then tap the other Shirt) and Empty. On wider screens names can also be dragged between Shirts, dropping on a filled Shirt to swap.
-- **Two selectors at once**: every Shirt saves on its own (the last change to a Shirt wins), and an open board refreshes every ~5 seconds. A Shirt changed by someone else flashes ("Tom moved this"). No realtime service.
+- **Two selectors at once**: every Shirt saves on its own (the last change to a Shirt wins), and an open board refreshes every ~10 seconds. A Shirt changed by someone else flashes ("Tom moved this"). No realtime service.
 - Past and Cancelled Matches show the board read-only.
 
 ### Team Sheet
@@ -380,7 +380,7 @@ Every signed-in screen is checked with axe in light, dark (device) and Dark chos
 
 Code is organised **by feature**, not by layer. Each feature owns its domain rules in plain TypeScript, independent of Next.js, which makes them testable in isolation and lets new features attach without editing existing ones. See [ADR 0002](docs/adr/0002-feature-modules.md).
 
-Features: `users` (access, roles, blocking), `locations`, `equipment` (units, whereabouts, moves), `events` (events, series, teams), `duties` (checklists, duties, confirm, clashes, summary), `calendar-feed`, `players` (Playing, Positions, time Away), `availability` (replies, Announce, Nudge, chase message, Messaged), `contact` (Mobile numbers, WhatsApp links), `selection` (Selection board, Team Sheets, Notify the team), `injuries` (Injuries, Fitness, Concussion timeline, Physio Message).
+Features: `users` (access, roles, blocking), `account-deletion`, `onboarding`, `stores`, `equipment` (units, whereabouts, moves), `events` (events, series, teams), `checklists`, `duties` (duties, confirm, clashes, summary), `calendar-feed`, `push`, `players` (Playing, Positions, time Away), `availability` (replies, Announce, Nudge, chase message, Messaged), `contact` (Mobile numbers, WhatsApp links), `selection` (Selection board, Team Sheets, Notify the team), `injuries` (Injuries, Fitness, Concussion timeline, Physio Message).
 
 ## Out of scope for v1
 

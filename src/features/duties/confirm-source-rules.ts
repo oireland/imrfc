@@ -83,6 +83,24 @@ export function gatherHeldBy(portions: Portion[], { userIds, count }: { userIds:
 }
 
 /**
+ * When a From Duty was handed on while the unit is still with the person it came from, the
+ * new People hold none of it and a plain Confirm is refused. This is each way out: "Tom has it
+ * from Sam", i.e. what the Duty's People hold plus the rest from another Holder who has enough.
+ * Empty when a plain Confirm already works.
+ */
+export function handedOnSources(portions: Portion[], { userIds, count }: { userIds: string[]; count: number }): { holderId: string; sources: SourcePart[] }[] {
+  if (gatherFromDutyUsers(portions, { userIds, count }).ok) return [];
+  const own = gatherHeldBy(portions, { userIds, count }).sources;
+  const remaining = count - own.reduce((sum, part) => sum + part.count, 0);
+  return portions
+    .filter((p) => p.whereaboutsType === "holder" && p.holderId && !userIds.includes(p.holderId) && p.count >= remaining)
+    .map((p) => ({
+      holderId: p.holderId!,
+      sources: [...own, { place: { type: "holder", holderId: p.holderId! } as Place, count: remaining }],
+    }));
+}
+
+/**
  * Validates a "who has how many" split: every part names one of the Duty's People, no
  * negative counts, and the parts add up to the Duty's count.
  */

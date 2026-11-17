@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { listStores, store } from "@/features/stores";
 import { user } from "@/features/users";
@@ -57,7 +56,6 @@ async function seedUser(db: Awaited<ReturnType<typeof createTestDb>>) {
 describe("createEquipmentUnit", () => {
   it("creates an Active Equipment Unit with a Home, Quantity 1 by default, and one Portion", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
 
     const result = await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
@@ -73,7 +71,6 @@ describe("createEquipmentUnit", () => {
 
   it("creates an Equipment Unit with a Quantity greater than 1, all at Home", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
 
     const result = await createEquipmentUnit(db, { name: "Tackle shields", homeId: home.id, quantity: 8 });
@@ -88,7 +85,6 @@ describe("createEquipmentUnit", () => {
 
   it("rejects an Equipment Unit without a name", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
 
     const result = await createEquipmentUnit(db, { name: "", homeId: home.id });
@@ -101,7 +97,6 @@ describe("createEquipmentUnit", () => {
 describe("listEquipmentUnits", () => {
   it("excludes Retired Equipment Units by default", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
     const created = await createEquipmentUnit(db, { name: "Old shields", homeId: home.id });
@@ -115,7 +110,6 @@ describe("listEquipmentUnits", () => {
 
   it("includes Retired Equipment Units when asked", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     const created = await createEquipmentUnit(db, { name: "Old shields", homeId: home.id });
     if (!created.ok) throw new Error("expected Equipment Unit to be created");
@@ -130,7 +124,6 @@ describe("listEquipmentUnits", () => {
 describe("setEquipmentStatus", () => {
   it("changes an Equipment Unit's Equipment Status", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     const created = await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
     if (!created.ok) throw new Error("expected Equipment Unit to be created");
@@ -145,7 +138,6 @@ describe("setEquipmentStatus", () => {
 describe("retireEquipmentUnit", () => {
   it("takes an Equipment Unit out of circulation but keeps its Portions and history", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     const alex = await seedUser(db);
     const created = await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
@@ -162,7 +154,6 @@ describe("retireEquipmentUnit", () => {
 
   it("says so when the Equipment Unit doesn't exist", async () => {
     const db = await createTestDb();
-    await migrate(db);
     expect((await retireEquipmentUnit(db, "nope")).ok).toBe(false);
   });
 });
@@ -170,7 +161,6 @@ describe("retireEquipmentUnit", () => {
 describe("Moves in a hurry", () => {
   it("rejects a non-positive or fractional count without changing the Quantity", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     const alex = await seedUser(db);
     const created = await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
@@ -191,7 +181,6 @@ describe("Moves in a hurry", () => {
 
   it("keeps the counts right when several Moves of one Equipment Unit happen at once", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     const alex = await seedUser(db);
     const people = await Promise.all([seedUser(db), seedUser(db), seedUser(db), seedUser(db)]);
@@ -218,7 +207,6 @@ describe("Moves in a hurry", () => {
 describe("setConditionNote", () => {
   it("updates an Equipment Unit's Condition Note and logs the change", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     const alex = await seedUser(db);
     const created = await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
@@ -240,7 +228,6 @@ describe("setConditionNote", () => {
 describe("recordMove", () => {
   it("records 'I've got it': Whereabouts becomes the Holder", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     const alex = await seedUser(db);
     const created = await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
@@ -260,7 +247,6 @@ describe("recordMove", () => {
 
   it("records 'put it in [Store]': Whereabouts becomes the Store", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     const otherStore = await seedHome(db);
     const alex = await seedUser(db);
@@ -279,7 +265,6 @@ describe("recordMove", () => {
 
   it("moves only the given count from the given Place, for a split Equipment Unit", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     const sam = await seedUser(db);
     const tom = await seedUser(db);
@@ -311,7 +296,6 @@ describe("recordMove", () => {
 describe("recordSplitMove", () => {
   it("gathers from several sources and splits across several targets, logging one entry per flow", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     const sam = await seedUser(db);
     const tom = await seedUser(db);
@@ -354,7 +338,6 @@ describe("recordSplitMove", () => {
 
   it("rejects when a source place doesn't have enough", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     const sam = await seedUser(db);
     const created = await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
@@ -373,7 +356,6 @@ describe("recordSplitMove", () => {
 describe("setUnconfirmed", () => {
   it("moves the whole Quantity to Unconfirmed with no source given", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     const created = await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
     if (!created.ok) throw new Error("expected Equipment Unit to be created");
@@ -389,7 +371,6 @@ describe("setUnconfirmed", () => {
 describe("raiseQuantity", () => {
   it("raises the Quantity and adds the extra count at Home, logging why", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     const alex = await seedUser(db);
     const created = await createEquipmentUnit(db, { name: "Tackle shields", homeId: home.id, quantity: 6 });
@@ -410,7 +391,6 @@ describe("raiseQuantity", () => {
 describe("lowerQuantity", () => {
   it("lowers the Quantity, removing count from the only Place automatically", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     const alex = await seedUser(db);
     const created = await createEquipmentUnit(db, { name: "Tackle shields", homeId: home.id, quantity: 8 });
@@ -429,7 +409,6 @@ describe("lowerQuantity", () => {
 
   it("rejects lowering below 1", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     const alex = await seedUser(db);
     const created = await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
@@ -444,7 +423,6 @@ describe("lowerQuantity", () => {
 describe("setQuantity", () => {
   async function seedShields(quantity: number) {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     const alex = await seedUser(db);
     const created = await createEquipmentUnit(db, { name: "Tackle shields", homeId: home.id, quantity });
@@ -493,7 +471,6 @@ describe("setQuantity", () => {
 describe("listEquipmentHeldBy", () => {
   it("lists the non-retired Equipment Units whose Holder is the User, with the count held", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     const me = await seedUser(db);
     const other = await seedUser(db);
@@ -532,7 +509,6 @@ describe("listEquipmentHeldBy", () => {
 describe("archiveStoreIfUnused", () => {
   it("archives a Store nothing is homed or stored at", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     const [spare] = await db.insert(store).values({ id: "spare", name: "Spare", address: "x" }).returning();
     await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
@@ -544,7 +520,6 @@ describe("archiveStoreIfUnused", () => {
 
   it("refuses a Store that is some Equipment Unit's Home", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
 
@@ -556,7 +531,6 @@ describe("archiveStoreIfUnused", () => {
 
   it("refuses a Store that still has equipment in it, even if it isn't its Home", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     const alex = await seedUser(db);
     const [other] = await db.insert(store).values({ id: "other", name: "Other", address: "x" }).returning();
@@ -571,7 +545,6 @@ describe("archiveStoreIfUnused", () => {
 describe("setConditionNote length limit", () => {
   it("refuses a note that's far too long, changing and logging nothing", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     const alex = await seedUser(db);
     const created = await createEquipmentUnit(db, { name: "Ball bag A", homeId: home.id });
@@ -588,7 +561,6 @@ describe("setConditionNote length limit", () => {
 describe("hasEquipmentUnconfirmedAt", () => {
   it("is true only while equipment is Unconfirmed at that Event", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     await seedEvent(db, "event-1");
     await seedEvent(db, "event-2");
@@ -612,7 +584,6 @@ describe("the Movement Log is the source of truth", () => {
 
   it("replays to the same Portions after every kind of change to the Whereabouts", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     const [other] = await db.insert(store).values({ id: "clubhouse", name: "Clubhouse", address: "W12" }).returning();
     const alex = await seedUser(db);
@@ -660,7 +631,6 @@ describe("the Movement Log is the source of truth", () => {
 
   it("replays a unit whose Quantity is lowered without saying where from", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     const alex = await seedUser(db);
     const created = await createEquipmentUnit(db, { name: "Bibs", homeId: home.id, quantity: 5, addedBy: alex.id });
@@ -673,7 +643,6 @@ describe("the Movement Log is the source of truth", () => {
 
   it("orders entries made in the same moment by when they were written", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const home = await seedHome(db);
     const alex = await seedUser(db);
     const created = await createEquipmentUnit(db, { name: "Tackle pad", homeId: home.id, addedBy: alex.id });

@@ -4,7 +4,6 @@ import { sql } from "drizzle-orm";
 import type { Db } from "@/db/types";
 import { describe, expect, it } from "vitest";
 import { createTestDb } from "@/test/db";
-import { migrate } from "@/test/migrate";
 
 // pg_constraint.confdeltype: "a" is NO ACTION, "n" is SET NULL.
 const EXPECTED: [string, string, string][] = [
@@ -38,7 +37,6 @@ async function eventForeignKeys(db: Database) {
 describe("Event foreign keys", () => {
   it("every column holding an Event id references the Event", async () => {
     const db = await createTestDb();
-    await migrate(db);
 
     const found = (await eventForeignKeys(db)).map((k) => [k.table, k.column, k.action]);
 
@@ -47,14 +45,12 @@ describe("Event foreign keys", () => {
 
   it("the database rejects a row for an Event that doesn't exist", async () => {
     const db = await createTestDb();
-    await migrate(db);
 
     await expect(db.execute(sql`insert into selection_pitch (event_id, shirt_count) values ('no-such-event', 23)`)).rejects.toThrow();
   });
 
   it("the migration clears rows left behind by Events deleted before the constraints existed", async () => {
     const db = await createTestDb();
-    await migrate(db);
     for (const { table, name } of await eventForeignKeys(db)) {
       await db.execute(sql.raw(`alter table ${table} drop constraint "${name}"`));
     }

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { store } from "@/features/stores";
 import { createEquipmentUnit, getPortions, listMovementLog, raiseQuantity, recordMove } from "@/features/equipment";
@@ -34,7 +33,6 @@ import {
 
 async function setup() {
   const db = await createTestDb();
-  await migrate(db);
   await db.insert(user).values(
     ["tom", "sam", "priya"].map((id) => ({ id, name: id, email: `${id}@x.org`, accessState: "approved" as const })),
   );
@@ -274,7 +272,6 @@ describe("Duties", () => {
   describe("Confirm counts and splits", () => {
     async function setupCounted(quantity = 8, count = 4) {
       const db = await createTestDb();
-      await migrate(db);
       await db.insert(user).values(
         ["tom", "sam"].map((id) => ({ id, name: id, email: `${id}@x.org`, accessState: "approved" as const })),
       );
@@ -1157,6 +1154,19 @@ describe("Equipment integrity", () => {
       expect(result.ok).toBe(false);
       expect(await total(db, equipment.id)).toBe(1);
       expect(await whereaboutsOf(db, equipment.id)).toMatchObject({ whereaboutsType: "holder", holderId: "sam" });
+    });
+
+    it("a From Duty handed to someone else can be Confirmed from the carrier when the Confirm says so", async () => {
+      const { db, equipment, to, from } = await setup();
+      await claimDuty(db, to.id, "sam");
+      await confirmDuty(db, to.id, member("sam"));
+      await handOnDuty(db, from.id, "sam", "tom");
+
+      const result = await confirmDuty(db, from.id, member("tom"), { from: [{ place: { type: "holder", holderId: "sam" }, count: 1 }] });
+
+      expect(result).toEqual({ ok: true });
+      expect(await total(db, equipment.id)).toBe(1);
+      expect(await whereaboutsOf(db, equipment.id)).toMatchObject({ whereaboutsType: "store" });
     });
 
     it("refuses a Confirm whose chosen sources add up to nothing", async () => {

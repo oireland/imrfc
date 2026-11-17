@@ -1,8 +1,8 @@
 import { isValidElement, type ReactNode } from "react";
 import { drizzle } from "drizzle-orm/pglite";
 import { PGlite } from "@electric-sql/pglite";
+import { migrate } from "drizzle-orm/pglite/migrator";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { migrate } from "@/test/migrate";
 import { seedSeason } from "@/test/season";
 
 // Each page runs against a seeded season on PGlite, through a db that counts its queries.
@@ -65,7 +65,7 @@ afterAll(() => client.close());
 
 beforeAll(async () => {
   const db = drizzle(client);
-  await migrate(db);
+  await migrate(db, { migrationsFolder: "drizzle" });
   seeded = await seedSeason(db);
   const { listKnownUsers } = await import("@/features/users");
   const me = (await listKnownUsers(db)).find((u) => u.id === seeded.userId)!;

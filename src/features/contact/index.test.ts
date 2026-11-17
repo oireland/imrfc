@@ -1,12 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { user } from "@/features/users";
 import { clearMobileNumber, getMobileNumber, hasMobileNumber, listMobileNumbers, setMobileNumber } from "./index";
 
 async function setup() {
   const db = await createTestDb();
-  await migrate(db);
   await db.insert(user).values([
     { id: "tom", name: "Tom Hale", email: "tom@x.org", accessState: "approved", role: "member" },
     { id: "sam", name: "Sam Roe", email: "sam@x.org", accessState: "approved", role: "member" },

@@ -2,7 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { testUtils } from "better-auth/plugins";
 import { db } from "@/db/client";
-import { account, session, user, verification } from "@/features/users/schema";
+import { account, session, user, verification } from "@/features/users";
 
 /**
  * A second Better Auth instance with the test-utils plugin, kept out of the real config

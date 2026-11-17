@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { store } from "@/features/stores";
 import { createEquipmentUnit } from "@/features/equipment";
@@ -16,7 +15,6 @@ import { deleteAccount } from "./index";
 
 async function setup() {
   const db = await createTestDb();
-  await migrate(db);
   await db.insert(user).values([
     { id: "tom", name: "Tom Hale", email: "tom@x.org", accessState: "approved", role: "member" },
     { id: "cat", name: "Cat Jones", email: "cat@x.org", accessState: "approved", role: "committee" },

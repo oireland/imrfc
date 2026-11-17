@@ -1,6 +1,6 @@
 import path from "node:path";
 import { Document, Font, Image, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
-import type { SheetLayout } from "@/features/selection/sheet";
+import type { SheetLayout } from "@/features/selection/client";
 
 const assets = path.join(process.cwd(), "src/assets");
 

@@ -4,12 +4,10 @@ import { sql } from "drizzle-orm";
 import type { Db } from "@/db/types";
 import { describe, expect, it } from "vitest";
 import { createTestDb } from "@/test/db";
-import { migrate } from "@/test/migrate";
 
 /** Eight shields, all in the shed; written directly, as a bad script or console session would. */
 async function seedShields() {
   const db = await createTestDb();
-  await migrate(db);
   await db.execute(sql`insert into "user" (id, name, email, email_verified) values ('sam', 'Sam', 'sam@example.com', true)`);
   await db.execute(sql`insert into store (id, name, address) values ('shed', 'Shed', 'x')`);
   await db.transaction(async (tx: Db) => {

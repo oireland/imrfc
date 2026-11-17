@@ -31,6 +31,8 @@ export type DutySlot = {
   sourceOptions: SourceOption[];
   needsHolderChoice: boolean;
   holderOptions: HolderOption[];
+  /** A From Duty handed on while the unit is still with someone else: "Tom has it from Sam", one per way to Confirm. */
+  handedOn: { label: string; sources: SourcePart[] }[];
 };
 
 export type DutyEquipment = {
@@ -257,7 +259,7 @@ function Slot({ slot, equipmentName, soon, onOpen }: { slot: DutySlot; equipment
   );
 }
 
-type View = "main" | "people" | "assign" | "places" | "confirmSplit";
+type View = "main" | "people" | "assign" | "places" | "confirmSplit" | "handedOn";
 
 function DutySheet({
   item,
@@ -307,6 +309,10 @@ function DutySheet({
   }
 
   function startConfirm() {
+    if (slot.handedOn.length > 0) {
+      setView("handedOn");
+      return;
+    }
     if (slot.needsSourceChoice || slot.needsHolderChoice) {
       setView("confirmSplit");
       return;
@@ -519,6 +525,23 @@ function DutySheet({
               );
             })}
           </ul>
+        )}
+
+        {view === "handedOn" && (
+          <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+            <p className="text-sm text-muted-foreground">Nothing&apos;s with {personLabel} yet. Who did it come from?</p>
+            {slot.handedOn.map((option) => (
+              <button
+                key={option.label}
+                type="button"
+                disabled={pending}
+                onClick={() => run({ action: "confirm", from: option.sources }, "Marked as done")}
+                className="flex h-12 w-full items-center justify-center rounded-2xl bg-muted px-3 text-base font-semibold disabled:opacity-60"
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         )}
 
         {view === "confirmSplit" && (
