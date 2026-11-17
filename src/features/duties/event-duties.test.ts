@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { store } from "@/features/stores";
 import { createEquipmentUnit } from "@/features/equipment";
@@ -11,7 +10,6 @@ import { actOnEventDuty, claimDuty, ensureDuties, listEventDuties, voidDutiesFor
 
 async function setup() {
   const db = await createTestDb();
-  await migrate(db);
   await db.insert(user).values(
     ["tom", "sam"].map((id) => ({ id, name: id, email: `${id}@x.org`, accessState: "approved" as const })),
   );

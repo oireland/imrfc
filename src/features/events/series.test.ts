@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { cancelEvent } from "./index";
 import { failOnInsert } from "@/test/fail-on-insert";
@@ -15,7 +14,6 @@ import {
 
 async function setup() {
   const db = await createTestDb();
-  await migrate(db);
   const pattern: NewSeries = {
     weekdays: [3],
     startTime: "19:00",

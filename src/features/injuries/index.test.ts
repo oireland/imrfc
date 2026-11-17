@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { createTestDb } from "@/test/db";
-import { migrate } from "@/test/migrate";
 import { user, type Role } from "@/features/users";
 import { clearInjuries, clearInjury, listFitness, listInjuries, listPhysioNeeds, logByMistake, reportInjury, updateInjury } from "./index";
 import type { ReportInput } from "./rules";
@@ -13,7 +12,6 @@ const tom = { id: "tom", role: "committee" as const };
 
 async function setup() {
   const db = await createTestDb();
-  await migrate(db);
   await db.insert(user).values([
     { id: "hal", name: "Hooker Hal", email: "hal@x.org", accessState: "approved" },
     { id: "fran", name: "Fly-half Fran", email: "fran@x.org", accessState: "approved" },

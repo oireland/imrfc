@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { store } from "@/features/stores";
 import { createEquipmentUnit, raiseQuantity, setEquipmentStatus } from "@/features/equipment";
@@ -26,7 +25,6 @@ function countSelects(db: { select: (...args: unknown[]) => unknown }): () => nu
 
 async function setup() {
   const db = await createTestDb();
-  await migrate(db);
   const [shed] = await db
     .insert(store)
     .values({ id: "s1", name: "Shed", address: "x" })

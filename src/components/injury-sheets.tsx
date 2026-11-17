@@ -7,7 +7,7 @@ import { Chip } from "@/components/event-fields";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { BODY_AREAS, type BodyArea, type OpenStatus, type ReportInput, type UpdateInput } from "@/features/injuries/rules";
+import { BODY_AREAS, type BodyArea, type OpenStatus, type ReportInput, type UpdateInput } from "@/features/injuries/client";
 import { cn } from "cn";
 
 type Result = { ok: true } | { ok: false; error: string };

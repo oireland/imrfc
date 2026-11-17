@@ -1,6 +1,6 @@
 # Feature modules with framework-free domain rules
 
-Code is grouped by feature (`users`, `stores`, `equipment`, `events`, `duties`, `calendar-feed`), each owning its domain rules as plain TypeScript with no Next.js imports; Next.js routes, server actions and components are thin adapters over them. This keeps the rules fast to test first (TDD) and lets new capabilities — Availability/RSVP is the reference case — arrive as a new feature that references others by id instead of editing them.
+Code is grouped by feature (the folders under `src/features`; the list grows slice by slice, so it isn't repeated here), each owning its domain rules as plain TypeScript with no Next.js imports; Next.js routes, server actions and components are thin adapters over them. This keeps the rules fast to test first (TDD) and lets new capabilities — Availability/RSVP is the reference case — arrive as a new feature that references others by id instead of editing them.
 
 ## Consequences
 

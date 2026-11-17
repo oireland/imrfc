@@ -31,7 +31,7 @@ export { dutyActions } from "./duty-actions-rules";
 export type { DutyAction } from "./duty-actions-rules";
 export { joinNames } from "./names-rules";
 export { seasonStart } from "./duty-record-rules";
-export { gatherConfirmSources, needsSourceChoice } from "./confirm-source-rules";
+export { gatherConfirmSources, handedOnSources, needsSourceChoice } from "./confirm-source-rules";
 export { parseSourceValue, sourceValue } from "./source-value";
 export type { HolderPart, SourcePart } from "./confirm-source-rules";
 
@@ -330,7 +330,7 @@ function resolveHolderSplit(
  * the Checklist line's effective count (not necessarily the Equipment Unit's whole
  * Quantity). A To Duty's count is gathered from a source Place (or several — see
  * `gatherConfirmSources`), defaulted unless the confirm sheet gives one. A From Duty's
- * count always comes from the Duty's own People. When the Duty has several People and
+ * count comes from the Duty's own People, unless the Confirm names where it is (see `handedOnSources`). When the Duty has several People and
  * the count is more than one, "who has how many" decides the final Holders (To Duty,
  * or a From Duty staying with them) — defaulted to all with whoever Confirms.
  */
@@ -401,7 +401,7 @@ async function recordConfirmMove(
     });
   }
 
-  const parts = gatherFromDutyUsers(portions, { userIds, count }).sources;
+  const parts = options?.from ?? gatherFromDutyUsers(portions, { userIds, count }).sources;
   if (row.destinationType === "holder") {
     const holderSplit = resolveHolderSplit(userIds, count, actor.id, options?.holders);
     if (!holderSplit.ok) return holderSplit;

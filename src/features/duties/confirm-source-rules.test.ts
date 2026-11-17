@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gatherConfirmSources, gatherFromDutyUsers, needsSourceChoice, validateHolderSplit } from "./confirm-source-rules";
+import { gatherConfirmSources, gatherFromDutyUsers, handedOnSources, needsSourceChoice, validateHolderSplit } from "./confirm-source-rules";
 import type { Portion } from "@/features/equipment";
 
 const portion = (over: Partial<Portion>): Portion => ({
@@ -154,5 +154,33 @@ describe("validateHolderSplit", () => {
       ok: false,
       error: "Only the duty's people can hold it.",
     });
+  });
+});
+
+describe("handedOnSources", () => {
+  const held = (holderId: string, count: number) => portion({ whereaboutsType: "holder", holderId, count });
+
+  it("offers each other holder who has what the Duty's People don't", () => {
+    expect(handedOnSources([held("sam", 4)], { userIds: ["tom"], count: 4 })).toEqual([
+      { holderId: "sam", sources: [{ place: { type: "holder", holderId: "sam" }, count: 4 }] },
+    ]);
+  });
+
+  it("takes what the Duty's People hold first and the rest from the other holder", () => {
+    expect(handedOnSources([held("tom", 1), held("sam", 3)], { userIds: ["tom"], count: 4 })).toEqual([
+      {
+        holderId: "sam",
+        sources: [
+          { place: { type: "holder", holderId: "tom" }, count: 1 },
+          { place: { type: "holder", holderId: "sam" }, count: 3 },
+        ],
+      },
+    ]);
+  });
+
+  it("offers nothing when the Duty's People (or a Store) can already cover it, or no one else has enough", () => {
+    expect(handedOnSources([held("tom", 4), held("sam", 4)], { userIds: ["tom"], count: 4 })).toEqual([]);
+    expect(handedOnSources([portion({ storeId: "home", count: 4 })], { userIds: ["tom"], count: 4 })).toEqual([]);
+    expect(handedOnSources([held("sam", 2)], { userIds: ["tom"], count: 4 })).toEqual([]);
   });
 });

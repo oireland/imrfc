@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { eraseUser, user } from "@/features/users";
 import { clearAway, getPlayer, listPlayers, setPlaying, setPlayerPositions } from "./index";
@@ -7,7 +6,6 @@ import { addAway, awayAlert, editAway, imBack, listAway, listAwayOn, removeAway 
 
 async function setup() {
   const db = await createTestDb();
-  await migrate(db);
   await db.insert(user).values([
     { id: "hal", name: "Hooker Hal", email: "hal@x.org", accessState: "approved", preferredPosition: "Hooker" },
     { id: "fran", name: "Fly-half Fran", email: "fran@x.org", accessState: "approved", preferredPosition: "Fly-half" },

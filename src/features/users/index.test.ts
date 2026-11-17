@@ -1,6 +1,5 @@
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { account, session, user } from "./schema";
 import {
@@ -40,7 +39,6 @@ async function seedUser(
 describe("listPendingUsers", () => {
   it("returns only Pending Users", async () => {
     const db = await createTestDb();
-    await migrate(db);
     await seedUser(db, { accessState: "pending", name: "Pending Pat" });
     await seedUser(db, { accessState: "approved", name: "Approved Alex" });
 
@@ -51,7 +49,6 @@ describe("listPendingUsers", () => {
 
   it("counts Pending Users", async () => {
     const db = await createTestDb();
-    await migrate(db);
     await seedUser(db, { accessState: "pending" });
     await seedUser(db, { accessState: "pending" });
     await seedUser(db, { accessState: "approved" });
@@ -63,7 +60,6 @@ describe("listPendingUsers", () => {
 describe("approveUser", () => {
   it("moves a Pending User to Approved", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const pat = await seedUser(db, { accessState: "pending" });
 
     await approveUser(db, pat.id);
@@ -76,7 +72,6 @@ describe("approveUser", () => {
 describe("blockUser / unblockUser", () => {
   it("blocks an Approved User and can unblock them back to Approved", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const alex = await seedUser(db, { accessState: "approved" });
 
     await blockUser(db, alex.id);
@@ -90,7 +85,6 @@ describe("blockUser / unblockUser", () => {
 
   it("revokes the User's sessions", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const alex = await seedUser(db, { accessState: "approved" });
     await db.insert(session).values({
       id: crypto.randomUUID(),
@@ -109,7 +103,6 @@ describe("blockUser / unblockUser", () => {
 describe("listApprovedUsers", () => {
   it("returns only Approved Users", async () => {
     const db = await createTestDb();
-    await migrate(db);
     await seedUser(db, { accessState: "pending", name: "Pending Pat" });
     await seedUser(db, { accessState: "approved", name: "Approved Alex" });
     await seedUser(db, { accessState: "blocked", name: "Blocked Bo" });
@@ -124,7 +117,6 @@ describe("listApprovedUsers", () => {
 describe("listKnownUsers", () => {
   it("returns everyone but Pending Users, so names in past records still resolve", async () => {
     const db = await createTestDb();
-    await migrate(db);
     await seedUser(db, { accessState: "pending", name: "Pending Pat" });
     await seedUser(db, { accessState: "approved", name: "Approved Alex" });
     await seedUser(db, { accessState: "blocked", name: "Blocked Bo" });
@@ -139,7 +131,6 @@ describe("listKnownUsers", () => {
 describe("changeRole", () => {
   it("changes another User's Role", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const ann = await seedUser(db, { role: "admin", accessState: "approved" });
     const tom = await seedUser(db, { accessState: "approved" });
 
@@ -150,7 +141,6 @@ describe("changeRole", () => {
 
   it("refuses a Role that doesn't exist", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const ann = await seedUser(db, { role: "admin", accessState: "approved" });
     const tom = await seedUser(db, { accessState: "approved" });
 
@@ -162,7 +152,6 @@ describe("changeRole", () => {
 
   it("stops the last Admin demoting themselves", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const ann = await seedUser(db, { role: "admin", accessState: "approved" });
 
     const result = await changeRole(db, { actorId: ann.id, userId: ann.id, role: "member" });
@@ -173,7 +162,6 @@ describe("changeRole", () => {
 
   it("lets an Admin demote themselves when another Admin remains", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const ann = await seedUser(db, { role: "admin", accessState: "approved" });
     await seedUser(db, { role: "admin", accessState: "approved" });
 
@@ -182,7 +170,6 @@ describe("changeRole", () => {
 
   it("doesn't count a blocked Admin as one who remains", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const ann = await seedUser(db, { role: "admin", accessState: "approved" });
     await seedUser(db, { role: "admin", accessState: "blocked" });
 
@@ -193,7 +180,6 @@ describe("changeRole", () => {
 describe("blockUserAs", () => {
   it("stops an Admin blocking themselves", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const ann = await seedUser(db, { role: "admin", accessState: "approved" });
 
     const result = await blockUserAs(db, { actorId: ann.id, userId: ann.id });
@@ -204,7 +190,6 @@ describe("blockUserAs", () => {
 
   it("blocks another User and ends their sessions", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const ann = await seedUser(db, { role: "admin", accessState: "approved" });
     const tom = await seedUser(db, { accessState: "approved" });
 
@@ -217,7 +202,6 @@ describe("blockUserAs", () => {
 describe("setRole", () => {
   it("changes a User's Role", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const alex = await seedUser(db, { role: "member" });
 
     await setRole(db, alex.id, "committee");
@@ -230,7 +214,6 @@ describe("setRole", () => {
 describe("setName", () => {
   it("saves a trimmed name", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const u = await seedUser(db, { name: "" });
 
     await setName(db, u.id, "  Ollie Ireland ");
@@ -241,7 +224,6 @@ describe("setName", () => {
 
   it("refuses a blank name", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const u = await seedUser(db, { name: "Kept" });
 
     expect(await setName(db, u.id, "   ")).toEqual({ ok: false, error: "Please enter your name." });
@@ -254,7 +236,6 @@ describe("setName", () => {
 describe("setPreferredPosition", () => {
   it("saves the chosen Position", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const u = await seedUser(db);
 
     await setPreferredPosition(db, u.id, "Fly-half");
@@ -267,7 +248,6 @@ describe("setPreferredPosition", () => {
 describe("setThemePreference", () => {
   it("defaults to system and saves a chosen theme", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const u = await seedUser(db);
     expect(u.theme).toBe("system");
 
@@ -281,7 +261,6 @@ describe("setThemePreference", () => {
 describe("eraseUser", () => {
   it("wipes the User's personal details but keeps the row so their history still reads", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const tom = await seedUser(db, { name: "Tom Hale", email: "tom@example.com", accessState: "approved" });
     await db.update(user).set({ preferredPosition: "Hooker", otherPositions: ["Loosehead Prop"], image: "https://x/tom.png" }).where(eq(user.id, tom.id));
 
@@ -301,7 +280,6 @@ describe("eraseUser", () => {
 
   it("frees the email, so signing in again starts a new account", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const tom = await seedUser(db, { email: "tom@example.com", accessState: "approved" });
 
     await eraseUser(db, tom.id);
@@ -311,7 +289,6 @@ describe("eraseUser", () => {
 
   it("signs them out everywhere and unlinks their sign-in methods", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const tom = await seedUser(db, { accessState: "approved" });
     await db.insert(session).values({ id: "s1", userId: tom.id, token: "t1", expiresAt: new Date(Date.now() + 3_600_000) });
     await db.insert(account).values({ id: "a1", userId: tom.id, accountId: "google-tom", providerId: "google" });
@@ -324,7 +301,6 @@ describe("eraseUser", () => {
 
   it("leaves them out of the Users lists", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const tom = await seedUser(db, { accessState: "pending" });
 
     await eraseUser(db, tom.id);
@@ -337,7 +313,6 @@ describe("eraseUser", () => {
 describe("setName length limit", () => {
   it("refuses a name that's far too long", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const u = await seedUser(db, { name: "Kept" });
 
     expect(await setName(db, u.id, "a".repeat(101))).toEqual({

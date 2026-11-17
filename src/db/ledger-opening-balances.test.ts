@@ -2,11 +2,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { getPortions, listEquipmentUnits, replayWhereabouts, setUnconfirmed } from "@/features/equipment";
-import { movementLogEntry } from "@/features/equipment/schema";
-import { sameWhereabouts } from "@/features/equipment/ledger";
+import { getPortions, listEquipmentUnits, movementLogEntry, replayWhereabouts, sameWhereabouts, setUnconfirmed } from "@/features/equipment";
 import { createTestDb } from "@/test/db";
-import { migrate } from "@/test/migrate";
 import { seedSeason } from "@/test/season";
 
 /** The data step of migration 0037: everything after its last statement breakpoint. */
@@ -27,7 +24,6 @@ async function replaysEveryUnit(db: Awaited<ReturnType<typeof createTestDb>>) {
 describe("migration 0037: opening balances for units from before the ledger", () => {
   it("makes every Equipment Unit replay to its Portions, however its log was left", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const { unitId, nextEventId } = await seedSeason(db);
     const units = await listEquipmentUnits(db);
 
@@ -48,7 +44,6 @@ describe("migration 0037: opening balances for units from before the ledger", ()
 
   it("keeps replaying correctly as the unit changes afterwards", async () => {
     const db = await createTestDb();
-    await migrate(db);
     const { unitId, nextEventId } = await seedSeason(db);
     await db.execute(sql`delete from movement_log_entry where equipment_unit_id = ${unitId}`);
     await db.execute(sql.raw(openingBalanceStatement()));

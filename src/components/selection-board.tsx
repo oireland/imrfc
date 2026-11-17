@@ -7,9 +7,7 @@ import { cn } from "cn";
 import { ArrowLeftRight, Plus, X } from "lucide-react";
 import type { Board, BoardCandidate, Naming, Pitch, Role, SheetLayout, ShirtView } from "@/features/selection";
 // The Shirt rules are plain TypeScript, so the picker can sort without a round trip.
-import { sortForShirt, STARTING_SHIRTS } from "@/features/selection/shirts";
-import { ROLES, ROLE_NAMES, rolesText } from "@/features/selection/sheet";
-import { applyOptimistic, type OptimisticChange } from "@/features/selection/optimistic";
+import { applyOptimistic, ROLES, ROLE_NAMES, rolesText, sortForShirt, STARTING_SHIRTS, type OptimisticChange } from "@/features/selection/client";
 import { BottomSheet } from "@/components/bottom-sheet";
 import { NameTheTeam, type NamingActions } from "@/components/name-the-team";
 import { TeamSheetDialog } from "@/components/team-sheet-dialog";

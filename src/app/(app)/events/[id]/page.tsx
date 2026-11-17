@@ -42,6 +42,7 @@ import {
   listEventDuties,
   listPeopleOnEquipment,
   listPlanWarnings,
+  handedOnSources,
   needsSourceChoice,
   type EventDuty,
   type DutyRequest,
@@ -271,6 +272,13 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
         ? d.userIds.map((uid) => ({ userId: uid, name: uid === user.id ? "You" : (nameOf(uid) ?? "Someone"), count: uid === user.id ? count : 0 }))
         : [];
       if (needsHolder && !holderOptions.some((h) => h.count > 0)) holderOptions[0].count = count;
+      const handedOn =
+        d.direction === "from" && !d.confirmedAt && !d.voidedAt && d.userIds.length > 0
+          ? handedOnSources(equipmentPortions, { userIds: d.userIds, count }).map((option) => ({
+              label: `${namesOf(d.userIds)} ${d.userIds.length === 1 && d.userIds[0] !== user.id ? "has" : "have"} it from ${nameOf(option.holderId)?.replace("You", "you") ?? "someone"}`,
+              sources: option.sources,
+            }))
+          : [];
       return {
         direction: d.direction,
         userIds: d.userIds,
@@ -288,6 +296,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
         sourceOptions,
         needsHolderChoice: needsHolder,
         holderOptions,
+        handedOn,
       };
     };
 

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { migrate } from "@/test/migrate";
 import { createTestDb } from "@/test/db";
 import { store } from "@/features/stores";
 import { createEquipmentUnit, raiseQuantity } from "@/features/equipment";
@@ -13,7 +12,6 @@ const future = (days: number, hours = 18) => new Date(Date.now() + days * 86_400
 
 async function setup() {
   const db = await createTestDb();
-  await migrate(db);
   await db.insert(user).values(
     ["tom", "sam"].map((id) => ({ id, name: id, email: `${id}@x.org`, accessState: "approved" as const })),
   );

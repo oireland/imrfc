@@ -11,8 +11,8 @@ export { displayName } from "./display-name";
 export { canAccessApp, canDeleteAccount, canDeleteEvent, canManageUsers, isCommitteeOrAbove } from "./permissions";
 export { RUGBY_POSITIONS } from "./positions";
 export type { RugbyPosition } from "./positions";
-// Other features' schema.ts files reference this table for foreign keys.
-export { user } from "./schema";
+// Other features' schema.ts files reference `user` for foreign keys; the auth library maps the rest.
+export { account, session, user, verification } from "./schema";
 
 
 export type PendingUser = typeof user.$inferSelect;
