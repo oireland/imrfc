@@ -7,7 +7,7 @@ import { user } from "@/features/users";
 const EQUIPMENT_STATUSES = ["active", "missing", "retired"] as const;
 const PLACE_TYPES = ["store", "holder", "unconfirmed"] as const;
 // Every kind but condition_note changes the Whereabouts; see ledger.ts.
-const LOG_KINDS = ["added", "bought", "lost", "move", "unconfirmed", "condition_note"] as const;
+const LOG_KINDS = ["added", "opening", "bought", "lost", "move", "unconfirmed", "condition_note"] as const;
 const MOVE_REASONS = ["ad_hoc", "duty"] as const;
 
 /** A CHECK that the column holds one of the enum's values (or NULL); Drizzle's text enums are TypeScript-only. */
@@ -95,7 +95,7 @@ export const movementLogEntry = pgTable(
     toLastSeenEventId: text("to_last_seen_event_id"),
     // Condition Note fields (kind = "condition_note")
     conditionNote: text("condition_note"),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index("movement_log_entry_equipment_unit_id_idx").on(t.equipmentUnitId),
@@ -103,6 +103,6 @@ export const movementLogEntry = pgTable(
     check("movement_log_entry_reason_valid", oneOf(t.reason, MOVE_REASONS)),
     check("movement_log_entry_from_type_valid", oneOf(t.fromType, PLACE_TYPES)),
     check("movement_log_entry_to_type_valid", oneOf(t.toType, PLACE_TYPES)),
-    check("movement_log_entry_user_known", sql`${t.userId} is not null or ${t.kind} in ('unconfirmed', 'added')`),
+    check("movement_log_entry_user_known", sql`${t.userId} is not null or ${t.kind} in ('unconfirmed', 'added', 'opening')`),
   ],
 );

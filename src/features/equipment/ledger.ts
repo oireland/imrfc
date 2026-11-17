@@ -15,6 +15,11 @@ export type LedgerEntry =
   | { kind: "move"; count: number; from: Place; to: Place }
   /** Nobody confirmed where it went after an Event: `to` is Unconfirmed, last seen there. */
   | { kind: "unconfirmed"; count: number; from: Place; to: Place }
+  /**
+   * Migration L5: a unit's Portions as they stood when the ledger was introduced. Replay starts
+   * at the latest run of opening entries, ignoring everything logged before it.
+   */
+  | { kind: "opening"; count: number; to: Place }
   /** Doesn't change the Whereabouts. */
   | { kind: "condition_note" };
 
@@ -37,6 +42,7 @@ export function applyEntry(portions: Portion[], entry: LedgerEntry, equipmentUni
   if (!Number.isInteger(entry.count) || entry.count < 1) return { ok: false, error: "Enter how many to move." };
   switch (entry.kind) {
     case "added":
+    case "opening":
     case "bought":
       return { ok: true, portions: credit(portions, equipmentUnitId, entry.to, entry.count) };
     case "lost":
@@ -53,7 +59,11 @@ export function applyEntry(portions: Portion[], entry: LedgerEntry, equipmentUni
 /** An Equipment Unit's Portions rebuilt from its whole ledger, oldest entry first. */
 export function replay(equipmentUnitId: string, entries: LedgerEntry[]): Applied {
   let portions: Portion[] = [];
+  // Whatever came before the latest opening balance may not replay (that's why it was needed): skip it.
+  let start = entries.findLastIndex((e) => e.kind === "opening");
+  while (start > 0 && entries[start - 1].kind === "opening") start--;
   for (const [i, entry] of entries.entries()) {
+    if (i < start) continue;
     const applied = applyEntry(portions, entry, equipmentUnitId);
     if (!applied.ok) return { ok: false, error: `entry ${i + 1}: ${applied.error}` };
     portions = applied.portions;

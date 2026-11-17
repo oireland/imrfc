@@ -99,6 +99,7 @@ function toLedgerEntry(row: MovementLogEntry): LedgerEntry | string {
     case "condition_note":
       return { kind: "condition_note" };
     case "added":
+    case "opening":
     case "bought":
       return to ? { kind: row.kind, count, to } : `${row.kind} entry ${row.id} doesn't say where to`;
     case "lost":

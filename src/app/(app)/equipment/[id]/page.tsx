@@ -87,6 +87,7 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
     const word = split && entry.count ? String(entry.count) : "it";
     if (entry.kind === "condition_note") return `${who} noted: “${entry.conditionNote}”`;
     if (entry.kind === "added") return `${entry.userId ? who : "Someone"} added ${word} to ${storeName(entry.toStoreId)}`;
+    if (entry.kind === "opening") return `Where ${word} was when this log began: ${entry.toType === "store" ? `in ${storeName(entry.toStoreId)}` : entry.toType === "holder" ? `with ${personName(entry.toHolderId)}` : `unconfirmed after ${eventName(entry.toLastSeenEventId)}`}`;
     if (entry.kind === "bought") return `${who} bought ${entry.count}`;
     if (entry.kind === "lost") return `${who} lost ${entry.count}`;
     if (entry.kind === "unconfirmed") return `Nobody confirmed where ${word} went after ${eventName(entry.toLastSeenEventId)}`;
