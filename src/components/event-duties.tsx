@@ -14,7 +14,6 @@ export type HolderOption = { userId: string; name: string; count: number };
 
 /** One Duty as the Event page shows it; plain data so it can cross to the client. */
 export type DutySlot = {
-  id: string;
   direction: "to" | "from";
   userIds: string[];
   /** Display names, same order as `userIds`. */
@@ -122,7 +121,7 @@ export function EventDuties({
   soon: boolean;
   viewerId: string;
   people: { id: string; name: string }[];
-  act: (dutyId: string, request: DutyRequest) => Promise<Result>;
+  act: (equipmentUnitId: string, direction: DutySlot["direction"], request: DutyRequest) => Promise<Result>;
   /** Committee only, and not for a Cancelled Event: what it takes to edit the list. */
   kit?: KitEditing;
   /** Where the list comes from, e.g. "From its series"; shown to Committee beside the editing controls. */
@@ -180,7 +179,7 @@ export function EventDuties({
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     {[item.to, item.from].map((slot) => (
-                      <Slot key={slot.id} slot={slot} equipmentName={item.equipmentName} soon={soon} onOpen={() => setOpen({ equipmentUnitId: item.equipmentUnitId, direction: slot.direction })} />
+                      <Slot key={slot.direction} slot={slot} equipmentName={item.equipmentName} soon={soon} onOpen={() => setOpen({ equipmentUnitId: item.equipmentUnitId, direction: slot.direction })} />
                     ))}
                   </div>
                   {item.headsUps.map((text) => (
@@ -205,7 +204,7 @@ export function EventDuties({
 
       {openItem && openSlot && (
         <DutySheet
-          key={openSlot.id}
+          key={openSlot.direction}
           item={openItem}
           slot={openSlot}
           eventTitle={eventTitle}
@@ -274,7 +273,7 @@ function DutySheet({
   eventTitle: string;
   viewerId: string;
   people: { id: string; name: string }[];
-  act: (dutyId: string, request: DutyRequest) => Promise<Result>;
+  act: (equipmentUnitId: string, direction: DutySlot["direction"], request: DutyRequest) => Promise<Result>;
   onClose: () => void;
 }) {
   const [view, setView] = useState<View>("main");
@@ -297,7 +296,7 @@ function DutySheet({
 
   function run(request: DutyRequest, success: string, { close = true }: { close?: boolean } = {}) {
     startTransition(async () => {
-      const result = await act(slot.id, request);
+      const result = await act(item.equipmentUnitId, slot.direction, request);
       if (!result.ok) {
         toast.error(result.error);
         return;

@@ -136,6 +136,77 @@ export async function ensureDuties(db: Db, eventId: string, equipmentUnitIds: st
   return rows.map((r) => toDuty(r, userIdsByDuty.get(r.id) ?? []));
 }
 
+/** A Duty as an Event shows it: `id` is null while nobody has acted on it, so no row exists yet. */
+export type EventDuty = Omit<Duty, "id"> & { id: string | null };
+
+/**
+ * An Event's To and From Duty for each given Equipment Unit, read-only. A Duty with no
+ * row yet reads as blank: nobody on it, not Confirmed, going back Home. Rows are only
+ * created when someone acts on a Duty (`actOnEventDuty`). On a Cancelled Event a blank
+ * Duty reads as voided, like the stored ones.
+ */
+export async function listEventDuties(
+  db: Db,
+  eventId: string,
+  equipmentUnitIds: string[],
+  { cancelled }: { cancelled: boolean },
+): Promise<EventDuty[]> {
+  if (equipmentUnitIds.length === 0) return [];
+  const rows: (typeof duty.$inferSelect)[] = await db
+    .select()
+    .from(duty)
+    .where(and(eq(duty.eventId, eventId), inArray(duty.equipmentUnitId, equipmentUnitIds)));
+  const userIdsByDuty = await loadUserIdsFor(db, rows.map((r) => r.id));
+  return equipmentUnitIds.flatMap((equipmentUnitId) =>
+    (["to", "from"] as const).map((direction): EventDuty => {
+      const row = rows.find((r) => r.equipmentUnitId === equipmentUnitId && r.direction === direction);
+      if (row) return toDuty(row, userIdsByDuty.get(row.id) ?? []);
+      return {
+        id: null,
+        eventId,
+        equipmentUnitId,
+        direction,
+        destination: { type: "home" },
+        confirmedAt: null,
+        voidedAt: cancelled ? new Date() : null,
+        userIds: [],
+      };
+    }),
+  );
+}
+
+/**
+ * Does what the viewer asked on an Event's Duty, named by Equipment Unit and direction.
+ * Creates the Equipment Unit's To and From Duties first if they don't exist yet (so
+ * "From follows To" still works). A Cancelled Event gets no new Duties.
+ */
+export async function actOnEventDuty(
+  db: Db,
+  eventId: string,
+  equipmentUnitId: string,
+  direction: "to" | "from",
+  viewer: { id: string; role: Role },
+  request: DutyRequest,
+): Promise<Result> {
+  const found = await getEvent(db, eventId);
+  if (!found) return { ok: false, error: "That event no longer exists." };
+  const checklist = await resolveEventChecklist(db, { eventId, seriesId: found.seriesId, eventType: found.eventType });
+  if (!checklist.items.some((i) => i.equipmentUnitId === equipmentUnitId)) {
+    return { ok: false, error: "That equipment isn't on this event's list." };
+  }
+  if (found.cancelled) {
+    const [existing] = await db
+      .select({ id: duty.id })
+      .from(duty)
+      .where(and(eq(duty.eventId, eventId), eq(duty.equipmentUnitId, equipmentUnitId), eq(duty.direction, direction)));
+    if (!existing) return { ok: false, error: "That event was cancelled, so there's nothing to do." };
+    return actOnDuty(db, existing.id, viewer, request);
+  }
+  const target = (await ensureDuties(db, eventId, [equipmentUnitId])).find((d) => d.direction === direction);
+  if (!target) return { ok: false, error: "That duty no longer exists." };
+  return actOnDuty(db, target.id, viewer, request);
+}
+
 /** Any Member joins a Duty — whether it's unfilled or already has other People on it. */
 export async function claimDuty(db: Db, dutyId: string, userId: string): Promise<Result> {
   const row = await getDuty(db, dutyId);

@@ -31,19 +31,19 @@ import {
 } from "@/features/checklists";
 import { describeWhereabouts, hasEquipmentUnconfirmedAt, listEquipmentUnits, listPortionsFor, type EquipmentUnit, type Portion } from "@/features/equipment";
 import {
-  actOnDuty,
+  actOnEventDuty,
   deleteDutiesForEvent,
   sourceValue,
   dropDutiesFor,
   dutyActions,
   voidDutiesForEvent,
-  ensureDuties,
   gatherConfirmSources,
   joinNames,
+  listEventDuties,
   listPeopleOnEquipment,
   listPlanWarnings,
   needsSourceChoice,
-  type Duty,
+  type EventDuty,
   type DutyRequest,
 } from "@/features/duties";
 import {
@@ -156,10 +156,10 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     return { ok: true };
   }
 
-  async function act(dutyId: string, request: DutyRequest) {
+  async function act(equipmentUnitId: string, direction: EventDuty["direction"], request: DutyRequest) {
     "use server";
     const current = await requireApprovedUser();
-    const result = await actOnDuty(db, dutyId, current, request);
+    const result = await actOnEventDuty(db, id, equipmentUnitId, direction, current, request);
     revalidatePath(`/events/${id}`);
     return result;
   }
@@ -216,7 +216,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
   const countByUnit = new Map(resolved.items.map((i) => [i.equipmentUnitId, i.count]));
   const canEditList = committee && !eventDetails.cancelled;
   const [duties, portions, peopleOnEquipment, onlyOnOwnList] = await Promise.all([
-    ensureDuties(db, id, equipmentUnitIds),
+    listEventDuties(db, id, equipmentUnitIds, { cancelled: eventDetails.cancelled }),
     listPortionsFor(db, equipmentUnitIds),
     canEditList ? listPeopleOnEquipment(db, id, equipmentUnitIds) : new Map<string, Set<string>>(),
     canEditList && resolved.source === "event" ? unitsOnlyOnOwnList(listTarget) : [],
@@ -225,7 +225,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
   const headsUps = warnings.headsUps.filter((h) => h.eventIds.includes(id));
   const approved = people.filter((p) => p.accessState === "approved");
   const personName = new Map(people.map((p) => [p.id, displayName(p)]));
-  const dutyFor = (kid: string, direction: Duty["direction"]) =>
+  const dutyFor = (kid: string, direction: EventDuty["direction"]) =>
     duties.find((d) => d.equipmentUnitId === kid && d.direction === direction)!;
 
   const equipmentById = new Map(equipmentUnits.map((u: EquipmentUnit) => [u.id, u]));
@@ -252,7 +252,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     const toDuty = dutyFor(kid, "to");
     const fromDuty = dutyFor(kid, "from");
 
-    const slot = (d: Duty): DutySlot => {
+    const slot = (d: EventDuty): DutySlot => {
       const needsSource = d.direction === "to" && needsSourceChoice(equipmentPortions, { dutyUserIds: d.userIds, count });
       const sourceOptions: SourceOption[] = needsSource
         ? gatherConfirmSources(equipmentPortions, { dutyUserIds: d.userIds, homeStoreId: homeId ?? "", count }).sources.map((s) => ({
@@ -272,7 +272,6 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
         : [];
       if (needsHolder && !holderOptions.some((h) => h.count > 0)) holderOptions[0].count = count;
       return {
-        id: d.id,
         direction: d.direction,
         userIds: d.userIds,
         people: d.userIds.map((uid) => (uid === user.id ? "You" : (nameOf(uid) ?? "Someone"))),
