@@ -1,7 +1,6 @@
 import { db } from "@/db/client";
 import { getAsk } from "@/features/availability";
-import { isCommitteeOrAbove } from "@/features/users";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, viewerOf } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function GET(_request: Request, { params }: RouteContext<"/api/asks/[id]">) {
   const user = await getCurrentUser();
   if (!user || user.accessState !== "approved") return new Response(null, { status: 401 });
-  const ask = await getAsk(db, (await params).id, { id: user.id, committee: isCommitteeOrAbove(user.role) });
+  const ask = await getAsk(db, (await params).id, viewerOf(user));
   if (!ask) return new Response(null, { status: 404 });
   return Response.json(ask, { headers: { "Cache-Control": "private, no-store" } });
 }

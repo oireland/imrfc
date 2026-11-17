@@ -1,6 +1,7 @@
 import { parsePhoneNumberFromString } from "libphonenumber-js/min";
+import type { Result } from "@/lib/result";
 
-export type ParsedMobileNumber = { ok: true; number: string | null } | { ok: false; error: string };
+export type ParsedMobileNumber = Result<{ number: string | null }>;
 
 const INVALID = "That doesn't look like a mobile number. Try 07… or start with + and the country code.";
 

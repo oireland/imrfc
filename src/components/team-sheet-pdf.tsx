@@ -61,7 +61,7 @@ function TeamSheetDocument({ sheet }: { sheet: SheetLayout }) {
               <Text style={styles.date}>{sheet.date}</Text>
             </View>
             {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt */}
-            <Image src={path.join(assets, "crest.png")} style={styles.crest} />
+            <Image src={path.join(process.cwd(), "docs/brand/crest.png")} style={styles.crest} />
           </View>
           <View style={styles.details}>
             {sheet.details.map((d) => (
@@ -97,3 +97,11 @@ function TeamSheetDocument({ sheet }: { sheet: SheetLayout }) {
 }
 
 export const renderTeamSheetPdf = (sheet: SheetLayout) => renderToBuffer(<TeamSheetDocument sheet={sheet} />);
+
+/** A team sheet as a downloadable PDF response, named "<title> <date>". */
+export async function pdfResponse(layout: SheetLayout, date: string): Promise<Response> {
+  const filename = `${layout.title} ${date}`.replace(/[^\w ]+/g, "").trim().replace(/ +/g, "-");
+  return new Response(new Uint8Array(await renderTeamSheetPdf(layout)), {
+    headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${filename}.pdf"`, "Cache-Control": "private, no-store" },
+  });
+}

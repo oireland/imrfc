@@ -4,14 +4,14 @@ import { BackLink } from "@/components/back-link";
 import { SelectionBoard } from "@/components/selection-board";
 import { getEvent } from "@/features/events";
 import { getBoard, getNaming, getTeamSheet } from "@/features/selection";
-import { displayName, isCommitteeOrAbove } from "@/features/users";
-import { requireApprovedUser } from "@/lib/session";
+import { displayName } from "@/features/users";
+import { requireApprovedUser, viewerOf } from "@/lib/session";
 import { add, clear, dismissTeamNotice, guest, nameTeam, pick, remove, retryTeamNotice, roles, sendTeamChanges, swap } from "./actions";
 
 export default async function SelectionPage({ params }: PageProps<"/events/[id]/selection">) {
   const { id } = await params;
   const current = await requireApprovedUser();
-  const viewer = { id: current.id, committee: isCommitteeOrAbove(current.role) };
+  const viewer = viewerOf(current);
   const [board, event] = await Promise.all([getBoard(db, id, viewer), getEvent(db, id)]);
   if (!board || !event) notFound();
   // The board is loaded once and shared, so each pitch's naming and sheet don't reload it.

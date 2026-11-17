@@ -267,6 +267,13 @@
       "when": 1794932874532,
       "tag": "0037_ledger-opening-balances",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1794940614637,
+      "tag": "0038_seed-teams",
+      "breakpoints": true
     }
   ]
 }

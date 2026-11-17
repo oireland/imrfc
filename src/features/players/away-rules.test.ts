@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, awayLabel, awayPushMessage, formatDay, groupAway, imBackUntil, londonToday, periodState, rangeLabel, validateAway, type AwayPeriod } from "./away-rules";
+import { awayLabel, awayPushMessage, groupAway, imBackUntil, periodState, rangeLabel, validateAway, type AwayPeriod } from "./away-rules";
 
 const period = (overrides: Partial<AwayPeriod>): AwayPeriod => ({
   id: "a1",
@@ -88,19 +88,6 @@ describe("imBackUntil", () => {
   });
 });
 
-describe("addDays", () => {
-  it("crosses month and year ends", () => {
-    expect(addDays("2026-12-30", 3)).toBe("2027-01-02");
-    expect(addDays("2026-03-01", -1)).toBe("2026-02-28");
-  });
-});
-
-describe("formatDay", () => {
-  it("writes a date as day and short month", () => {
-    expect(formatDay("2026-11-03")).toBe("3 Nov");
-  });
-});
-
 describe("awayLabel", () => {
   const today = "2026-11-10";
 
@@ -135,13 +122,6 @@ describe("awayPushMessage", () => {
 
   it("is silent for one starting further off", () => {
     expect(awayPushMessage({ name: "Jo King", from: "2026-10-25", until: "2026-11-03" }, today)).toBeNull();
-  });
-});
-
-describe("londonToday", () => {
-  it("is the London date, across the BST change", () => {
-    expect(londonToday(new Date("2026-10-24T23:30:00Z"))).toBe("2026-10-25");
-    expect(londonToday(new Date("2026-10-25T23:30:00Z"))).toBe("2026-10-25");
   });
 });
 

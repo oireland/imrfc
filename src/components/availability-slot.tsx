@@ -18,18 +18,18 @@ import {
   whatsappMessage,
 } from "@/features/availability";
 import { listMobileNumbers, whatsappLink } from "@/features/contact";
-import { londonToUtc } from "@/features/events";
 import { sendToUser } from "@/features/push";
 import { isCommitteeOrAbove } from "@/features/users";
 import { getMailSender } from "@/lib/mail";
 import { getPushSender } from "@/lib/push";
-import { requireApprovedUser, type CurrentUser } from "@/lib/session";
+import { requireApprovedUser, type CurrentUser, viewerOf } from "@/lib/session";
 import { alertCommitteeLater } from "@/app/(app)/alert-committee";
 import { AvailabilityCard } from "./availability-card";
+import { londonToUtc } from "@/lib/london";
 
 async function currentViewer() {
   const current = await requireApprovedUser();
-  return { id: current.id, committee: isCommitteeOrAbove(current.role) };
+  return viewerOf(current);
 }
 
 /**

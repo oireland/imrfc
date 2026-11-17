@@ -5,8 +5,8 @@ import { db } from "@/db/client";
 import { addAway, editAway, imBack, removeAway, type AwayInput } from "@/features/players";
 import { requireApprovedUser } from "@/lib/session";
 import { alertCommitteeOfAway } from "./alert-committee";
+import type { Result } from "@/lib/result";
 
-type Result = { ok: true } | { ok: false; error: string };
 
 function refresh() {
   revalidatePath("/", "layout");

@@ -1,13 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canAccessApp, canDeleteAccount, canDeleteEvent, canManageUsers, isCommitteeOrAbove } from "./permissions";
-
-describe("canAccessApp", () => {
-  it("is true only for an Approved Access State", () => {
-    expect(canAccessApp("approved")).toBe(true);
-    expect(canAccessApp("pending")).toBe(false);
-    expect(canAccessApp("blocked")).toBe(false);
-  });
-});
+import { canDeleteAccount, canDeleteEvent, canManageUsers, isCommitteeOrAbove } from "./permissions";
 
 describe("isCommitteeOrAbove", () => {
   it("is true for Committee and Admin, false for Member", () => {

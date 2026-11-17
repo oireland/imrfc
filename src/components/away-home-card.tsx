@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { HealthCard } from "@/components/health-stack";
+import type { Result } from "@/lib/result";
 
 /** Home: "You're away until 3 Nov · exams", with I'm back. Shown while Away. */
 export function AwayHomeCard({
@@ -14,7 +15,7 @@ export function AwayHomeCard({
   /** "3 Nov". */
   until: string;
   reason: string;
-  imBack: () => Promise<{ ok: true } | { ok: false; error: string }>;
+  imBack: () => Promise<Result>;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();

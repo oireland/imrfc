@@ -1,7 +1,8 @@
-import type { equipmentUnit } from "./schema";
-import type { Place, Portion } from "./portions";
+import type { equipmentUnit, movementLogEntry } from "./schema";
+import { placeOf, type Place, type Portion } from "./portions";
 
 type EquipmentUnit = typeof equipmentUnit.$inferSelect;
+type MovementLogEntry = typeof movementLogEntry.$inferSelect;
 
 /** One Equipment Unit's Portion at a Place, as the Equipment view shows it: a row within a group. */
 export type EquipmentRow = { unit: EquipmentUnit; portion: Portion };
@@ -17,20 +18,15 @@ export type WhereaboutsGroup =
  * with its count there.
  */
 export function groupByWhereabouts(rows: EquipmentRow[], viewerId?: string): WhereaboutsGroup[] {
-  const stores = new Map<string, EquipmentRow[]>();
-  const holders = new Map<string, EquipmentRow[]>();
-  const unconfirmed: EquipmentRow[] = [];
-
-  for (const row of rows) {
-    const { portion } = row;
-    if (portion.whereaboutsType === "store" && portion.storeId) {
-      stores.set(portion.storeId, [...(stores.get(portion.storeId) ?? []), row]);
-    } else if (portion.whereaboutsType === "holder" && portion.holderId) {
-      holders.set(portion.holderId, [...(holders.get(portion.holderId) ?? []), row]);
-    } else if (portion.whereaboutsType === "unconfirmed") {
-      unconfirmed.push(row);
-    }
-  }
+  const stores = Map.groupBy(
+    rows.filter((r) => r.portion.whereaboutsType === "store" && r.portion.storeId),
+    (r) => r.portion.storeId!,
+  );
+  const holders = Map.groupBy(
+    rows.filter((r) => r.portion.whereaboutsType === "holder" && r.portion.holderId),
+    (r) => r.portion.holderId!,
+  );
+  const unconfirmed = rows.filter((r) => r.portion.whereaboutsType === "unconfirmed");
 
   const viewerRows = viewerId ? holders.get(viewerId) : undefined;
   if (viewerId) holders.delete(viewerId);
@@ -53,12 +49,6 @@ export function groupByWhereabouts(rows: EquipmentRow[], viewerId?: string): Whe
 
 export type QuickMoveTarget = { type: "store"; storeId: string } | { type: "holder"; holderId: string };
 export type QuickMove = { count: number; from: Place; to: QuickMoveTarget };
-
-function placeOf(portion: Portion): Place {
-  if (portion.whereaboutsType === "store") return { type: "store", storeId: portion.storeId! };
-  if (portion.whereaboutsType === "holder") return { type: "holder", holderId: portion.holderId! };
-  return { type: "unconfirmed", lastSeenEventId: portion.lastSeenEventId! };
-}
 
 /**
  * The one-tap Move offered on a Portion row: return an Equipment Unit I hold to its Home, otherwise "I've got it".
@@ -100,4 +90,44 @@ export function describeWhereabouts(portions: Portion[], names: WhereaboutsNames
     return split ? `${p.count} not confirmed — last seen at ${event}` : `Not confirmed — last seen at ${event}`;
   });
   return lines.join(" · ");
+}
+
+export type HistoryNames = {
+  storeName: (storeId: string | null) => string;
+  /** "you" for the viewer, "someone" when unknown; capitalised here when it starts a sentence. */
+  personName: (userId: string | null) => string;
+  eventName: (eventId: string | null) => string;
+};
+
+/**
+ * One Movement Log entry as a sentence: "You put it in the Shed", "Tom gave it to Priya".
+ * `split` is whether the Equipment Unit has more than one, so entries say "3" rather than "it".
+ */
+export function historyLine(entry: MovementLogEntry, names: HistoryNames, split: boolean): string {
+  const { storeName, personName, eventName } = names;
+  const who = personName(entry.userId).replace(/^./, (c) => c.toUpperCase());
+  const word = split && entry.count ? String(entry.count) : "it";
+  if (entry.kind === "condition_note") return `${who} noted: “${entry.conditionNote}”`;
+  if (entry.kind === "added") return `${entry.userId ? who : "Someone"} added ${word} to ${storeName(entry.toStoreId)}`;
+  if (entry.kind === "opening") {
+    const where =
+      entry.toType === "store"
+        ? `in ${storeName(entry.toStoreId)}`
+        : entry.toType === "holder"
+          ? `with ${personName(entry.toHolderId)}`
+          : `unconfirmed after ${eventName(entry.toLastSeenEventId)}`;
+    return `Where ${word} was when this log began: ${where}`;
+  }
+  if (entry.kind === "bought") return `${who} bought ${entry.count}`;
+  if (entry.kind === "lost") return `${who} lost ${entry.count}`;
+  if (entry.kind === "unconfirmed") return `Nobody confirmed where ${word} went after ${eventName(entry.toLastSeenEventId)}`;
+  const where = entry.toType === "store" ? `in ${storeName(entry.toStoreId)}` : `with ${personName(entry.toHolderId)}`;
+  if (entry.reason === "duty") {
+    if (entry.toType === "store") return `${who} put ${word} back ${where} (duty done)`;
+    if (entry.toHolderId === entry.userId) return `${who} brought ${word} along (duty done)`;
+    return `${who} confirmed ${word === "it" ? "it's" : `${word} is`} ${where} (duty done)`;
+  }
+  if (entry.toType === "store") return `${who} put ${word} ${where}`;
+  if (entry.toHolderId === entry.userId) return `${who} took ${word}`;
+  return `${who} gave ${word} to ${personName(entry.toHolderId)}`;
 }

@@ -1,7 +1,6 @@
 import { db } from "@/db/client";
 import { getNotice } from "@/features/selection";
-import { isCommitteeOrAbove } from "@/features/users";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, viewerOf } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function GET(_request: Request, { params }: RouteContext<"/api/notices/[id]">) {
   const user = await getCurrentUser();
   if (!user || user.accessState !== "approved") return new Response(null, { status: 401 });
-  const notice = await getNotice(db, (await params).id, { id: user.id, committee: isCommitteeOrAbove(user.role) });
+  const notice = await getNotice(db, (await params).id, viewerOf(user));
   if (!notice) return new Response(null, { status: 404 });
   return Response.json(notice, { headers: { "Cache-Control": "private, no-store" } });
 }

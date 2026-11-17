@@ -18,6 +18,7 @@ import { EventTabs, type EventTab } from "@/components/event-tabs";
 import { ShareButton } from "@/components/share-button";
 import { buttonVariants } from "@/components/ui/button";
 import { formatDay, formatWhen } from "@/lib/format-time";
+import { joinList } from "@/lib/join-names";
 import { mapsSearchUrl } from "@/lib/maps";
 import {
   addToChecklist,
@@ -29,16 +30,13 @@ import {
   setChecklistItemCount,
   type ChecklistScope,
 } from "@/features/checklists";
-import { describeWhereabouts, hasEquipmentUnconfirmedAt, listEquipmentUnits, listPortionsFor, type EquipmentUnit, type Portion } from "@/features/equipment";
+import { describeWhereabouts, hasEquipmentUnconfirmedAt, listEquipmentUnits, listPortionsFor, placeKey, type EquipmentUnit } from "@/features/equipment";
 import {
   actOnEventDuty,
-  deleteDutiesForEvent,
-  sourceValue,
-  dropDutiesFor,
+  deleteDuties,
   dutyActions,
   voidDutiesForEvent,
   gatherConfirmSources,
-  joinNames,
   listEventDuties,
   listPeopleOnEquipment,
   listPlanWarnings,
@@ -56,7 +54,6 @@ import {
   getEvent,
   listEventTitles,
   listVenues,
-  londonParts,
   type QuickEventInput,
 } from "@/features/events";
 import { deleteAvailabilityForEvent, takesReplies } from "@/features/availability";
@@ -65,9 +62,11 @@ import { formatPhysioList, listPhysioNeeds } from "@/features/injuries";
 import { listStores, type Store } from "@/features/stores";
 import { canDeleteEvent, displayName, isCommitteeOrAbove, listKnownUsers } from "@/features/users";
 import { requireApprovedUser } from "@/lib/session";
+import { londonParts } from "@/lib/london";
+import type { Result, Failure } from "@/lib/result";
 
 /** Why the signed-in User can't change this Event's list, or null if they can: Committee only, and not once it's Cancelled. */
-async function refuseListChange(eventId: string): Promise<{ ok: false; error: string } | null> {
+async function refuseListChange(eventId: string): Promise<Failure | null> {
   const current = await requireApprovedUser();
   if (!isCommitteeOrAbove(current.role)) return { ok: false, error: "Only Committee can change the list." };
   if ((await getEvent(db, eventId))?.cancelled) return { ok: false, error: "This event is cancelled." };
@@ -124,7 +123,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     if (!canDeleteEvent(current.role)) return;
     if (await hasEquipmentUnconfirmedAt(db, id)) redirect(`/events/${id}?error=event-has-unconfirmed`);
     await db.transaction(async (tx) => {
-      await deleteDutiesForEvent(tx, id);
+      await deleteDuties(tx, id);
       await deleteSelectionForEvent(tx, id);
       await deleteAvailabilityForEvent(tx, id);
       await clearChecklist(tx, { scope: "event", scopeId: id });
@@ -136,7 +135,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
 
   // An Event's type is fixed: edits use the stored one, never what the client sends.
   const storedType = eventDetails.eventType;
-  async function edit(input: QuickEventInput & { scope: "this" | "future" }): Promise<{ ok: true } | { ok: false; error: string }> {
+  async function edit(input: QuickEventInput & { scope: "this" | "future" }): Promise<Result> {
     "use server";
     const current = await requireApprovedUser();
     if (!isCommitteeOrAbove(current.role)) return { ok: false, error: "Only Committee can edit Events." };
@@ -184,7 +183,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     const denied = await refuseListChange(id);
     if (denied) return denied;
     await removeFromChecklist(db, listTarget, equipmentUnitId);
-    await dropDutiesFor(db, id, [equipmentUnitId]);
+    await deleteDuties(db, id, [equipmentUnitId]);
     revalidatePath(`/events/${id}`);
     return { ok: true as const };
   }
@@ -202,13 +201,13 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     if (denied) return denied;
     const dropped = await unitsOnlyOnOwnList(listTarget);
     await clearChecklist(db, listTarget);
-    await dropDutiesFor(db, id, dropped);
+    await deleteDuties(db, id, dropped);
     revalidatePath(`/events/${id}`);
     return { ok: true as const };
   }
 
   const resolved = await resolveEventChecklist(db, {
-    eventId: id,
+    id,
     seriesId: eventDetails.seriesId,
     eventType: eventDetails.eventType,
   });
@@ -230,8 +229,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
     duties.find((d) => d.equipmentUnitId === kid && d.direction === direction)!;
 
   const equipmentById = new Map(equipmentUnits.map((u: EquipmentUnit) => [u.id, u]));
-  const portionsByUnit = new Map<string, Portion[]>();
-  for (const p of portions) portionsByUnit.set(p.equipmentUnitId, [...(portionsByUnit.get(p.equipmentUnitId) ?? []), p]);
+  const portionsByUnit = Map.groupBy(portions, (p) => p.equipmentUnitId);
   const eventNames = await listEventTitles(db, portions.flatMap((p) => (p.lastSeenEventId ? [p.lastSeenEventId] : [])));
   const storeName = (storeId: string | null) => stores.find((s: Store) => s.id === storeId)?.name ?? "a store";
   const nameOf = (userId: string | null) => (userId === user.id ? "You" : userId ? (personName.get(userId) ?? "Someone") : null);
@@ -241,7 +239,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
       personName: (holderId) => (holderId === user.id ? "you" : (nameOf(holderId) ?? "someone")),
       eventName: (eventId) => eventNames.get(eventId) ?? "an event",
     });
-  const namesOf = (userIds: string[]) => joinNames(userIds.map((uid) => (uid === user.id ? "You" : (nameOf(uid) ?? "Someone"))));
+  const namesOf = (userIds: string[]) => joinList(userIds.map((uid) => (uid === user.id ? "You" : (nameOf(uid) ?? "Someone"))));
   /** Names for a confirmation sentence, so the viewer is "you". */
   const affectedNames = (userIds: Iterable<string> | undefined) =>
     [...(userIds ?? [])].map((uid) => (uid === user.id ? "you" : (personName.get(uid) ?? "someone")));
@@ -257,7 +255,7 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
       const needsSource = d.direction === "to" && needsSourceChoice(equipmentPortions, { dutyUserIds: d.userIds, count });
       const sourceOptions: SourceOption[] = needsSource
         ? gatherConfirmSources(equipmentPortions, { dutyUserIds: d.userIds, homeStoreId: homeId ?? "", count }).sources.map((s) => ({
-            value: sourceValue(s.place),
+            value: placeKey(s.place),
             label:
               s.place.type === "store"
                 ? storeName(s.place.storeId)

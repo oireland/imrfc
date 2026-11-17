@@ -3,6 +3,7 @@ import { and, eq, inArray, or } from "drizzle-orm";
 import { getEquipmentUnit, listEquipmentUnitsByIds } from "@/features/equipment";
 import { checklist, checklistItem } from "./schema";
 import { effectiveCount, resolveChecklist, type ChecklistLine } from "./rules";
+import type { Result } from "@/lib/result";
 
 export { resolveChecklist, effectiveCount } from "./rules";
 export type { ChecklistLine, ResolvedChecklist } from "./rules";
@@ -61,8 +62,8 @@ async function ensureOwnChecklist(db: Db, target: ChecklistScope): Promise<strin
   if (existing) return existing;
   // All or nothing, and safe when two first edits arrive together: whoever inserts the level's
   // row copies what it inherits; the other just uses the row that is there.
-  return db.transaction(async (tx: Db) => {
-    const created: { id: string }[] = await tx
+  return db.transaction(async (tx) => {
+    const created = await tx
       .insert(checklist)
       .values({ id: crypto.randomUUID(), scope: target.scope, scopeId: target.scopeId })
       .onConflictDoNothing()
@@ -90,7 +91,7 @@ export async function addToChecklist(
   target: ChecklistScope,
   equipmentUnitId: string,
   count: number | null = null,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<Result> {
   const unit = await getEquipmentUnit(db, equipmentUnitId);
   if (!unit || unit.status !== "active") {
     return { ok: false, error: "Missing or retired equipment can't go on the list." };
@@ -110,7 +111,7 @@ export async function setChecklistItemCount(
   target: ChecklistScope,
   equipmentUnitId: string,
   count: number | null,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<Result> {
   if (!validCount(count)) return BAD_COUNT;
   const id = await ensureOwnChecklist(db, target);
   await db
@@ -135,12 +136,12 @@ export async function clearChecklist(db: Db, target: ChecklistScope) {
   await db.delete(checklist).where(eq(checklist.id, id));
 }
 
-export type ChecklistEventRef = { eventId: string; seriesId: string | null; eventType: string };
+export type ChecklistEventRef = { id: string; seriesId: string | null; eventType: string };
 
 /** Event's own Checklist, else its Series', else its Event Type's Default — with each
  * line's effective count (capped at the Equipment Unit's current Quantity). */
 export async function resolveEventChecklist(db: Db, event: ChecklistEventRef): Promise<ResolvedEventChecklist> {
-  return (await resolveEventChecklists(db, [event])).get(event.eventId)!;
+  return (await resolveEventChecklists(db, [event])).get(event.id)!;
 }
 
 /** `resolveEventChecklist` for many Events at once, keyed by Event id — in two queries however many there are. */
@@ -150,10 +151,10 @@ export async function resolveEventChecklists(
 ): Promise<Map<string, ResolvedEventChecklist>> {
   const result = new Map<string, ResolvedEventChecklist>();
   if (events.length === 0) return result;
-  const eventIds = [...new Set(events.map((e) => e.eventId))];
+  const eventIds = [...new Set(events.map((e) => e.id))];
   const seriesIds = [...new Set(events.flatMap((e) => (e.seriesId ? [e.seriesId] : [])))];
   const eventTypes = [...new Set(events.map((e) => e.eventType))];
-  const rows: { scope: ChecklistScope["scope"]; scopeId: string; equipmentUnitId: string | null; count: number | null }[] = await db
+  const rows = await db
     .select({
       scope: checklist.scope,
       scopeId: checklist.scopeId,
@@ -180,9 +181,9 @@ export async function resolveEventChecklists(
   }
 
   const resolvedByEvent = events.map((e) => ({
-    eventId: e.eventId,
+    eventId: e.id,
     resolved: resolveChecklist({
-      event: lines.get(`event:${e.eventId}`),
+      event: lines.get(`event:${e.id}`),
       series: e.seriesId ? lines.get(`series:${e.seriesId}`) : undefined,
       default: lines.get(`event_type:${e.eventType}`),
     }),

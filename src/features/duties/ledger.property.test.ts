@@ -41,7 +41,7 @@ import { user } from "@/features/users";
 import {
   createEquipmentUnit,
   getEquipmentUnit,
-  getPortions,
+  loadPortions,
   lowerQuantity,
   raiseQuantity,
   recordMove,
@@ -109,7 +109,7 @@ async function newUnit(db: Db, quantity: number): Promise<string> {
 }
 
 async function whereabouts(db: Db, unitId: string): Promise<Model> {
-  return new Map(portionPairs(await getPortions(db, unitId)));
+  return new Map(portionPairs(await loadPortions(db, unitId)));
 }
 
 type PendingFrom = { dutyId: string; people: string[]; count: number };
@@ -240,7 +240,7 @@ describe("The equipment ledger under random sequences of changes", () => {
             }
           }
 
-          const portions = await getPortions(db, unitId);
+          const portions = await loadPortions(db, unitId);
           expect(portionPairs(portions), `after ${step}`).toEqual(modelPairs(model));
           expect(problemsWith(portions), `after ${step}`).toEqual([]);
           const replayed = await replayWhereabouts(db, unitId);

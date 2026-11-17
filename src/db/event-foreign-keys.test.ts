@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { sql } from "drizzle-orm";
-import type { Db } from "@/db/types";
 import { describe, expect, it } from "vitest";
 import { createTestDb } from "@/test/db";
 
@@ -56,7 +55,7 @@ describe("Event foreign keys", () => {
     }
     await db.execute(sql`insert into "user" (id, name, email, email_verified) values ('u', 'U', 'u@example.com', true)`);
     await db.execute(sql`insert into store (id, name, address) values ('shed', 'Shed', 'x')`);
-    await db.transaction(async (tx: Db) => {
+    await db.transaction(async (tx) => {
       await tx.execute(sql`insert into equipment_unit (id, name, home_id, quantity) values ('merged', 'Shields', 'shed', 8), ('alone', 'Ball bag', 'shed', 1)`);
       await tx.execute(sql`insert into equipment_portion (id, equipment_unit_id, count, whereabouts_type, store_id, last_seen_event_id) values
         ('p1', 'merged', 5, 'store', 'shed', null),

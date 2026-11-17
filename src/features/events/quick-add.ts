@@ -1,5 +1,6 @@
 import type { Competition, EventType, HomeAway, NewEvent } from "./rules";
-import { londonToUtc, type SeriesPattern } from "./series-rules";
+import type { SeriesPattern } from "./series-rules";
+import { addDays, londonToUtc } from "@/lib/london";
 
 export type QuickEventInput = {
   date: string; // YYYY-MM-DD, London
@@ -55,10 +56,10 @@ export function buildQuickEvent(input: QuickEventInput): NewEvent {
         ...(meetTime && { meetTime }),
         ...(travelMeetTime && { travelMeetTime }),
         ...(input.travelMeetPoint?.trim() && { travelMeetPoint: input.travelMeetPoint.trim() }),
-        ...(input.schedule?.trim() && { schedule: input.schedule.trim() }),
-        ...(input.travelAttire?.trim() && { travelAttire: input.travelAttire.trim() }),
-        ...(input.warmUpAttire?.trim() && { warmUpAttire: input.warmUpAttire.trim() }),
-        ...(input.postMatchActivity?.trim() && { postMatchActivity: input.postMatchActivity.trim() }),
+        schedule: input.schedule,
+        travelAttire: input.travelAttire,
+        warmUpAttire: input.warmUpAttire,
+        postMatchActivity: input.postMatchActivity,
       },
     };
   }
@@ -67,9 +68,7 @@ export function buildQuickEvent(input: QuickEventInput): NewEvent {
   const endTime = input.endTime ?? input.startTime;
   let end = londonToUtc(input.date, endTime);
   if (end < start) {
-    const next = new Date(`${input.date}T12:00:00Z`);
-    next.setUTCDate(next.getUTCDate() + 1);
-    end = londonToUtc(next.toISOString().slice(0, 10), endTime);
+    end = londonToUtc(addDays(input.date, 1), endTime);
   }
   if (input.type === "social") return { ...common, eventType: "social", title: (input.title ?? "").trim(), start, end };
   return { ...common, eventType: "training", start, end };

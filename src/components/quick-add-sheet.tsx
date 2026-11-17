@@ -9,6 +9,7 @@ import { Chip, MatchWhen, MatchWho, matchInput, type EventType, type MatchFieldV
 import { VenueInput } from "@/components/venue-input";
 import { cn } from "cn";
 import type { QuickEventInput } from "@/features/events";
+import type { Result } from "@/lib/result";
 
 /** Now and an hour on, as London HH:MM, to prefill the time pickers. */
 function nowAndAnHourOn(): [string, string] {
@@ -49,7 +50,7 @@ export function QuickAddSheet({
   venues: string[]; // already used, as suggestions
   teams: { id: string; name: string }[];
   onClose: () => void;
-  action: (input: QuickEventInput) => Promise<{ ok: true; id: string } | { ok: false; error: string }>;
+  action: (input: QuickEventInput) => Promise<Result<{ id: string }>>;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();

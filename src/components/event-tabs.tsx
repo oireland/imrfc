@@ -2,7 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 export type EventTab = { id: string; label: string; count?: number; content: ReactNode };
 

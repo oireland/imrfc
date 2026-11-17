@@ -12,35 +12,40 @@ import { formatWhen } from "@/lib/format-time";
 import { listPlanWarnings } from "@/features/duties";
 import {
   describeWhereabouts,
+  historyLine,
   getEquipmentUnit,
-  getPortions,
+  loadPortions,
   listMovementLog,
+  parsePlaceKey,
+  placeKey,
+  placeOf,
   quickMoveFor,
-  recordMove,
   setQuantity,
   type MovementLogEntry,
-  type Place,
   type Portion,
 } from "@/features/equipment";
 import { listEventTitles } from "@/features/events";
-import { displayName, isCommitteeOrAbove, listApprovedUsers, listKnownUsers } from "@/features/users";
+import { displayName, isCommitteeOrAbove, listKnownUsers } from "@/features/users";
 import { listStores, type Store } from "@/features/stores";
 import { requireApprovedUser } from "@/lib/session";
+import { giveTo, putInStore, quickMove } from "../actions";
 
 const CARD_TITLE_CLASS = "font-heading text-[22px] leading-tight";
 
-/** A Portion's Place as a form field value: "store:<id>", "holder:<id>", or "unconfirmed:<id>". */
-function placeValue(portion: Portion): string {
-  if (portion.whereaboutsType === "store") return `store:${portion.storeId}`;
-  if (portion.whereaboutsType === "holder") return `holder:${portion.holderId}`;
-  return `unconfirmed:${portion.lastSeenEventId}`;
-}
-
-function parsePlace(value: string): Place {
-  const [type, id] = value.split(":");
-  if (type === "store") return { type: "store", storeId: id };
-  if (type === "holder") return { type: "holder", holderId: id };
-  return { type: "unconfirmed", lastSeenEventId: id };
+function CountInput({ portion, split }: { portion: Portion; split: boolean }) {
+  return split ? (
+    <input
+      type="number"
+      name="count"
+      min={1}
+      max={portion.count}
+      defaultValue={portion.count}
+      aria-label="How many"
+      className="w-16 rounded-md border border-border bg-transparent px-2 text-sm"
+    />
+  ) : (
+    <input type="hidden" name="count" value={portion.count} />
+  );
 }
 
 export default async function EquipmentUnitDetailPage({ params }: PageProps<"/equipment/[id]">) {
@@ -50,7 +55,7 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
   const [found, stores, portions, log, warnings, people] = await Promise.all([
     getEquipmentUnit(db, id),
     listStores(db, { includeArchived: true }),
-    getPortions(db, id),
+    loadPortions(db, id),
     listMovementLog(db, id),
     listPlanWarnings(db, new Date(), { equipmentUnitId: id }),
     listKnownUsers(db),
@@ -81,76 +86,13 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
   const split = unit.quantity > 1;
   const committee = isCommitteeOrAbove(user.role);
 
-  /** One Movement Log entry as a sentence: "You put it in the Shed", "Tom gave it to Priya". */
-  function historyLine(entry: MovementLogEntry): string {
-    const who = capitalised(personName(entry.userId));
-    const word = split && entry.count ? String(entry.count) : "it";
-    if (entry.kind === "condition_note") return `${who} noted: “${entry.conditionNote}”`;
-    if (entry.kind === "added") return `${entry.userId ? who : "Someone"} added ${word} to ${storeName(entry.toStoreId)}`;
-    if (entry.kind === "opening") return `Where ${word} was when this log began: ${entry.toType === "store" ? `in ${storeName(entry.toStoreId)}` : entry.toType === "holder" ? `with ${personName(entry.toHolderId)}` : `unconfirmed after ${eventName(entry.toLastSeenEventId)}`}`;
-    if (entry.kind === "bought") return `${who} bought ${entry.count}`;
-    if (entry.kind === "lost") return `${who} lost ${entry.count}`;
-    if (entry.kind === "unconfirmed") return `Nobody confirmed where ${word} went after ${eventName(entry.toLastSeenEventId)}`;
-    const where =
-      entry.toType === "store" ? `in ${storeName(entry.toStoreId)}` : `with ${personName(entry.toHolderId)}`;
-    if (entry.reason === "duty") {
-      if (entry.toType === "store") return `${who} put ${word} back ${where} (duty done)`;
-      if (entry.toHolderId === entry.userId) return `${who} brought ${word} along (duty done)`;
-      return `${who} confirmed ${word === "it" ? "it's" : `${word} is`} ${where} (duty done)`;
-    }
-    if (entry.toType === "store") return `${who} put ${word} ${where}`;
-    if (entry.toHolderId === entry.userId) return `${who} took ${word}`;
-    return `${who} gave ${word} to ${personName(entry.toHolderId)}`;
-  }
-
-  async function quickMove(formData: FormData) {
-    "use server";
-    const { id: userId } = await requireApprovedUser();
-    const portionId = String(formData.get("portionId"));
-    const [current, currentPortions] = await Promise.all([getEquipmentUnit(db, id), getPortions(db, id)]);
-    const portion = currentPortions.find((p) => p.id === portionId) ?? currentPortions[0];
-    if (!current || !portion) return;
-    const count = formData.get("count");
-    const move = quickMoveFor({ unit: current, portion }, userId, count ? Number(count) : undefined);
-    await recordMove(db, id, userId, move.to, "ad_hoc", { count: move.count, from: move.from });
-    revalidatePath(`/equipment/${id}`);
-    revalidatePath("/equipment");
-  }
-
-  async function giveTo(formData: FormData) {
-    "use server";
-    const { id: userId } = await requireApprovedUser();
-    const holderId = String(formData.get("holderId"));
-    const from = parsePlace(String(formData.get("from")));
-    const count = Number(formData.get("count"));
-    const recipient = (await listApprovedUsers(db)).find((p) => p.id === holderId);
-    if (!recipient || !count) return;
-    await recordMove(db, id, userId, { type: "holder", holderId }, "ad_hoc", { count, from });
-    revalidatePath(`/equipment/${id}`);
-    revalidatePath("/equipment");
-  }
-
-  async function putInStore(formData: FormData) {
-    "use server";
-    const { id: userId } = await requireApprovedUser();
-    const from = parsePlace(String(formData.get("from")));
-    const count = Number(formData.get("count"));
-    if (!count) return;
-    await recordMove(db, id, userId, { type: "store", storeId: String(formData.get("storeId")) }, "ad_hoc", {
-      count,
-      from,
-    });
-    revalidatePath(`/equipment/${id}`);
-    revalidatePath("/equipment");
-  }
-
   async function changeQuantity(formData: FormData) {
     "use server";
     const { id: userId, role } = await requireApprovedUser();
     if (!isCommitteeOrAbove(role)) return;
     const quantity = Number(formData.get("quantity"));
     const fromValue = String(formData.get("from") ?? "");
-    await setQuantity(db, id, userId, quantity, fromValue ? parsePlace(fromValue) : undefined);
+    await setQuantity(db, id, userId, quantity, fromValue ? parsePlaceKey(fromValue) : undefined);
     revalidatePath(`/equipment/${id}`);
     revalidatePath("/equipment");
   }
@@ -173,14 +115,15 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
 
         <QuickMoveBlockButton
           action={quickMove}
-          fields={{ portionId: portion.id }}
+          fields={{ equipmentUnitId: unit.id, portionId: portion.id }}
           available={split ? portion.count : 1}
           returnTo={move.to.type === "store" ? storeName(move.to.storeId) : null}
         />
 
         {giveable.length > 0 && (
           <form action={giveTo} className="flex flex-col gap-1.5">
-            <input type="hidden" name="from" value={placeValue(portion)} />
+            <input type="hidden" name="equipmentUnitId" value={unit.id} />
+            <input type="hidden" name="from" value={placeKey(placeOf(portion))} />
             <label htmlFor={`give-to-${portion.id}`} className="text-xs text-muted-foreground">
               Or give it to someone
             </label>
@@ -195,25 +138,15 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
                   </NativeSelectOption>
                 ))}
               </NativeSelect>
-              {split && (
-                <input
-                  type="number"
-                  name="count"
-                  min={1}
-                  max={portion.count}
-                  defaultValue={portion.count}
-                  aria-label="How many"
-                  className="w-16 rounded-md border border-border bg-transparent px-2 text-sm"
-                />
-              )}
-              {!split && <input type="hidden" name="count" value={portion.count} />}
+              <CountInput portion={portion} split={split} />
               <SubmitButton variant="secondary">Give</SubmitButton>
             </div>
           </form>
         )}
 
         <form action={putInStore} className="flex flex-col gap-1.5">
-          <input type="hidden" name="from" value={placeValue(portion)} />
+          <input type="hidden" name="equipmentUnitId" value={unit.id} />
+            <input type="hidden" name="from" value={placeKey(placeOf(portion))} />
           <label htmlFor={`put-in-store-${portion.id}`} className="text-xs text-muted-foreground">
             Or put it away in
           </label>
@@ -225,18 +158,7 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
                 </NativeSelectOption>
               ))}
             </NativeSelect>
-            {split && (
-              <input
-                type="number"
-                name="count"
-                min={1}
-                max={portion.count}
-                defaultValue={portion.count}
-                aria-label="How many"
-                className="w-16 rounded-md border border-border bg-transparent px-2 text-sm"
-              />
-            )}
-            {!split && <input type="hidden" name="count" value={portion.count} />}
+            <CountInput portion={portion} split={split} />
             <SubmitButton variant="secondary">Put away</SubmitButton>
           </div>
         </form>
@@ -309,7 +231,7 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
                       Choose where from…
                     </NativeSelectOption>
                     {portions.map((p) => (
-                      <NativeSelectOption key={p.id} value={placeValue(p)}>
+                      <NativeSelectOption key={p.id} value={placeKey(placeOf(p))}>
                         {p.whereaboutsType === "store"
                           ? storeName(p.storeId)
                           : p.whereaboutsType === "holder"
@@ -342,7 +264,7 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
               <ul className="divide-y divide-border">
                 {log.map((entry: MovementLogEntry) => (
                   <li key={entry.id} className="px-4 py-3 text-sm text-muted-foreground">
-                    {historyLine(entry)}
+                    {historyLine(entry, { storeName, personName, eventName }, split)}
                     {" — "}
                     {formatWhen(entry.createdAt)}
                   </li>

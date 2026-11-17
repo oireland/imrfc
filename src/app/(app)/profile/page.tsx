@@ -15,7 +15,8 @@ import { InjuriesCard } from "@/components/injuries-card";
 import { PositionsPicker } from "@/components/positions-picker";
 import { displayName, setName, type RugbyPosition } from "@/features/users";
 import { listInjuries } from "@/features/injuries";
-import { listAway, londonToday, setPlayerPositions, setPlaying } from "@/features/players";
+import { listAway, setPlayerPositions, setPlaying } from "@/features/players";
+import { londonDay } from "@/lib/london";
 import { getMobileNumber, setMobileNumber } from "@/features/contact";
 import { getFeedToken, resetFeedToken } from "@/features/calendar-feed";
 import { isSubscribed, subscribe, unsubscribe } from "@/features/push";
@@ -29,7 +30,7 @@ import { injuryItems } from "../injury-items";
 
 export default async function ProfilePage() {
   const user = await requireApprovedUser();
-  const today = londonToday();
+  const today = londonDay();
   const [mobileNumber, token, awayPeriods, injuries, eventOptions, requestHeaders] = await Promise.all([
     getMobileNumber(db, user, user.id),
     getFeedToken(db, user.id),

@@ -1,5 +1,6 @@
 "use client";
 
+import { joinList } from "@/lib/join-names";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -7,9 +8,9 @@ import { Loader2, Send, X } from "lucide-react";
 import type { Naming, NoticeStatus } from "@/features/selection";
 import { formatDay } from "@/lib/format-time";
 import { BottomSheet } from "@/components/bottom-sheet";
+import type { Result } from "@/lib/result";
 
-type SendResult = { ok: true; noticeId: string | null; sending: number } | { ok: false; error: string };
-type Result = { ok: true } | { ok: false; error: string };
+type SendResult = Result<{ noticeId: string | null; sending: number }>;
 
 export type NamingActions = {
   name: (eventId: string) => Promise<SendResult>;
@@ -20,13 +21,10 @@ export type NamingActions = {
 
 const people = (n: number) => (n === 1 ? "1 person" : `${n} people`);
 
-/** "Jo", "Jo and Sam", "Jo, Sam and Ray". */
-const listNames = (names: string[]) => (names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
-
 function failedMessage(notice: NoticeStatus) {
   const what = notice.kind === "name" ? "team announcement" : "changes";
   const others = notice.sent > 0 ? " Everyone else got it." : "";
-  return `${notice.by}'s ${what} didn't reach ${listNames(notice.missed)}.${others}`;
+  return `${notice.by}'s ${what} didn't reach ${joinList(notice.missed, "and")}.${others}`;
 }
 
 /**

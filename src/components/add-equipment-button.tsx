@@ -7,12 +7,13 @@ import { Plus } from "lucide-react";
 import { BottomSheet, SheetSaveButton } from "@/components/bottom-sheet";
 import { buttonVariants } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import type { Result } from "@/lib/result";
 
 type Action = (input: {
   name: string;
   homeId: string;
   quantity?: number;
-}) => Promise<{ ok: true; id: string } | { ok: false; error: string }>;
+}) => Promise<Result<{ id: string }>>;
 
 /** The full-width "+ Add equipment" button: opens the New equipment sheet. */
 export function AddEquipmentButton({ stores, action }: { stores: { id: string; name: string }[]; action: Action }) {

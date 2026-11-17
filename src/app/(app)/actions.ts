@@ -5,8 +5,9 @@ import { db } from "@/db/client";
 import { saveReply, type ReplyStatus } from "@/features/availability";
 import { buildQuickEvent, buildQuickSeries, createEvent, createSeries, type QuickEventInput } from "@/features/events";
 import { isCommitteeOrAbove, setThemePreference, type ThemePreference } from "@/features/users";
-import { requireApprovedUser } from "@/lib/session";
+import { requireApprovedUser, viewerOf } from "@/lib/session";
 import { alertCommitteeLater } from "./alert-committee";
+import type { Result } from "@/lib/result";
 
 /** Saves the colour theme chosen from the crest menu. */
 export async function setTheme(theme: ThemePreference) {
@@ -17,7 +18,7 @@ export async function setTheme(theme: ThemePreference) {
 }
 
 /** Creates an Event from the calendar's tap-a-day sheet. Committee and above only. */
-export async function quickAddEvent(input: QuickEventInput): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+export async function quickAddEvent(input: QuickEventInput): Promise<Result<{ id: string }>> {
   const user = await requireApprovedUser();
   if (!isCommitteeOrAbove(user.role)) return { ok: false, error: "Only Committee can add Events." };
   if ((input.type === "training" || input.type === "social") && input.repeatUntil) {
@@ -38,9 +39,9 @@ export async function quickAddEvent(input: QuickEventInput): Promise<{ ok: true;
 export async function saveMyReply(
   eventId: string,
   answer: { status: ReplyStatus; note: string; reason: string },
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<Result> {
   const user = await requireApprovedUser();
-  const result = await saveReply(db, { eventId, playerId: user.id, viewer: { id: user.id, committee: isCommitteeOrAbove(user.role) }, ...answer });
+  const result = await saveReply(db, { eventId, playerId: user.id, viewer: viewerOf(user), ...answer });
   if (result.ok && answer.status === "not_available") alertCommitteeLater({ eventId, playerId: user.id });
   revalidatePath("/");
   revalidatePath("/events");

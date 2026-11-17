@@ -18,7 +18,7 @@ export const SINGLE_ROLES: Role[] = ["C", "VC"];
 
 export const rolesText = (roles: Role[]) => ROLES.filter((r) => roles.includes(r)).join(", ");
 
-/** What the Team Sheet says, after Event values, Sheet Defaults and overrides have been settled. */
+/** What the Team Sheet says, read from the Event and its match details. */
 export type SheetFields = {
   title: string;
   kickoff: string;

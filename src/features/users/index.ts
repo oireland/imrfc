@@ -1,24 +1,24 @@
 import type { Db } from "@/db/types";
 import { LIMITS, firstTooLong } from "@/lib/text-limits";
-import { and, count, eq, inArray, ne } from "drizzle-orm";
+import { and, count, eq, inArray, ne, sql } from "drizzle-orm";
 import type { Role } from "./access";
 import type { RugbyPosition } from "./positions";
+import { displayName } from "./display-name";
 import { account, session, user } from "./schema";
 
 export { resolveNewUser } from "./access";
 export type { AccessState, Role } from "./access";
 export { displayName } from "./display-name";
-export { canAccessApp, canDeleteAccount, canDeleteEvent, canManageUsers, isCommitteeOrAbove } from "./permissions";
+export { canDeleteAccount, canDeleteEvent, canManageUsers, isCommitteeOrAbove } from "./permissions";
 export { RUGBY_POSITIONS } from "./positions";
 export type { RugbyPosition } from "./positions";
 // Other features' schema.ts files reference `user` for foreign keys; the auth library maps the rest.
 export { account, session, user, verification } from "./schema";
 
 
-export type PendingUser = typeof user.$inferSelect;
-export type AppUser = PendingUser;
+export type User = typeof user.$inferSelect;
 
-export async function listPendingUsers(db: Db): Promise<PendingUser[]> {
+export async function listPendingUsers(db: Db): Promise<User[]> {
   return db.select().from(user).where(eq(user.accessState, "pending"));
 }
 
@@ -28,7 +28,7 @@ export async function countPendingUsers(db: Db): Promise<number> {
 }
 
 /** Users who can sign in and be picked, asked or alerted: Approved only. */
-export async function listApprovedUsers(db: Db): Promise<PendingUser[]> {
+export async function listApprovedUsers(db: Db): Promise<User[]> {
   return db.select().from(user).where(eq(user.accessState, "approved"));
 }
 
@@ -37,22 +37,47 @@ export async function listApprovedUsers(db: Db): Promise<PendingUser[]> {
  * names in past records (Moves, replies, Duties) and for the Users admin; never for choosing
  * who to pick, ask or alert.
  */
-export async function listKnownUsers(db: Db): Promise<PendingUser[]> {
+export async function listKnownUsers(db: Db): Promise<User[]> {
   return db.select().from(user).where(ne(user.accessState, "pending"));
+}
+
+/** A name lookup over these Users that never fails: "Someone" for an unknown id. */
+export function nameLookup(people: { id: string; name: string; email: string }[]): (id: string | null | undefined) => string {
+  const names = new Map(people.map((p) => [p.id, displayName(p)]));
+  return (id) => (id ? names.get(id) : undefined) ?? "Someone";
+}
+
+/** Everyone ever approved, as a name lookup that never fails ("Someone" for an unknown id). */
+export async function loadNames(db: Db): Promise<(id: string | null | undefined) => string> {
+  return nameLookup(await listKnownUsers(db));
+}
+
+/** Approved Committee and Admins, sorted by id, for a push; `except` leaves out whoever caused it. */
+export async function listCommitteeIds(db: Db, { except }: { except?: string } = {}): Promise<string[]> {
+  const rows = await db
+    .select({ id: user.id })
+    .from(user)
+    .where(and(eq(user.accessState, "approved"), inArray(user.role, ["committee", "admin"]), except ? ne(user.id, except) : undefined))
+    .orderBy(sql`${user.id} collate "C"`) // byte order, as the callers' old JS .sort() was;
+  return rows.map((r) => r.id);
 }
 
 /** Which of these ids belong to Approved Users (unknown, pending, blocked and deleted ones are left out). */
 export async function filterApprovedUserIds(db: Db, ids: string[]): Promise<Set<string>> {
   if (ids.length === 0) return new Set();
-  const rows: { id: string }[] = await db
+  const rows = await db
     .select({ id: user.id })
     .from(user)
     .where(and(inArray(user.id, ids), eq(user.accessState, "approved")));
   return new Set(rows.map((r) => r.id));
 }
 
-export async function approveUser(db: Db, userId: string) {
+async function setApproved(db: Db, userId: string) {
   await db.update(user).set({ accessState: "approved" }).where(eq(user.id, userId));
+}
+
+export async function approveUser(db: Db, userId: string) {
+  await setApproved(db, userId);
 }
 
 export async function blockUser(db: Db, userId: string) {
@@ -85,7 +110,7 @@ export async function eraseUser(db: Db, userId: string) {
 }
 
 export async function unblockUser(db: Db, userId: string) {
-  await db.update(user).set({ accessState: "approved" }).where(eq(user.id, userId));
+  await setApproved(db, userId);
 }
 
 export async function setRole(db: Db, userId: string, role: Role) {
@@ -94,7 +119,7 @@ export async function setRole(db: Db, userId: string, role: Role) {
 
 const ROLES: readonly Role[] = ["member", "committee", "admin"];
 
-export function isRole(value: unknown): value is Role {
+function isRole(value: unknown): value is Role {
   return typeof value === "string" && (ROLES as readonly string[]).includes(value);
 }
 

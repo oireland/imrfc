@@ -1,5 +1,7 @@
 import { LIMITS, firstTooLong } from "@/lib/text-limits";
-import { addDays, formatDay } from "@/lib/day-string";
+import { formatDate } from "@/lib/format-time";
+import { addDays } from "@/lib/london";
+import type { Result } from "@/lib/result";
 
 /** A dated period a Player won't be playing for a non-injury reason. Dates are London calendar days, `YYYY-MM-DD`. */
 export type AwayPeriod = {
@@ -18,11 +20,11 @@ export type AwayInput = { from: string; until: string; reason: string };
 
 /** "20 Dec – 5 Jan", or just "3 Nov" for a single day. */
 export function rangeLabel(from: string, until: string): string {
-  return from === until ? formatDay(from) : `${formatDay(from)} – ${formatDay(until)}`;
+  return from === until ? formatDate(from) : `${formatDate(from)} – ${formatDate(until)}`;
 }
 
 /** A period to save: both dates (so it ends by itself), a Reason, and not wholly in the past. */
-export function validateAway(input: AwayInput, today: string): { ok: true; value: AwayInput } | { ok: false; error: string } {
+export function validateAway(input: AwayInput, today: string): Result<{ value: AwayInput }> {
   const reason = input.reason.trim();
   const tooLong = firstTooLong([["reason", reason, LIMITS.line]]);
   if (tooLong) return { ok: false, error: tooLong };
@@ -59,8 +61,8 @@ export function imBackUntil(today: string): string {
 /** For the Players list: "Away until 3 Nov" while Away, else "Away from 20 Dec" for the next one coming. */
 export function awayLabel(periods: Pick<AwayPeriod, "from" | "until">[], today: string): string | null {
   const { current, future } = groupAway(periods, today);
-  if (current.length > 0) return `Away until ${formatDay(current.map((p) => p.until).sort().at(-1)!)}`;
-  if (future.length > 0) return `Away from ${formatDay(future[0].from)}`;
+  if (current.length > 0) return `Away until ${formatDate(current.map((p) => p.until).sort().at(-1)!)}`;
+  if (future.length > 0) return `Away from ${formatDate(future[0].from)}`;
   return null;
 }
 
@@ -74,8 +76,6 @@ const PUSH_WITHIN_DAYS = 14;
 export function awayPushMessage(input: { name: string; from: string; until: string }, today: string): string | null {
   if (input.from > addDays(today, PUSH_WITHIN_DAYS)) return null;
   return input.from <= today
-    ? `${input.name} is away until ${formatDay(input.until)}`
-    : `${input.name} will be away from ${formatDay(input.from)}`;
+    ? `${input.name} is away until ${formatDate(input.until)}`
+    : `${input.name} will be away from ${formatDate(input.from)}`;
 }
-
-export { addDays, formatDay, londonToday } from "@/lib/day-string";

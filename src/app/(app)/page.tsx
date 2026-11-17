@@ -9,13 +9,15 @@ import { CrestThemePicker } from "@/components/crest-theme-picker";
 import { HealthStack } from "@/components/health-stack";
 import { InjuryHomeCard } from "@/components/injury-home-card";
 import { listWaitingOnReply } from "@/features/availability";
-import { joinNames, listUpcomingDutiesForUser } from "@/features/duties";
+import { listUpcomingDutiesForUser, othersOnDuty } from "@/features/duties";
 import { listEquipmentHeldBy, listEquipmentUnits } from "@/features/equipment";
 import { listInjuries } from "@/features/injuries";
-import { formatDay, listAway, londonToday } from "@/features/players";
+import { listAway } from "@/features/players";
 import { listPlayingFor } from "@/features/selection";
-import { displayName, isCommitteeOrAbove, listKnownUsers } from "@/features/users";
-import { greeting, londonDay, londonTime } from "@/lib/calendar";
+import { displayName, isCommitteeOrAbove, loadNames } from "@/features/users";
+import { greeting } from "@/lib/calendar";
+import { formatDate } from "@/lib/format-time";
+import { londonDay, londonTime } from "@/lib/london";
 import { requireApprovedUser } from "@/lib/session";
 import { cn } from "cn";
 import { quickAddEvent, saveMyReply, setTheme } from "./actions";
@@ -42,24 +44,20 @@ export default async function Home() {
 
   await markUnconfirmedOnce();
   const upcomingDuties = listUpcomingDutiesForUser(db, user.id);
-  const [asks, playing, duties, held, comingUp, allEquipment, people, away, injuries] = await Promise.all([
+  const [asks, playing, duties, held, comingUp, allEquipment, name, away, injuries] = await Promise.all([
     listWaitingOnReply(db, user.id),
     listPlayingFor(db, user.id),
     upcomingDuties,
     listEquipmentHeldBy(db, user.id),
     loadComingUp(user.id, upcomingDuties),
     listEquipmentUnits(db, { includeRetired: true }),
-    listKnownUsers(db),
-    listAway(db, user, user.id, londonToday()),
-    listInjuries(db, user, user.id, londonToday()),
+    loadNames(db),
+    listAway(db, user, user.id, londonDay()),
+    listInjuries(db, user, user.id, londonDay()),
   ]);
   const equipmentNames = new Map(allEquipment.map((k) => [k.id, k.name]));
-  const names = new Map(people.map((p) => [p.id, displayName(p)]));
   // A shared Duty is yours for everyone on it: "with Sam".
-  const withOthers = (userIds: string[]) => {
-    const others = userIds.filter((id) => id !== user.id).map((id) => names.get(id) ?? "Someone");
-    return others.length > 0 ? `with ${joinNames(others)}` : null;
-  };
+  const withOthers = (userIds: string[]) => othersOnDuty(userIds, user.id, name);
   const firstName = displayName(user).split(" ")[0];
   // My own health cards, most urgent first; time Away comes last.
   const injuryActions = {
@@ -88,7 +86,7 @@ export default async function Home() {
     />
   ));
   const awayCards = away.current.map((period) => (
-    <AwayHomeCard key={period.id} until={formatDay(period.until)} reason={period.reason} imBack={imBackAction.bind(null, period.id)} />
+    <AwayHomeCard key={period.id} until={formatDate(period.until)} reason={period.reason} imBack={imBackAction.bind(null, period.id)} />
   ));
   const healthCards = [...injuryCards, ...awayCards];
 

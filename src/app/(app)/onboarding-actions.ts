@@ -5,8 +5,9 @@ import { db } from "@/db/client";
 import { setMobileNumber } from "@/features/contact";
 import { RUGBY_POSITIONS, setName, setPreferredPosition, type RugbyPosition } from "@/features/users";
 import { requireApprovedUser } from "@/lib/session";
+import type { Result } from "@/lib/result";
 
-export type OnboardingState = { ok: true } | { ok: false; error: string } | null;
+export type OnboardingState = Result | null;
 
 function isRugbyPosition(value: string): value is RugbyPosition {
   return (RUGBY_POSITIONS as readonly string[]).includes(value);

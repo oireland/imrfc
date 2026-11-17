@@ -1,17 +1,12 @@
 // Source selection for Confirming a Duty when an Equipment Unit's Whereabouts is split across
 // several Places, and the "who has how many" split for several People on a Duty. Pure,
 // no database.
-import type { Place, Portion } from "@/features/equipment";
+import { placeOf, type Place, type Portion } from "@/features/equipment";
+import type { Result } from "@/lib/result";
 
 export type SourcePart = { place: Place; count: number };
 export type HolderPart = { userId: string; count: number };
 type Gathered = { sources: SourcePart[]; ok: boolean };
-
-function toPlace(p: Portion): Place {
-  if (p.whereaboutsType === "store") return { type: "store", storeId: p.storeId! };
-  if (p.whereaboutsType === "holder") return { type: "holder", holderId: p.holderId! };
-  return { type: "unconfirmed", lastSeenEventId: p.lastSeenEventId! };
-}
 
 function gather(ordered: Portion[], count: number): Gathered {
   const sources: SourcePart[] = [];
@@ -20,7 +15,7 @@ function gather(ordered: Portion[], count: number): Gathered {
     if (need <= 0) break;
     const take = Math.min(need, p.count);
     if (take <= 0) continue;
-    sources.push({ place: toPlace(p), count: take });
+    sources.push({ place: placeOf(p), count: take });
     need -= take;
   }
   return { sources, ok: need <= 0 };
@@ -108,7 +103,7 @@ export function validateHolderSplit(
   count: number,
   parts: HolderPart[],
   userIds: string[],
-): { ok: true } | { ok: false; error: string } {
+): Result {
   if (parts.some((p) => !userIds.includes(p.userId))) return { ok: false, error: "Only the duty's people can hold it." };
   if (parts.some((p) => !Number.isInteger(p.count) || p.count < 0)) return { ok: false, error: "Counts can't be negative." };
   const sum = parts.reduce((s, p) => s + p.count, 0);

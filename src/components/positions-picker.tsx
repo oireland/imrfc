@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { RUGBY_POSITIONS, type RugbyPosition } from "@/features/users";
+import type { Result } from "@/lib/result";
 
 /**
  * A Player's Preferred and Other Positions, on Profile and the Committee's Player page.
@@ -20,7 +21,7 @@ export function PositionsPicker({
 }: {
   initialPreferred: RugbyPosition | null;
   initialOther: RugbyPosition[];
-  save: (preferred: RugbyPosition, other: RugbyPosition[]) => Promise<{ ok: true } | { ok: false; error: string }>;
+  save: (preferred: RugbyPosition, other: RugbyPosition[]) => Promise<Result>;
 }) {
   const [preferred, setPreferred] = useState<RugbyPosition | "">(initialPreferred ?? "");
   const [other, setOther] = useState<RugbyPosition[]>(initialOther.filter((p) => p !== initialPreferred));

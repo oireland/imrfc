@@ -1,8 +1,4 @@
-import type { AccessState, Role } from "./access";
-
-export function canAccessApp(accessState: AccessState): boolean {
-  return accessState === "approved";
-}
+import type { Role } from "./access";
 
 export function isCommitteeOrAbove(role: Role): boolean {
   return role === "committee" || role === "admin";

@@ -13,7 +13,8 @@ import { getSeasonRecord, type RecordLine, type ReplyCounts } from "@/features/a
 import { listEquipmentUnits } from "@/features/equipment";
 import { getMobileNumber, setMobileNumber, whatsappLink } from "@/features/contact";
 import { listInjuries, STATUS_LABEL, worstFitness, type OpenStatus } from "@/features/injuries";
-import { getPlayer, listAway, londonToday, setPlayerPositions, setPlaying } from "@/features/players";
+import { getPlayer, listAway, setPlayerPositions, setPlaying } from "@/features/players";
+import { londonDay } from "@/lib/london";
 import { formatWhen } from "@/lib/format-time";
 import type { RugbyPosition } from "@/features/users";
 import { buttonVariants } from "@/components/ui/button";
@@ -28,7 +29,7 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
   const user = await requireCommittee();
 
   const { id } = await params;
-  const today = londonToday();
+  const today = londonDay();
   const [player, equipmentUnits, availability, mobileNumber, awayListing, injuries, eventOptions] = await Promise.all([
     getPlayer(db, id),
     listEquipmentUnits(db, { includeRetired: true }),

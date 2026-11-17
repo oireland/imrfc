@@ -1,6 +1,5 @@
 import { STATUS_LABEL, type InjuryStatus, type InjuryView } from "@/features/injuries";
-import { formatDay } from "@/features/players";
-import { formatDay as formatInstant } from "@/lib/format-time";
+import { formatDate, formatDay } from "@/lib/format-time";
 
 export type InjuryItem = {
   id: string;
@@ -39,13 +38,13 @@ export function injuryItems(views: InjuryView[]): InjuryItem[] {
     description: v.description,
     status: v.status as InjuryItem["status"],
     statusLabel: STATUS_LABEL[v.status],
-    since: `Since ${formatDay(v.happenedOn)}`,
-    summary: [`Since ${formatDay(v.happenedOn)}`, v.expectedReturn ? `back about ${formatDay(v.expectedReturn)}` : null].filter(Boolean).join(" · "),
+    since: `Since ${formatDate(v.happenedOn)}`,
+    summary: [`Since ${formatDate(v.happenedOn)}`, v.expectedReturn ? `back about ${formatDate(v.expectedReturn)}` : null].filter(Boolean).join(" · "),
     expectedReturn: v.expectedReturn,
-    stillExpecting: v.stillExpecting && v.expectedReturn ? formatDay(v.expectedReturn) : null,
+    stillExpecting: v.stillExpecting && v.expectedReturn ? formatDate(v.expectedReturn) : null,
     needsPhysio: v.needsPhysio,
     physioNote: v.physioNote,
     checkIn: v.checkIn,
-    history: v.history.map((c) => ({ text: historyText(c), note: c.note, by: c.by, when: formatInstant(c.at) })),
+    history: v.history.map((c) => ({ text: historyText(c), note: c.note, by: c.by, when: formatDay(c.at) })),
   }));
 }

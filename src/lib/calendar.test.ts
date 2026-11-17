@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { greeting, londonDay, londonTime, monthGrid } from "./calendar";
+import { greeting, monthGrid } from "./calendar";
 
 describe("monthGrid", () => {
   it("lays a month out Monday-first over six weeks", () => {
@@ -16,27 +16,10 @@ describe("monthGrid", () => {
   });
 });
 
-describe("londonDay", () => {
-  it("uses the London date during BST", () => {
-    expect(londonDay(new Date("2026-10-24T23:30:00Z"))).toBe("2026-10-25");
-  });
-
-  it("uses the London date after the clocks go back", () => {
-    expect(londonDay(new Date("2026-10-25T23:30:00Z"))).toBe("2026-10-25");
-  });
-});
-
 describe("greeting", () => {
   it("says Morning, Afternoon or Evening by London hour", () => {
     expect(greeting(new Date("2026-01-10T09:00:00Z"))).toBe("Morning");
     expect(greeting(new Date("2026-07-10T11:30:00Z"))).toBe("Afternoon"); // 12:30 BST
     expect(greeting(new Date("2026-01-10T18:00:00Z"))).toBe("Evening");
-  });
-});
-
-describe("londonTime", () => {
-  it("formats the London 24-hour time either side of the clocks going back", () => {
-    expect(londonTime(new Date("2026-10-24T18:00:00Z"))).toBe("19:00");
-    expect(londonTime(new Date("2026-10-26T18:00:00Z"))).toBe("18:00");
   });
 });

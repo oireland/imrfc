@@ -1,4 +1,5 @@
 // Clash rules: pure functions over plain data, no database or Next.js.
+import { joinList } from "@/lib/join-names";
 import { byStart, dutyUsers, itemCount, needsUnit, HOUR, type PlanEvent, type PlanEquipment } from "./plan";
 
 /** Events closer together than this count as back-to-back. */
@@ -11,18 +12,13 @@ export type Clash = {
   message: string;
 };
 
-function joinTitles(titles: string[]): string {
-  if (titles.length <= 2) return titles.join(" and ");
-  return `${titles.slice(0, -1).join(", ")} and ${titles[titles.length - 1]}`;
-}
-
 function overlapMessage(unit: PlanEquipment, events: PlanEvent[], total: number): string {
   const titles = events.map((e) => e.title);
   if (unit.quantity === 1) {
     const need = titles.length === 2 ? "both" : "all";
-    return `${joinTitles(titles)} overlap, and ${need} need ${unit.name}.`;
+    return `${joinList(titles, "and")} overlap, and ${need} need ${unit.name}.`;
   }
-  return `${joinTitles(titles)} need ${total} ${unit.name} between them, but the club only has ${unit.quantity}.`;
+  return `${joinList(titles, "and")} need ${total} ${unit.name} between them, but the club only has ${unit.quantity}.`;
 }
 
 function backToBackMessage(unit: PlanEquipment, a: PlanEvent, b: PlanEvent, total: number): string {

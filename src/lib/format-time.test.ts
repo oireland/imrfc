@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatAgo, formatWhen } from "./format-time";
+import { formatAgo, formatDate, formatWhen } from "./format-time";
 
 describe("formatWhen", () => {
   it("formats a summer (BST) instant in Europe/London, 24-hour", () => {
@@ -58,5 +58,11 @@ describe("formatAgo", () => {
     [new Date("2026-09-28T12:00:00Z"), "3d ago"],
   ])("says %s as %s", (date, expected) => {
     expect(formatAgo(date, now)).toBe(expected);
+  });
+});
+
+describe("formatDate", () => {
+  it("writes a date as day and short month", () => {
+    expect(formatDate("2026-11-03")).toBe("3 Nov");
   });
 });

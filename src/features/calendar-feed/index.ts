@@ -1,9 +1,9 @@
 import type { Db } from "@/db/types";
 import { eq } from "drizzle-orm";
-import { joinNames, listUpcomingDutiesForUser } from "@/features/duties";
+import { listUpcomingDutiesForUser, othersOnDuty } from "@/features/duties";
 import { listEvents } from "@/features/events";
 import { listEquipmentUnits } from "@/features/equipment";
-import { displayName, listKnownUsers, user } from "@/features/users";
+import { loadNames, user } from "@/features/users";
 import { buildCalendar, type FeedEvent } from "./ics-rules";
 import { feedToken } from "./schema";
 
@@ -46,23 +46,22 @@ export async function renderFeed(db: Db, token: string, now: Date = new Date()):
   if (!owner) return { status: 404 };
   if (owner.accessState === "blocked") return { status: 410 };
 
-  const [upcoming, past, equipment, duties, people] = await Promise.all([
+  const [upcoming, past, equipment, duties, name] = await Promise.all([
     listEvents(db, { when: "upcoming" }),
     listEvents(db, { when: "past" }),
     listEquipmentUnits(db, { includeRetired: true }),
     listUpcomingDutiesForUser(db, owner.id),
-    listKnownUsers(db),
+    loadNames(db),
   ]);
   const equipmentById = new Map(equipment.map((k) => [k.id, k]));
   const equipmentLabel = (equipmentUnitId: string, count: number) => {
     const unit = equipmentById.get(equipmentUnitId);
     return unit && unit.quantity > 1 ? `${unit.name} ×${count}` : (unit?.name ?? "Equipment");
   };
-  const names = new Map(people.map((p) => [p.id, displayName(p)]));
   // A shared Duty reads as everyone's: "You're bringing: Tackle shields ×4 with Sam".
   const withOthers = (userIds: string[]) => {
-    const others = userIds.filter((id) => id !== owner.id).map((id) => names.get(id) ?? "Someone");
-    return others.length > 0 ? ` with ${joinNames(others)}` : "";
+    const others = othersOnDuty(userIds, owner.id, name);
+    return others ? ` ${others}` : "";
   };
 
   const events: FeedEvent[] = [...past, ...upcoming].map((e) => ({

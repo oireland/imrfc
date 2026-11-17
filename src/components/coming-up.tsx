@@ -8,10 +8,12 @@ import { Beer, Check, ChevronLeft, ChevronRight, Dumbbell, Loader2, MapPin, Plus
 import { cn } from "cn";
 import type { MyReply, ReplyStatus } from "@/features/availability";
 import type { QuickEventInput } from "@/features/events";
-import { londonDay, londonTime, monthGrid } from "@/lib/calendar";
+import { monthGrid } from "@/lib/calendar";
+import { londonDay, londonTime } from "@/lib/london";
 import { comingUpSearch, readComingUpView, type ComingUpView } from "@/lib/coming-up-view";
 import { ReplySheet } from "@/components/availability-card";
 import { QuickAddSheet } from "@/components/quick-add-sheet";
+import type { Result } from "@/lib/result";
 
 export type CalendarEventType = "training" | "match" | "social";
 
@@ -33,7 +35,7 @@ export type CalendarEvent = {
 };
 
 type Answer = { status: ReplyStatus; note: string; reason: string };
-type ReplyAction = (eventId: string, answer: Answer) => Promise<{ ok: true } | { ok: false; error: string }>;
+type ReplyAction = (eventId: string, answer: Answer) => Promise<Result>;
 
 const TYPE: Record<CalendarEventType, { label: string; plural: string; icon: typeof Dumbbell; className: string }> = {
   training: { label: "Training", plural: "Training", icon: Dumbbell, className: "bg-training text-training-foreground" },
@@ -70,7 +72,7 @@ export function ComingUp({
   canAdd: boolean;
   venues: string[];
   teams: { id: string; name: string }[];
-  addAction: (input: QuickEventInput) => Promise<{ ok: true; id: string } | { ok: false; error: string }>;
+  addAction: (input: QuickEventInput) => Promise<Result<{ id: string }>>;
   title?: string;
   reply: ReplyAction;
   /** Home only: the title links across to Events. */
@@ -176,11 +178,7 @@ function MonthCalendar({
   const [selected, setSelected] = useState(today);
   const [view, setView] = useState(() => ({ year: Number(today.slice(0, 4)), month: Number(today.slice(5, 7)) - 1 }));
   const selectedDayRef = useRef<HTMLDivElement>(null);
-  const byDay = new Map<string, CalendarEvent[]>();
-  for (const e of events) {
-    const day = londonDay(new Date(e.start));
-    byDay.set(day, [...(byDay.get(day) ?? []), e]);
-  }
+  const byDay = Map.groupBy(events, (e) => londonDay(new Date(e.start)));
   const days = monthGrid(view.year, view.month);
   const selectedEvents = byDay.get(selected) ?? [];
 

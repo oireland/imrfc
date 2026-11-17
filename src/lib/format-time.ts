@@ -29,6 +29,11 @@ export function formatDay(date: Date): string {
   return `${WEEKDAY.format(date)} ${DAY.format(date)} ${MONTHS[Number(MONTH_INDEX.format(date)) - 1]}`;
 }
 
+/** "3 Nov", from a `YYYY-MM-DD` day. */
+export function formatDate(day: string): string {
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(Date.parse(day)));
+}
+
 /**
  * Formats a Date for display in Europe/London, 24-hour clock, e.g. "Wed 24 Sep, 18:00".
  * The year is appended only when it differs from `now`'s London year, e.g.

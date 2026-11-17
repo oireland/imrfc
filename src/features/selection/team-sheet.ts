@@ -1,7 +1,8 @@
 import type { Db } from "@/db/types";
 import { and, eq } from "drizzle-orm";
-import { getEvent, londonParts, startsAt } from "@/features/events";
+import { getEvent, type EventWithDetails } from "@/features/events";
 import { formatDay } from "@/lib/format-time";
+import { refuseMatchChange } from "./guard";
 import { getBoard, type Board } from "./index";
 import { selectionShirt } from "./schema";
 import {
@@ -14,9 +15,10 @@ import {
   type SheetLayout,
   type SheetPerson,
 } from "./sheet";
+import { londonParts } from "@/lib/london";
+import type { Result } from "@/lib/result";
 
 type Viewer = { id: string; committee: boolean };
-type Result = { ok: true } | { ok: false; error: string };
 
 export type TeamSheet = {
   eventId: string;
@@ -34,7 +36,7 @@ function clock(instant: Date): string {
 }
 
 /** The Match's times that are still TBC. Transport only matters for an away Match. */
-function missingTimes(event: NonNullable<Awaited<ReturnType<typeof getEvent>>>): string[] {
+function missingTimes(event: EventWithDetails): string[] {
   const details = event.matchDetails;
   const missing: string[] = [];
   if (event.startTbc) missing.push("Kick-off time is TBC");
@@ -44,7 +46,7 @@ function missingTimes(event: NonNullable<Awaited<ReturnType<typeof getEvent>>>):
 }
 
 /** A Match's Team Sheet fields, read from the Event and its match details; null for a non-Match. */
-export async function settleFields(db: Db, eventId: string) {
+export async function sheetFieldsFor(db: Db, eventId: string) {
   const event = await getEvent(db, eventId);
   if (!event || event.eventType !== "match") return null;
   const details = event.matchDetails;
@@ -79,16 +81,11 @@ export async function getTeamSheet(
   loaded?: Board,
 ): Promise<TeamSheet | null> {
   if (!viewer.committee) return null;
-  const [settled, board] = await Promise.all([settleFields(db, eventId), loaded ?? getBoard(db, eventId, viewer, now)]);
+  const [settled, board] = await Promise.all([sheetFieldsFor(db, eventId), loaded ?? getBoard(db, eventId, viewer, now)]);
   if (!settled || !board) return null;
   const { event, fields } = settled;
   const pitch = board.pitches.find((p) => p.eventId === eventId)!;
 
-  const rows = await db
-    .select({ shirt: selectionShirt.shirt, roles: selectionShirt.roles })
-    .from(selectionShirt)
-    .where(eq(selectionShirt.eventId, eventId));
-  const rolesOf = new Map<number, Role[]>(rows.map((r: { shirt: number; roles: string[] }) => [r.shirt, r.roles as Role[]]));
   const people: SheetPerson[] = pitch.shirts.flatMap((s) =>
     s.occupant
       ? [
@@ -97,7 +94,7 @@ export async function getTeamSheet(
             name: s.occupant.name,
             guest: s.occupant.kind === "guest",
             availability: s.occupant.kind === "player" ? s.occupant.availability : "available",
-            roles: rolesOf.get(s.shirt) ?? [],
+            roles: s.roles,
           },
         ]
       : [],
@@ -114,14 +111,8 @@ export async function getTeamSheet(
   };
 }
 
-async function refuse(db: Db, eventId: string, viewer: Viewer, now: Date): Promise<Result | null> {
-  if (!viewer.committee) return { ok: false, error: "Only committee can change the team." };
-  const event = await getEvent(db, eventId);
-  if (!event || event.eventType !== "match") return { ok: false, error: "That match doesn't exist." };
-  if (event.cancelled) return { ok: false, error: "This match is cancelled." };
-  if (startsAt(event) <= now) return { ok: false, error: "This match has already started." };
-  return null;
-}
+const refuse = (db: Db, eventId: string, viewer: Viewer, now: Date) =>
+  refuseMatchChange(db, eventId, viewer, now, "Only committee can change the team.");
 
 /** Sets the Match Day Roles of whoever is on a Shirt. C and VC move off anyone else who held them. */
 export async function setRoles(
@@ -131,11 +122,11 @@ export async function setRoles(
 ): Promise<Result> {
   const denied = await refuse(db, input.eventId, input.viewer, now);
   if (denied) return denied;
-  const rows: { shirt: number; roles: string[] }[] = await db.select().from(selectionShirt).where(eq(selectionShirt.eventId, input.eventId));
+  const rows = await db.select().from(selectionShirt).where(eq(selectionShirt.eventId, input.eventId));
   if (!rows.some((r) => r.shirt === input.shirt)) return { ok: false, error: "Pick someone for that shirt first." };
 
   const roles = ROLES.filter((r) => input.roles.includes(r));
-  await db.transaction(async (tx: Db) => {
+  await db.transaction(async (tx) => {
     for (const other of rows) {
       if (other.shirt === input.shirt) continue;
       const kept = other.roles.filter((r) => !(SINGLE_ROLES as string[]).includes(r) || !roles.includes(r as Role));

@@ -1,12 +1,14 @@
 import { LIMITS, firstTooLong } from "@/lib/text-limits";
-import { londonParts, startsAt, type EventType } from "@/features/events";
+import { startsAt, type EventType } from "@/features/events";
+import { londonParts } from "@/lib/london";
+import type { Result } from "@/lib/result";
 
 export type ReplyStatus = "available" | "not_available";
 
 export type ReplyInput = { status: ReplyStatus; note: string; reason: string };
 
 /** A reply to save: Not available always carries a Reason; Available may carry a note ("late"). */
-export function validateReply(input: ReplyInput): { ok: true; reply: ReplyInput } | { ok: false; error: string } {
+export function validateReply(input: ReplyInput): Result<{ reply: ReplyInput }> {
   const note = input.note.trim();
   const reason = input.reason.trim();
   const tooLong = firstTooLong([["note", note, LIMITS.note], ["reason", reason, LIMITS.line]]);
@@ -64,12 +66,13 @@ export type AvailabilitySummary = {
   notChased: NotChasedRow[];
 };
 
-/** Each Player's latest reply. */
-export function latestReplies(replies: Reply[]): Map<string, Reply> {
-  const latest = new Map<string, Reply>();
-  for (const r of replies) {
-    const current = latest.get(r.userId);
-    if (!current || r.createdAt > current.createdAt) latest.set(r.userId, r);
+/** The item with the latest `createdAt` for each key. */
+function latestBy<T extends { createdAt: Date }>(items: T[], keyOf: (item: T) => string): Map<string, T> {
+  const latest = new Map<string, T>();
+  for (const item of items) {
+    const key = keyOf(item);
+    const current = latest.get(key);
+    if (!current || item.createdAt > current.createdAt) latest.set(key, item);
   }
   return latest;
 }
@@ -101,17 +104,9 @@ export function summarizeAvailability({
   notChased?: Map<string, NotChased>;
 }): AvailabilitySummary {
   const names = new Map(players.map((p) => [p.id, p.name]));
-  const latest = latestReplies(replies);
-  const lastNudged = new Map<string, Date>();
-  for (const n of nudges) {
-    const current = lastNudged.get(n.userId);
-    if (!current || n.createdAt > current) lastNudged.set(n.userId, n.createdAt);
-  }
-  const lastMessaged = new Map<string, Messaged>();
-  for (const m of viewer.committee ? messages : []) {
-    const current = lastMessaged.get(m.userId);
-    if (!current || m.createdAt > current.createdAt) lastMessaged.set(m.userId, m);
-  }
+  const latest = latestBy(replies, (r) => r.userId);
+  const lastNudged = new Map([...latestBy(nudges, (n) => n.userId)].map(([id, n]) => [id, n.createdAt]));
+  const lastMessaged = latestBy(viewer.committee ? messages : [], (m) => m.userId);
   const messagedBy = (m?: Messaged) =>
     m ? { at: m.createdAt, by: names.get(m.messagedById) ?? nameOf?.(m.messagedById) ?? "Someone" } : null;
   const summary: AvailabilitySummary = { available: [], notAvailable: [], noReply: [], notChased: [] };
@@ -194,11 +189,10 @@ export type WaitingAsk = {
 
 /** Training and Match days: each Training alone, a day's Matches together. */
 function replyGroups<E extends GroupEvent>(events: E[]): E[][] {
-  const groups = new Map<string, E[]>();
-  for (const e of events.filter((e) => takesReplies(e.eventType))) {
-    const key = e.eventType === "match" ? `match:${londonParts(e.start).date}` : e.id;
-    groups.set(key, [...(groups.get(key) ?? []), e]);
-  }
+  const groups = Map.groupBy(
+    events.filter((e) => takesReplies(e.eventType)),
+    (e) => (e.eventType === "match" ? `match:${londonParts(e.start).date}` : e.id),
+  );
   return [...groups.values()].map((group) => group.sort(byStart));
 }
 
@@ -237,7 +231,7 @@ export function waitingOnReply({
 /** A Player's latest reply to any Event in `group`. */
 function latestInGroup<R extends { eventId: string; createdAt: Date }>(group: GroupEvent[], replies: R[]): R | undefined {
   const ids = new Set(group.map((e) => e.id));
-  return replies.filter((r) => ids.has(r.eventId)).reduce<R | undefined>((a, r) => (!a || r.createdAt > a.createdAt ? r : a), undefined);
+  return latestBy(replies.filter((r) => ids.has(r.eventId)), () => "").get("");
 }
 
 export type ReplyCounts = { available: number; notAvailable: number; noReply: number };

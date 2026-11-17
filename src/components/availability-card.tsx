@@ -1,5 +1,6 @@
 "use client";
 
+import { joinList } from "@/lib/join-names";
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -12,10 +13,10 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
+import type { Result } from "@/lib/result";
 
 type Answer = { status: ReplyStatus; note: string; reason: string };
-type Result = { ok: true } | { ok: false; error: string };
-type SendResult = { ok: true; askId: string; sending: number } | { ok: false; error: string };
+type SendResult = Result<{ askId: string; sending: number }>;
 type Tab = "in" | "out" | "none";
 
 /**
@@ -393,12 +394,11 @@ function YourReply({
 const people = (n: number) => (n === 1 ? "1 person" : `${n} people`);
 
 /** "Jo", "Jo and Sam", "Jo, Sam and Ray". */
-const listNames = (names: string[]) => (names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
 
 function failedMessage(ask: AskNotice) {
   const what = ask.kind === "announce" ? "announcement" : "nudge";
   const others = ask.sent > 0 ? ` Everyone else got it.` : "";
-  return `${ask.by}'s ${what} didn't reach ${listNames(ask.missed)}.${others}`;
+  return `${ask.by}'s ${what} didn't reach ${joinList(ask.missed, "and")}.${others}`;
 }
 
 /**

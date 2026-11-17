@@ -1,25 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_OCCURRENCES, checkOccurrenceCount, londonToUtc, occurrenceDates, validateSeries } from "./series-rules";
-
-describe("londonToUtc", () => {
-  it("is the same clock time in winter (GMT)", () => {
-    expect(londonToUtc("2026-01-07", "19:00").toISOString()).toBe("2026-01-07T19:00:00.000Z");
-  });
-
-  it("is an hour earlier in UTC in summer (BST)", () => {
-    expect(londonToUtc("2026-06-03", "19:00").toISOString()).toBe("2026-06-03T18:00:00.000Z");
-  });
-
-  it("switches on the day BST starts", () => {
-    expect(londonToUtc("2026-03-28", "19:00").toISOString()).toBe("2026-03-28T19:00:00.000Z");
-    expect(londonToUtc("2026-03-29", "19:00").toISOString()).toBe("2026-03-29T18:00:00.000Z");
-  });
-
-  it("switches back on the day BST ends", () => {
-    expect(londonToUtc("2026-10-24", "19:00").toISOString()).toBe("2026-10-24T18:00:00.000Z");
-    expect(londonToUtc("2026-10-25", "19:00").toISOString()).toBe("2026-10-25T19:00:00.000Z");
-  });
-});
+import { MAX_OCCURRENCES, checkOccurrenceCount, occurrenceDates, validateSeries } from "./series-rules";
 
 describe("occurrenceDates", () => {
   it("lists every matching weekday from start to end date inclusive", () => {

@@ -1,27 +1,28 @@
 import type { Db } from "@/db/types";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { listDutyRecordForUser } from "@/features/duties";
-import { displayName, isCommitteeOrAbove, listKnownUsers, RUGBY_POSITIONS, setPlaying, setPositions, type Role, type RugbyPosition } from "@/features/users";
+import { displayName, isCommitteeOrAbove, listCommitteeIds, listKnownUsers, loadNames, RUGBY_POSITIONS, setPlaying, setPositions, type Role, type RugbyPosition } from "@/features/users";
 import {
   awayLabel,
   awayPushMessage,
   groupAway,
   imBackUntil,
-  londonToday,
   periodState,
   validateAway,
   type AwayInput,
   type AwayPeriod,
 } from "./away-rules";
+import { londonDay } from "@/lib/london";
 import { listPlayers as listPlayersRules, summarizePlayers, type PlayerListing, type PlayerRow } from "./list-rules";
 import { normalizePositions } from "./positions-rules";
 import { playerAway } from "./schema";
+import type { Result } from "@/lib/result";
 
 export { setPlaying, setPositions };
 export { normalizePositions } from "./positions-rules";
 export type { PlayerListing, PlayerRow } from "./list-rules";
 export { summarizePlayers };
-export { addDays, awayLabel, formatDay, londonToday, periodState, rangeLabel } from "./away-rules";
+export { awayLabel, periodState, rangeLabel } from "./away-rules";
 export type { AwayInput, AwayPeriod, AwayState } from "./away-rules";
 
 
@@ -54,7 +55,7 @@ export async function listPlayers(
   db: Db,
   search = "",
   {
-    today = londonToday(),
+    today = londonDay(),
     now = new Date(),
     fitness = new Map(),
     ...filters
@@ -111,7 +112,7 @@ export async function setPlayerPositions(
   userId: string,
   preferred: RugbyPosition,
   other: RugbyPosition[],
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<Result> {
   const valid = (p: unknown) => (RUGBY_POSITIONS as readonly unknown[]).includes(p);
   if (!valid(preferred) || !other.every(valid)) return { ok: false, error: "Pick positions from the list." };
   await setPositions(db, userId, normalizePositions(preferred, other));
@@ -121,7 +122,6 @@ export async function setPlayerPositions(
 // ---- Time away ----------------------------------------------------------------------------
 
 type Actor = { id: string; role: Role };
-type AwayResult = { ok: true } | { ok: false; error: string };
 
 /** A Player manages their own time Away; Committee can for anyone. */
 const mayManage = (actor: Actor, userId: string) => actor.id === userId || isCommitteeOrAbove(actor.role);
@@ -135,16 +135,8 @@ async function findAway(db: Db, id: string): Promise<(typeof playerAway.$inferSe
   return row;
 }
 
-const toPeriod = (row: typeof playerAway.$inferSelect): AwayPeriod => ({
-  id: row.id,
-  userId: row.userId,
-  from: row.from,
-  until: row.until,
-  reason: row.reason,
-  setById: row.setById,
-  createdAt: row.createdAt,
-  updatedAt: row.updatedAt,
-});
+// removedAt is dropped on purpose.
+const toPeriod = ({ removedAt, ...period }: typeof playerAway.$inferSelect): AwayPeriod => period;
 
 /** Adds a period of time Away for `userId` (themself, or anyone for Committee). */
 export async function addAway(
@@ -152,8 +144,8 @@ export async function addAway(
   actor: Actor,
   userId: string,
   input: AwayInput,
-  today = londonToday(),
-): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  today = londonDay(),
+): Promise<Result<{ id: string }>> {
   if (!mayManage(actor, userId)) return { ok: false, error: "Only Committee can set someone else's time away." };
   const valid = validateAway(input, today);
   if (!valid.ok) return valid;
@@ -163,7 +155,7 @@ export async function addAway(
 }
 
 /** Changes a period that hasn't finished. */
-export async function editAway(db: Db, actor: Actor, id: string, input: AwayInput, today = londonToday()): Promise<AwayResult> {
+export async function editAway(db: Db, actor: Actor, id: string, input: AwayInput, today = londonDay()): Promise<Result> {
   const row = await findAway(db, id);
   if (!row || !mayManage(actor, row.userId)) return { ok: false, error: "You can't change that." };
   if (periodState(row, today) === "past") return { ok: false, error: "That one is over, so it stays as it was." };
@@ -174,7 +166,7 @@ export async function editAway(db: Db, actor: Actor, id: string, input: AwayInpu
 }
 
 /** I'm back: ends a current period yesterday, or drops one that only starts today. */
-export async function imBack(db: Db, actor: Actor, id: string, today = londonToday()): Promise<AwayResult> {
+export async function imBack(db: Db, actor: Actor, id: string, today = londonDay()): Promise<Result> {
   const row = await findAway(db, id);
   if (!row || !mayManage(actor, row.userId)) return { ok: false, error: "You can't change that." };
   if (periodState(row, today) !== "current") return { ok: false, error: "That isn't running now." };
@@ -184,7 +176,7 @@ export async function imBack(db: Db, actor: Actor, id: string, today = londonTod
 }
 
 /** Removes one still to come or running (added by mistake). Past periods stay as history. */
-export async function removeAway(db: Db, actor: Actor, id: string, today = londonToday()): Promise<AwayResult> {
+export async function removeAway(db: Db, actor: Actor, id: string, today = londonDay()): Promise<Result> {
   const row = await findAway(db, id);
   if (!row || !mayManage(actor, row.userId)) return { ok: false, error: "You can't change that." };
   if (periodState(row, today) === "past") return { ok: false, error: "Past time away is kept as history." };
@@ -196,14 +188,13 @@ export type AwayListing = { current: AwayEntry[]; future: AwayEntry[]; past: Awa
 export type AwayEntry = AwayPeriod & { setBy: string };
 
 /** A Player's time Away, grouped; only the Player themself and Committee can see it. */
-export async function listAway(db: Db, viewer: Actor, userId: string, today = londonToday()): Promise<AwayListing> {
+export async function listAway(db: Db, viewer: Actor, userId: string, today = londonDay()): Promise<AwayListing> {
   if (!mayManage(viewer, userId)) return { current: [], future: [], past: [] };
-  const [rows, people]: [(typeof playerAway.$inferSelect)[], Awaited<ReturnType<typeof listKnownUsers>>] = await Promise.all([
+  const [rows, name]: [(typeof playerAway.$inferSelect)[], (id: string) => string] = await Promise.all([
     db.select().from(playerAway).where(and(eq(playerAway.userId, userId), isNull(playerAway.removedAt))),
-    listKnownUsers(db),
+    loadNames(db),
   ]);
-  const names = new Map(people.map((u) => [u.id, displayName(u)]));
-  const entries = rows.map((r) => ({ ...toPeriod(r), setBy: names.get(r.setById) ?? "Someone" }));
+  const entries = rows.map((r) => ({ ...toPeriod(r), setBy: name(r.setById) }));
   return groupAway(entries, today);
 }
 
@@ -212,7 +203,7 @@ export type AwayOn = { reason: string; from: string; until: string };
 /** Who among `userIds` is Away on `date`, with the period (the Reason is for Committee's eyes only). */
 export async function listAwayOn(db: Db, userIds: string[], date: string): Promise<Map<string, AwayOn>> {
   if (userIds.length === 0) return new Map();
-  const rows: (typeof playerAway.$inferSelect)[] = await db
+  const rows = await db
     .select()
     .from(playerAway)
     .where(and(inArray(playerAway.userId, userIds), isNull(playerAway.removedAt)));
@@ -232,18 +223,14 @@ export async function listAwayOn(db: Db, userIds: string[], date: string): Promi
 export async function awayAlert(
   db: Db,
   id: string,
-  today = londonToday(),
+  today = londonDay(),
 ): Promise<{ userIds: string[]; title: string; body: string; playerId: string } | null> {
   const row = await findAway(db, id);
   if (!row) return null;
-  const people = await listKnownUsers(db);
-  const player = people.find((p) => p.id === row.userId);
-  const title = awayPushMessage({ name: player ? displayName(player) : "Someone", from: row.from, until: row.until }, today);
+  const name = await loadNames(db);
+  const title = awayPushMessage({ name: name(row.userId), from: row.from, until: row.until }, today);
   if (!title) return null;
-  const userIds = people
-    .filter((p) => p.accessState === "approved" && isCommitteeOrAbove(p.role as Role) && p.id !== row.setById)
-    .map((p) => p.id)
-    .sort();
+  const userIds = await listCommitteeIds(db, { except: row.setById });
   return { userIds, title, body: "", playerId: row.userId };
 }
 

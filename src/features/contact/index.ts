@@ -3,6 +3,7 @@ import { eq, inArray } from "drizzle-orm";
 import { isCommitteeOrAbove, type Role } from "@/features/users";
 import { parseMobileNumber } from "./rules";
 import { mobileNumber } from "./schema";
+import type { Result } from "@/lib/result";
 
 export { parseMobileNumber, whatsappLink } from "./rules";
 export type { ParsedMobileNumber } from "./rules";
@@ -28,12 +29,11 @@ export async function getMobileNumber(db: Db, viewer: Viewer, userId: string): P
 export async function listMobileNumbers(db: Db, viewer: Viewer, userIds: string[]): Promise<Map<string, string>> {
   const visible = userIds.filter((id) => canSee(viewer, id));
   if (visible.length === 0) return new Map();
-  const rows: { userId: string; number: string }[] = await db
+  const rows = await db
     .select({ userId: mobileNumber.userId, number: mobileNumber.number })
     .from(mobileNumber)
     .where(inArray(mobileNumber.userId, visible));
-  const byUser = new Map(rows.map((r) => [r.userId, r.number]));
-  return new Map(visible.flatMap((id) => (byUser.has(id) ? [[id, byUser.get(id)!] as const] : [])));
+  return new Map(rows.map((r) => [r.userId, r.number]));
 }
 
 /** Whether a User has a Mobile number saved; says nothing about what it is, so Onboarding can ask it. */
@@ -51,7 +51,7 @@ export async function setMobileNumber(
   actor: Viewer,
   userId: string,
   input: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<Result> {
   if (!canSee(actor, userId)) return { ok: false, error: "Only Committee can change someone else's number." };
   const parsed = parseMobileNumber(input);
   if (!parsed.ok) return parsed;

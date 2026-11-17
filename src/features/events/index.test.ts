@@ -14,6 +14,7 @@ import {
   listEvents,
   listEventsBetween,
   listEventTitles,
+  listMatchDay,
   listNextEvents,
   listTeams,
   type NewEvent,
@@ -135,7 +136,7 @@ describe("createEvent", () => {
       title: "1st XV vs St Georges",
       startTbc: false,
       matchDetails: { opponent: "St Georges", homeAway: "home", competition: "bucs", teamId: firstXV.id },
-      teams: [{ name: "1st XV" }],
+      team: { name: "1st XV" },
     });
   });
 
@@ -182,7 +183,7 @@ describe("createEvent", () => {
     });
     if (!made.ok) throw new Error(made.error);
 
-    expect((await getEvent(db, made.event.id))?.teams).toEqual([]);
+    expect((await getEvent(db, made.event.id))?.team).toBeNull();
   });
 });
 
@@ -271,7 +272,7 @@ describe("editEvent", () => {
 
     await editEvent(db, created.event.id, match(secondXV.id, "Sussex"));
 
-    expect(await getEvent(db, created.event.id)).toMatchObject({ title: "2nd XV vs Sussex", teams: [{ name: "2nd XV" }] });
+    expect(await getEvent(db, created.event.id)).toMatchObject({ title: "2nd XV vs Sussex", team: { name: "2nd XV" } });
   });
 
   it("edits a Match's Match details, including a TBC time becoming known", async () => {
@@ -448,6 +449,34 @@ describe("listEventsBetween", () => {
   });
 });
 
+describe("listMatchDay", () => {
+  it("returns every Match on the London day, soonest first, across a clocks-back day", async () => {
+    const db = await createTestDb();
+    const [firstXV] = await listTeams(db);
+    const make = async (eventType: "match" | "social", start: string) => {
+      const base = { start: new Date(start), end: new Date(new Date(start).getTime() + 5_400_000), venue: "Harlington" };
+      const result = await createEvent(
+        db,
+        eventType === "match"
+          ? { ...base, eventType, matchDetails: { teamId: firstXV.id, opponent: start, homeAway: "home", competition: "friendly" } }
+          : { ...base, eventType, title: "Social" },
+      );
+      if (!result.ok) throw new Error(result.error);
+      return result.event;
+    };
+    // The clocks go back on 2026-10-25, so that London day runs 00:00 BST to 24:00 GMT (25 hours).
+    await make("match", "2026-10-24T22:30:00Z"); // 23:30 BST on the 24th
+    const late = await make("match", "2026-10-25T23:30:00Z"); // 23:30 GMT on the 25th
+    const early = await make("match", "2026-10-25T09:00:00Z");
+    await make("social", "2026-10-25T12:00:00Z");
+    await make("match", "2026-10-26T00:30:00Z"); // 00:30 on the 26th
+
+    const day = await listMatchDay(db, early);
+
+    expect(day.map((e) => e.id)).toEqual([early.id, late.id]);
+  });
+});
+
 describe("createEvents", () => {
   const training = (venue: string): NewEvent => ({
     eventType: "training",
@@ -548,8 +577,8 @@ describe("getEvents", () => {
     expect(events.map((e) => e.id).sort()).toEqual([match.event.id, training.event.id].sort());
     const loaded = events.find((e) => e.id === match.event.id)!;
     expect(loaded.matchDetails?.opponent).toBe("Barts");
-    expect(loaded.teams.map((t) => t.name)).toEqual(["2nd XV"]);
-    expect(events.find((e) => e.id === training.event.id)).toMatchObject({ matchDetails: null, teams: [] });
+    expect(loaded.team?.name).toBe("2nd XV");
+    expect(events.find((e) => e.id === training.event.id)).toMatchObject({ matchDetails: null, team: null });
     expect(await getEvents(db, [])).toEqual([]);
   });
 });

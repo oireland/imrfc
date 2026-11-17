@@ -10,6 +10,7 @@ import { VenueInput } from "@/components/venue-input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { cn } from "cn";
 import type { QuickEventInput } from "@/features/events";
+import type { Result } from "@/lib/result";
 
 const TYPE_LABEL: Record<EventType, string> = { training: "Training", match: "Match", social: "Social" };
 
@@ -61,7 +62,7 @@ export function EditEventSheet({
   teams: { id: string; name: string }[];
   initial: EditEventInitial;
   onClose: () => void;
-  action: (input: QuickEventInput & { scope: "this" | "future" }) => Promise<{ ok: true } | { ok: false; error: string }>;
+  action: (input: QuickEventInput & { scope: "this" | "future" }) => Promise<Result>;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();

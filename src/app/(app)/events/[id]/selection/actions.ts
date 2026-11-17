@@ -6,17 +6,16 @@ import { after } from "next/server";
 import { db } from "@/db/client";
 import { sendToUser } from "@/features/push";
 import { addShirt, clearShirt, deliverNotice, dismissNotice, nameTheTeam, pickGuest, pickPlayer, removeShirt, retryNotice, sendChanges, setRoles, swapShirts, type Role } from "@/features/selection";
-import { isCommitteeOrAbove } from "@/features/users";
 import { getMailSender } from "@/lib/mail";
 import { getPushSender } from "@/lib/push";
-import { requireApprovedUser } from "@/lib/session";
+import { requireApprovedUser, viewerOf } from "@/lib/session";
 
 type Ref = { eventId: string; shirt: number };
 
 // Each Shirt saves on its own; the open boards then refresh within a few seconds (ADR 0005).
 async function changed<T>(eventIds: string[], run: (viewer: { id: string; committee: boolean }) => Promise<T>): Promise<T> {
   const current = await requireApprovedUser();
-  const result = await run({ id: current.id, committee: isCommitteeOrAbove(current.role) });
+  const result = await run(viewerOf(current));
   for (const id of eventIds) revalidatePath(`/events/${id}/selection`);
   return result;
 }
@@ -67,7 +66,7 @@ function sent(eventId: string) {
 
 export async function nameTeam(eventId: string) {
   const current = await requireApprovedUser();
-  const result = await nameTheTeam(db, { eventId, viewer: { id: current.id, committee: isCommitteeOrAbove(current.role) } });
+  const result = await nameTheTeam(db, { eventId, viewer: viewerOf(current) });
   if (result.ok && result.noticeId) await deliverLater(result.noticeId, eventId);
   sent(eventId);
   return result;
@@ -75,7 +74,7 @@ export async function nameTeam(eventId: string) {
 
 export async function sendTeamChanges(eventId: string) {
   const current = await requireApprovedUser();
-  const result = await sendChanges(db, { eventId, viewer: { id: current.id, committee: isCommitteeOrAbove(current.role) } });
+  const result = await sendChanges(db, { eventId, viewer: viewerOf(current) });
   if (result.ok && result.noticeId) await deliverLater(result.noticeId, eventId);
   sent(eventId);
   return result;
@@ -83,7 +82,7 @@ export async function sendTeamChanges(eventId: string) {
 
 export async function retryTeamNotice(eventId: string, noticeId: string) {
   const current = await requireApprovedUser();
-  const result = await retryNotice(db, noticeId, { id: current.id, committee: isCommitteeOrAbove(current.role) });
+  const result = await retryNotice(db, noticeId, viewerOf(current));
   if (result.ok && result.noticeId) await deliverLater(result.noticeId, eventId);
   sent(eventId);
   return result;
@@ -91,7 +90,7 @@ export async function retryTeamNotice(eventId: string, noticeId: string) {
 
 export async function dismissTeamNotice(eventId: string, noticeId: string) {
   const current = await requireApprovedUser();
-  const result = await dismissNotice(db, noticeId, { id: current.id, committee: isCommitteeOrAbove(current.role) });
+  const result = await dismissNotice(db, noticeId, viewerOf(current));
   revalidatePath(`/events/${eventId}/selection`);
   return result;
 }

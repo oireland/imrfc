@@ -1,13 +1,14 @@
 "use client";
 
+import { joinList } from "@/lib/join-names";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Minus, Pencil, Plus } from "lucide-react";
 import { BottomSheet } from "@/components/bottom-sheet";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import type { Result } from "@/lib/result";
 
-type Result = { ok: true } | { ok: false; error: string };
 
 /** One Equipment Unit that can be added to a kit list. */
 export type KitOption = { id: string; name: string; /** Its Home, e.g. "Reynolds Locker". */ subtitle: string; quantity: number };
@@ -37,11 +38,6 @@ export type KitItem = {
   count: number;
   /** Display names of everyone with a Duty on it. */
   affected: string[];
-};
-
-const names = (list: string[]): string => {
-  if (list.length <= 1) return list.join("");
-  return `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
 };
 
 /** State and sheets for editing a kit list: the Edit toggle, per-row controls, Add and Remove. */
@@ -90,7 +86,7 @@ export function useKitEditing(kit: KitEditing | undefined) {
         <ConfirmSheet
           eyebrow="Take off the list"
           title={`Take ${removing.name} off the list?`}
-          body={`Taking it off drops the jobs on it (${names(removing.affected)}).`}
+          body={`Taking it off drops the jobs on it (${joinList(removing.affected, "and")}).`}
           confirmLabel="Take it off"
           keepLabel="Keep it"
           onConfirm={() => run(() => kit.remove(removing.equipmentUnitId))}
@@ -101,7 +97,7 @@ export function useKitEditing(kit: KitEditing | undefined) {
         <ConfirmSheet
           eyebrow="Go back"
           title={`Go back to ${kit.reset.label}?`}
-          body={`Going back drops the jobs on kit that isn't on ${kit.reset.label} (${names(kit.reset.affected)}).`}
+          body={`Going back drops the jobs on kit that isn't on ${kit.reset.label} (${joinList(kit.reset.affected, "and")}).`}
           confirmLabel="Go back"
           keepLabel="Keep this list"
           onConfirm={() => run(kit.reset!.run)}
