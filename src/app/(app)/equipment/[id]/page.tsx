@@ -64,7 +64,11 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
     return person ? displayName(person) : "someone";
   };
   const capitalised = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-  const eventNames = await listEventTitles(db, portions.flatMap((p) => (p.lastSeenEventId ? [p.lastSeenEventId] : [])));
+  const eventNames = await listEventTitles(db, [
+    ...portions.flatMap((p) => (p.lastSeenEventId ? [p.lastSeenEventId] : [])),
+    ...log.flatMap((e) => (e.toLastSeenEventId ? [e.toLastSeenEventId] : [])),
+  ]);
+  const eventName = (eventId: string | null) => (eventId && eventNames.get(eventId)) || "an event";
   const clashes = warnings.clashes.filter((c) => c.equipmentUnitId === id);
   const headsUps = warnings.headsUps.filter((h) => h.equipmentUnitId === id);
   const storesById = new Map(stores.map((s: Store) => [s.id, s]));
@@ -72,7 +76,7 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
   const whereaboutsLabel = describeWhereabouts(portions, {
     storeName,
     personName,
-    eventName: (eventId) => eventNames.get(eventId) ?? "an event",
+    eventName,
   });
   const split = unit.quantity > 1;
   const committee = isCommitteeOrAbove(user.role);
@@ -80,11 +84,12 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
   /** One Movement Log entry as a sentence: "You put it in the Shed", "Tom gave it to Priya". */
   function historyLine(entry: MovementLogEntry): string {
     const who = capitalised(personName(entry.userId));
-    if (entry.kind === "condition_note") return `${who} noted: “${entry.conditionNote}”`;
-    if (entry.conditionNote?.startsWith("Bought ") || entry.conditionNote?.startsWith("Lost ")) {
-      return `${who} ${entry.conditionNote.startsWith("Bought") ? "bought" : "lost"} ${entry.count}`;
-    }
     const word = split && entry.count ? String(entry.count) : "it";
+    if (entry.kind === "condition_note") return `${who} noted: “${entry.conditionNote}”`;
+    if (entry.kind === "added") return `${entry.userId ? who : "Someone"} added ${word} to ${storeName(entry.toStoreId)}`;
+    if (entry.kind === "bought") return `${who} bought ${entry.count}`;
+    if (entry.kind === "lost") return `${who} lost ${entry.count}`;
+    if (entry.kind === "unconfirmed") return `Nobody confirmed where ${word} went after ${eventName(entry.toLastSeenEventId)}`;
     const where =
       entry.toType === "store" ? `in ${storeName(entry.toStoreId)}` : `with ${personName(entry.toHolderId)}`;
     if (entry.reason === "duty") {

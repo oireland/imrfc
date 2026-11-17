@@ -4,6 +4,8 @@ export type NewEquipmentUnit = {
   homeId: string;
   /** Defaults to 1; hidden in the UI until raised. */
   quantity?: number;
+  /** Who added it, for the Movement Log. */
+  addedBy?: string;
 };
 
 export type ValidationResult = { ok: true } | { ok: false; error: string };

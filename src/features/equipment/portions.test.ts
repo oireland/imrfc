@@ -3,11 +3,8 @@ import {
   lowerQuantity,
   mergePortions,
   moveMultiple,
-  movePortion,
-  raiseQuantity,
   singlePlace,
   totalQuantity,
-  wholeQuantityMove,
   type Portion,
 } from "./portions";
 
@@ -71,61 +68,6 @@ describe("singlePlace", () => {
     const a = portion({ count: 4, storeId: "shed" });
     const b = portion({ count: 4, whereaboutsType: "holder", storeId: null, holderId: "sam" });
     expect(singlePlace([a, b])).toBeUndefined();
-  });
-});
-
-describe("movePortion", () => {
-  it("moves a count from one place to another, merging at the destination", () => {
-    const shed = portion({ count: 8, storeId: "shed" });
-    const result = movePortion([shed], {
-      count: 4,
-      from: { type: "store", storeId: "shed" },
-      to: { type: "holder", holderId: "sam" },
-    });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.portions).toEqual([
-      expect.objectContaining({ count: 4, whereaboutsType: "store", storeId: "shed" }),
-      expect.objectContaining({ count: 4, whereaboutsType: "holder", holderId: "sam" }),
-    ]);
-  });
-
-  it("merges into an existing portion already at the destination", () => {
-    const shed = portion({ count: 8, storeId: "shed" });
-    const withSam = portion({ count: 2, whereaboutsType: "holder", storeId: null, holderId: "sam" });
-    const result = movePortion([shed, withSam], {
-      count: 4,
-      from: { type: "store", storeId: "shed" },
-      to: { type: "holder", holderId: "sam" },
-    });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.portions).toEqual([
-      expect.objectContaining({ count: 4, whereaboutsType: "store", storeId: "shed" }),
-      expect.objectContaining({ count: 6, whereaboutsType: "holder", holderId: "sam" }),
-    ]);
-  });
-
-  it("rejects moving more than is at the source place", () => {
-    const shed = portion({ count: 3, storeId: "shed" });
-    const result = movePortion([shed], {
-      count: 4,
-      from: { type: "store", storeId: "shed" },
-      to: { type: "holder", holderId: "sam" },
-    });
-    expect(result).toEqual({ ok: false, error: "There aren't 4 there to move." });
-  });
-
-  it("removes the source portion entirely when its whole count moves", () => {
-    const shed = portion({ count: 4, storeId: "shed" });
-    const result = movePortion([shed], {
-      count: 4,
-      from: { type: "store", storeId: "shed" },
-      to: { type: "holder", holderId: "sam" },
-    });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.portions).toEqual([expect.objectContaining({ count: 4, holderId: "sam" })]);
   });
 });
 
@@ -200,32 +142,6 @@ describe("moveMultiple", () => {
   });
 });
 
-describe("wholeQuantityMove", () => {
-  it("consolidates every portion into one at the target place", () => {
-    const shed = portion({ count: 4, storeId: "shed" });
-    const sam = portion({ count: 4, whereaboutsType: "holder", storeId: null, holderId: "sam" });
-    const result = wholeQuantityMove([shed, sam], { type: "holder", holderId: "tom" });
-    expect(result).toEqual([expect.objectContaining({ count: 8, whereaboutsType: "holder", holderId: "tom" })]);
-  });
-});
-
-describe("raiseQuantity", () => {
-  it("adds the extra count at Home, merging with any portion already there", () => {
-    const shed = portion({ count: 4, storeId: "shed" });
-    const result = raiseQuantity([shed], { storeId: "shed", addCount: 2 });
-    expect(result).toEqual([expect.objectContaining({ count: 6, storeId: "shed" })]);
-  });
-
-  it("adds a new portion at Home when nothing is there yet", () => {
-    const sam = portion({ count: 4, whereaboutsType: "holder", storeId: null, holderId: "sam" });
-    const result = raiseQuantity([sam], { storeId: "shed", addCount: 2 });
-    expect(result).toEqual([
-      expect.objectContaining({ count: 4, holderId: "sam" }),
-      expect.objectContaining({ count: 2, storeId: "shed" }),
-    ]);
-  });
-});
-
 describe("lowerQuantity", () => {
   it("removes the count automatically when there is only one portion", () => {
     const shed = portion({ count: 8, storeId: "shed" });
@@ -268,12 +184,3 @@ describe("lowerQuantity", () => {
   });
 });
 
-describe("movePortion counts", () => {
-  it("rejects zero, negative and fractional counts", () => {
-    const shed = portion({ count: 4 });
-    for (const count of [0, -3, 1.5, Number.NaN]) {
-      const result = movePortion([shed], { count, from: { type: "store", storeId: "shed" }, to: { type: "holder", holderId: "tom" } });
-      expect(result.ok).toBe(false);
-    }
-  });
-});

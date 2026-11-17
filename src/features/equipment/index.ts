@@ -1,20 +1,19 @@
 import type { Db } from "@/db/types";
 import { LIMITS, firstTooLong } from "@/lib/text-limits";
-import { and, desc, eq, gt, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import { equipmentPortion, equipmentUnit, movementLogEntry } from "./schema";
 import { archiveStore } from "@/features/stores";
 import { validateEquipmentUnit, type NewEquipmentUnit } from "./rules";
 import {
+  countAt,
   lowerQuantity as lowerQuantityRule,
   moveMultiple,
-  movePortion,
-  raiseQuantity as raiseQuantityRule,
   singlePlace,
-  totalQuantity,
-  wholeQuantityMove,
+  toPlace,
   type Place,
   type Portion,
 } from "./portions";
+import { applyEntry, replay, type LedgerEntry } from "./ledger";
 
 export { equipmentUnit, equipmentPortion } from "./schema";
 export { validateEquipmentUnit } from "./rules";
@@ -23,6 +22,8 @@ export { describeWhereabouts, groupByWhereabouts, quickMoveFor } from "./whereab
 export type { EquipmentRow, QuickMove, WhereaboutsGroup, WhereaboutsNames } from "./whereabouts";
 export { singlePlace, totalQuantity } from "./portions";
 export type { Place, Portion } from "./portions";
+export { sameWhereabouts } from "./ledger";
+export type { LedgerEntry } from "./ledger";
 
 
 export type EquipmentUnit = typeof equipmentUnit.$inferSelect;
@@ -52,7 +53,7 @@ async function loadPortions(db: Db, equipmentUnitId: string): Promise<Portion[]>
   return db.select().from(equipmentPortion).where(eq(equipmentPortion.equipmentUnitId, equipmentUnitId));
 }
 
-/** Replaces every Portion of an Equipment Unit with the given set. */
+/** Replaces every Portion of an Equipment Unit with the given set. Only `appendToLedger` calls this. */
 async function savePortions(db: Db, equipmentUnitId: string, portions: Portion[]) {
   await db.delete(equipmentPortion).where(eq(equipmentPortion.equipmentUnitId, equipmentUnitId));
   if (portions.length === 0) return;
@@ -69,6 +70,97 @@ async function savePortions(db: Db, equipmentUnitId: string, portions: Portion[]
   );
 }
 
+type PlaceColumns<P extends "from" | "to"> = { [K in `${P}Type`]: Place["type"] | null } & {
+  [K in `${P}StoreId` | `${P}HolderId` | `${P}LastSeenEventId`]: string | null;
+};
+
+function placeColumns<P extends "from" | "to">(prefix: P, place: Place | undefined): PlaceColumns<P> {
+  return {
+    [`${prefix}Type`]: place?.type ?? null,
+    [`${prefix}StoreId`]: place?.type === "store" ? place.storeId : null,
+    [`${prefix}HolderId`]: place?.type === "holder" ? place.holderId : null,
+    [`${prefix}LastSeenEventId`]: place?.type === "unconfirmed" ? place.lastSeenEventId : null,
+  } as PlaceColumns<P>;
+}
+
+function placeFromColumns(type: string | null, storeId: string | null, holderId: string | null, lastSeenEventId: string | null): Place | undefined {
+  if (type === "store" && storeId) return { type: "store", storeId };
+  if (type === "holder" && holderId) return { type: "holder", holderId };
+  if (type === "unconfirmed" && lastSeenEventId) return { type: "unconfirmed", lastSeenEventId };
+  return undefined;
+}
+
+/** A stored entry as the ledger reads it, or why it can't be read. */
+function toLedgerEntry(row: MovementLogEntry): LedgerEntry | string {
+  const from = placeFromColumns(row.fromType, row.fromStoreId, row.fromHolderId, row.fromLastSeenEventId);
+  const to = placeFromColumns(row.toType, row.toStoreId, row.toHolderId, row.toLastSeenEventId);
+  const count = row.count ?? 0;
+  switch (row.kind) {
+    case "condition_note":
+      return { kind: "condition_note" };
+    case "added":
+    case "bought":
+      return to ? { kind: row.kind, count, to } : `${row.kind} entry ${row.id} doesn't say where to`;
+    case "lost":
+      return from ? { kind: "lost", count, from } : `lost entry ${row.id} doesn't say where from`;
+    case "move":
+    case "unconfirmed":
+      return from && to ? { kind: row.kind, count, from, to } : `${row.kind} entry ${row.id} doesn't say where from and to`;
+  }
+}
+
+/**
+ * Appends entries to an Equipment Unit's Movement Log and brings its Portions up to date to match,
+ * all in the caller's transaction (which must hold the unit lock, or be creating the unit). This is
+ * the only way the Whereabouts changes: the Portions are always what replaying the log gives.
+ */
+async function appendToLedger(
+  db: Db,
+  equipmentUnitId: string,
+  userId: string | null,
+  entries: LedgerEntry[],
+  reason?: "ad_hoc" | "duty",
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (entries.length === 0) return { ok: true };
+  let portions = await loadPortions(db, equipmentUnitId);
+  for (const entry of entries) {
+    const applied = applyEntry(portions, entry, equipmentUnitId);
+    if (!applied.ok) return applied;
+    portions = applied.portions;
+  }
+  // One statement, so `seq` follows the order of `entries`.
+  await db.insert(movementLogEntry).values(
+    entries.map((entry) => ({
+      id: crypto.randomUUID(),
+      equipmentUnitId,
+      kind: entry.kind,
+      userId,
+      reason: entry.kind === "move" ? (reason ?? "ad_hoc") : null,
+      count: entry.kind === "condition_note" ? null : entry.count,
+      ...placeColumns("from", "from" in entry ? entry.from : undefined),
+      ...placeColumns("to", "to" in entry ? entry.to : undefined),
+    })),
+  );
+  await savePortions(db, equipmentUnitId, portions);
+  return { ok: true };
+}
+
+/** An Equipment Unit's Portions rebuilt from nothing but its Movement Log. */
+export async function replayWhereabouts(db: Db, equipmentUnitId: string): Promise<{ ok: true; portions: Portion[] } | { ok: false; error: string }> {
+  const rows: MovementLogEntry[] = await db
+    .select()
+    .from(movementLogEntry)
+    .where(eq(movementLogEntry.equipmentUnitId, equipmentUnitId))
+    .orderBy(asc(movementLogEntry.seq));
+  const entries: LedgerEntry[] = [];
+  for (const row of rows) {
+    const entry = toLedgerEntry(row);
+    if (typeof entry === "string") return { ok: false, error: entry };
+    entries.push(entry);
+  }
+  return replay(equipmentUnitId, entries);
+}
+
 export async function listEquipmentUnits(
   db: Db,
   { includeRetired = false }: { includeRetired?: boolean } = {},
@@ -77,6 +169,7 @@ export async function listEquipmentUnits(
   return db.select().from(equipmentUnit).where(ne(equipmentUnit.status, "retired"));
 }
 
+/** Adds an Equipment Unit with its whole Quantity at Home, logged as added by `input.addedBy`. */
 export async function createEquipmentUnit(
   db: Db,
   input: NewEquipmentUnit,
@@ -95,13 +188,9 @@ export async function createEquipmentUnit(
         quantity,
       })
       .returning();
-    await tx.insert(equipmentPortion).values({
-      id: crypto.randomUUID(),
-      equipmentUnitId: created.id,
-      count: quantity,
-      whereaboutsType: "store",
-      storeId: input.homeId,
-    });
+    await appendToLedger(tx, created.id, input.addedBy ?? null, [
+      { kind: "added", count: quantity, to: { type: "store", storeId: input.homeId } },
+    ]);
     return created;
   });
   return { ok: true, equipmentUnit: row };
@@ -166,25 +255,9 @@ export async function setConditionNote(
   return { ok: true };
 }
 
-function logTarget(target: MoveTarget) {
-  return {
-    toType: target.type,
-    toStoreId: target.type === "store" ? target.storeId : null,
-    toHolderId: target.type === "holder" ? target.holderId : null,
-  };
-}
-
-function logSource(from: Place) {
-  return {
-    fromType: from.type,
-    fromStoreId: from.type === "store" ? from.storeId : null,
-    fromHolderId: from.type === "holder" ? from.holderId : null,
-  };
-}
-
 /**
  * Records a Move. With no `count`/`from`, the whole Quantity moves (every Portion
- * consolidates into one, at the target) — how Duties confirm today. With `from`
+ * consolidates into one, at the target, with an entry for each Place it left). With `from`
  * (and optionally a `count`, defaulting to everything there), only that Portion moves —
  * an ad-hoc Move on a counted Equipment Unit that is split across places.
  */
@@ -210,37 +283,15 @@ async function recordMoveLocked(
   reason: "ad_hoc" | "duty",
   options?: { count?: number; from?: Place },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const portions = await loadPortions(db, equipmentUnitId);
-
-  let nextPortions: Portion[];
-  let movedCount: number;
-  let from: Place;
-
   if (options?.from) {
-    from = options.from;
-    movedCount = options.count ?? portionCountAt(portions, from);
-    const moved = movePortion(portions, { count: movedCount, from, to: target });
-    if (!moved.ok) return moved;
-    nextPortions = moved.portions;
-  } else {
-    from = singlePlace(portions) ?? { type: "store", storeId: "" };
-    movedCount = totalQuantity(portions);
-    nextPortions = wholeQuantityMove(portions, target);
+    const portions = await loadPortions(db, equipmentUnitId);
+    const count = options.count ?? countAt(portions, options.from);
+    return appendToLedger(db, equipmentUnitId, userId, [{ kind: "move", count, from: options.from, to: target }], reason);
   }
-
-  await savePortions(db, equipmentUnitId, nextPortions);
-
-  await db.insert(movementLogEntry).values({
-    id: crypto.randomUUID(),
-    equipmentUnitId,
-    kind: "move",
-    userId,
-    reason,
-    count: movedCount,
-    ...logSource(from),
-    ...logTarget(target),
-  });
-  return { ok: true };
+  // Every Place it's at, the target included, so "I've got it" still logs a Move when it's already there.
+  const portions = await loadPortions(db, equipmentUnitId);
+  const entries: LedgerEntry[] = portions.map((p) => ({ kind: "move", count: p.count, from: toPlace(p), to: target }));
+  return appendToLedger(db, equipmentUnitId, userId, entries, reason);
 }
 
 function samePlace(a: Place, b: MoveTarget): boolean {
@@ -293,40 +344,23 @@ async function recordSplitMoveLocked(
   reason: "ad_hoc" | "duty",
   { sources, targets }: { sources: { from: Place; count: number }[]; targets: { to: MoveTarget; count: number }[] },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const portions = await loadPortions(db, equipmentUnitId);
-  const moved = moveMultiple(portions, { sources, targets });
-  if (!moved.ok) return moved;
-  await savePortions(db, equipmentUnitId, moved.portions);
-
+  // Checks the whole Move adds up and each source has enough, with the messages people see.
+  const checked = moveMultiple(await loadPortions(db, equipmentUnitId), { sources, targets });
+  if (!checked.ok) return checked;
   const flows = pairFlows(sources, targets).filter((f) => !samePlace(f.from, f.to));
-  for (const f of flows) {
-    await db.insert(movementLogEntry).values({
-      id: crypto.randomUUID(),
-      equipmentUnitId,
-      kind: "move",
-      userId,
-      reason,
-      count: f.count,
-      ...logSource(f.from),
-      ...logTarget(f.to),
-    });
-  }
-  return { ok: true };
-}
-
-function portionCountAt(portions: Portion[], place: Place): number {
-  return (
-    portions.find((p) => {
-      if (place.type === "store") return p.whereaboutsType === "store" && p.storeId === place.storeId;
-      if (place.type === "holder") return p.whereaboutsType === "holder" && p.holderId === place.holderId;
-      return p.whereaboutsType === "unconfirmed" && p.lastSeenEventId === place.lastSeenEventId;
-    })?.count ?? 0
+  return appendToLedger(
+    db,
+    equipmentUnitId,
+    userId,
+    flows.map((f) => ({ kind: "move", count: f.count, from: f.from, to: f.to })),
+    reason,
   );
 }
 
 /**
  * The Equipment Unit's Whereabouts is unknown: the count at the given source Place (or the
- * whole Quantity, with no `from`) was last seen at the given Event. No Move is recorded.
+ * whole Quantity, with no `from`) was last seen at the given Event. Logged with no User, and not as
+ * a Move: nobody did this.
  */
 export async function setUnconfirmed(db: Db, equipmentUnitId: string, lastSeenEventId: string, from?: Place, count?: number) {
   return withUnitLock(db, equipmentUnitId, (tx) => setUnconfirmedLocked(tx, equipmentUnitId, lastSeenEventId, from, count));
@@ -334,18 +368,19 @@ export async function setUnconfirmed(db: Db, equipmentUnitId: string, lastSeenEv
 
 async function setUnconfirmedLocked(db: Db, equipmentUnitId: string, lastSeenEventId: string, from?: Place, count?: number) {
   const portions = await loadPortions(db, equipmentUnitId);
-  const target: Place = { type: "unconfirmed", lastSeenEventId };
-  let nextPortions: Portion[];
+  const to: Place = { type: "unconfirmed", lastSeenEventId };
+  let entries: LedgerEntry[];
   if (from) {
-    const available = portionCountAt(portions, from);
+    const available = countAt(portions, from);
     const moveCount = count !== undefined ? Math.min(count, available) : available;
     if (moveCount < 1) return;
-    const moved = movePortion(portions, { count: moveCount, from, to: target });
-    nextPortions = moved.ok ? moved.portions : portions;
+    entries = [{ kind: "unconfirmed", count: moveCount, from, to }];
   } else {
-    nextPortions = wholeQuantityMove(portions, target);
+    entries = portions
+      .filter((p) => p.lastSeenEventId !== lastSeenEventId)
+      .map((p) => ({ kind: "unconfirmed", count: p.count, from: toPlace(p), to }));
   }
-  await savePortions(db, equipmentUnitId, nextPortions);
+  await appendToLedger(db, equipmentUnitId, null, entries);
 }
 
 /** Whether any equipment is Unconfirmed, last seen at this Event. */
@@ -393,24 +428,11 @@ async function raiseQuantityLocked(
   userId: string,
   addCount: number,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const [unit, portions] = await Promise.all([getEquipmentUnit(db, equipmentUnitId), loadPortions(db, equipmentUnitId)]);
+  const unit = await getEquipmentUnit(db, equipmentUnitId);
   if (!unit) return { ok: false, error: "That equipment no longer exists." };
 
-  const nextPortions = raiseQuantityRule(portions, { storeId: unit.homeId, addCount });
   await db.update(equipmentUnit).set({ quantity: unit.quantity + addCount }).where(eq(equipmentUnit.id, equipmentUnitId));
-  await savePortions(db, equipmentUnitId, nextPortions);
-  await db.insert(movementLogEntry).values({
-    id: crypto.randomUUID(),
-    equipmentUnitId,
-    kind: "move",
-    userId,
-    reason: "ad_hoc",
-    count: addCount,
-    toType: "store",
-    toStoreId: unit.homeId,
-    conditionNote: `Bought ${addCount}`,
-  });
-  return { ok: true };
+  return appendToLedger(db, equipmentUnitId, userId, [{ kind: "bought", count: addCount, to: { type: "store", storeId: unit.homeId } }]);
 }
 
 /** Lowers an Equipment Unit's Quantity; Committee picks the Place when split. Logged in the Movement Log. */
@@ -437,20 +459,11 @@ async function lowerQuantityLocked(
 
   const result = lowerQuantityRule(portions, { removeCount, from });
   if (!result.ok) return result;
+  // The rule only succeeds with a `from` or a unit at a single Place.
+  const place = (from ?? singlePlace(portions))!;
 
   await db.update(equipmentUnit).set({ quantity: unit.quantity - removeCount }).where(eq(equipmentUnit.id, equipmentUnitId));
-  await savePortions(db, equipmentUnitId, result.portions);
-  await db.insert(movementLogEntry).values({
-    id: crypto.randomUUID(),
-    equipmentUnitId,
-    kind: "move",
-    userId,
-    reason: "ad_hoc",
-    count: removeCount,
-    ...(from ? logSource(from) : {}),
-    conditionNote: `Lost ${removeCount}`,
-  });
-  return { ok: true };
+  return appendToLedger(db, equipmentUnitId, userId, [{ kind: "lost", count: removeCount, from: place }]);
 }
 
 /**
@@ -489,7 +502,7 @@ export async function listMovementLog(db: Db, equipmentUnitId: string): Promise<
     .select()
     .from(movementLogEntry)
     .where(eq(movementLogEntry.equipmentUnitId, equipmentUnitId))
-    .orderBy(desc(movementLogEntry.createdAt));
+    .orderBy(desc(movementLogEntry.seq));
 }
 
 /** Equipment Units currently with this User as Holder (Retired ones are out of circulation), with the count held. */

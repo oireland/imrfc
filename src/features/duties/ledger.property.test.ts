@@ -3,8 +3,9 @@
 // Quantity changes and Duty Confirms. After every step the database must match the model, its
 // Quantity must equal what's actually anywhere, and nothing may be lost or invented.
 //
-// Not covered here: concurrency (PGlite has one connection; see the real-Postgres locking test) and
-// replaying the Movement Log (it can't describe every change yet).
+// Replaying the Movement Log from nothing must also give the same Portions after every step.
+//
+// Not covered here: concurrency (PGlite has one connection; see the real-Postgres locking test).
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { createTestDb } from "@/test/db";
@@ -46,6 +47,8 @@ import {
   raiseQuantity,
   recordMove,
   recordSplitMove,
+  replayWhereabouts,
+  sameWhereabouts,
   setQuantity,
   setUnconfirmed,
   type MoveTarget,
@@ -242,6 +245,8 @@ describe("The equipment ledger under random sequences of changes", () => {
           const portions = await getPortions(db, unitId);
           expect(portionPairs(portions), `after ${step}`).toEqual(modelPairs(model));
           expect(problemsWith(portions), `after ${step}`).toEqual([]);
+          const replayed = await replayWhereabouts(db, unitId);
+          expect(replayed.ok && sameWhereabouts(replayed.portions, portions), `replay after ${step}`).toBe(true);
           expect((await getEquipmentUnit(db, unitId))?.quantity, `Quantity after ${step}`).toBe(modelTotal(model));
         }
       }),

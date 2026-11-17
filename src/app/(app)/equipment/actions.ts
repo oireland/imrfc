@@ -14,7 +14,7 @@ export async function addEquipmentUnit(input: {
 }): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const user = await requireApprovedUser();
   if (!isCommitteeOrAbove(user.role)) return { ok: false, error: "Only Committee can add equipment." };
-  const result = await createEquipmentUnit(db, input);
+  const result = await createEquipmentUnit(db, { ...input, addedBy: user.id });
   if (!result.ok) return result;
   revalidatePath("/equipment");
   return { ok: true, id: result.equipmentUnit.id };

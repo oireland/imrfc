@@ -14,6 +14,8 @@ import {
   lowerQuantity,
   raiseQuantity,
   recordMove,
+  recordSplitMove,
+  replayWhereabouts,
   retireEquipmentUnit,
   archiveStoreIfUnused,
   setConditionNote,
@@ -21,6 +23,7 @@ import {
   setQuantity,
   setUnconfirmed,
 } from "./index";
+import { sameWhereabouts } from "./ledger";
 
 async function seedHome(db: Awaited<ReturnType<typeof createTestDb>>) {
   const [row] = await db
@@ -154,7 +157,7 @@ describe("retireEquipmentUnit", () => {
     expect(await listEquipmentUnits(db)).toEqual([]);
     expect(await listEquipmentUnits(db, { includeRetired: true })).toMatchObject([{ status: "retired" }]);
     expect(await getPortions(db, created.equipmentUnit.id)).toMatchObject([{ count: 1, storeId: home.id }]);
-    expect(await listMovementLog(db, created.equipmentUnit.id)).toHaveLength(1);
+    expect((await listMovementLog(db, created.equipmentUnit.id)).map((e) => e.kind)).toEqual(["condition_note", "added"]);
   });
 
   it("says so when the Equipment Unit doesn't exist", async () => {
@@ -183,7 +186,7 @@ describe("Moves in a hurry", () => {
     }
 
     expect((await getPortions(db, id)).reduce((n, p) => n + p.count, 0)).toBe(1);
-    expect(await listMovementLog(db, id)).toEqual([]);
+    expect((await listMovementLog(db, id)).map((e) => e.kind)).toEqual(["added"]);
   });
 
   it("keeps the counts right when several Moves of one Equipment Unit happen at once", async () => {
@@ -229,6 +232,7 @@ describe("setConditionNote", () => {
     const log = await listMovementLog(db, created.equipmentUnit.id);
     expect(log).toMatchObject([
       { kind: "condition_note", userId: alex.id, conditionNote: "2 balls need pumping" },
+      { kind: "added", count: 1, toStoreId: home.id },
     ]);
   });
 });
@@ -249,7 +253,8 @@ describe("recordMove", () => {
 
     const log = await listMovementLog(db, created.equipmentUnit.id);
     expect(log).toMatchObject([
-      { kind: "move", reason: "ad_hoc", count: 1, toType: "holder", toHolderId: alex.id },
+      { kind: "move", reason: "ad_hoc", count: 1, fromStoreId: home.id, toType: "holder", toHolderId: alex.id },
+      { kind: "added" },
     ]);
   });
 
@@ -342,8 +347,8 @@ describe("recordSplitMove", () => {
     expect(portions).toHaveLength(2);
     const log = await listMovementLog(db, equipmentUnitId);
     // No log entry for Sam's own portion (it stayed with them) — only Home → Tom is a real Move,
-    // on top of the ad-hoc setup Move from the top of the test.
-    expect(log).toHaveLength(2);
+    // on top of the ad-hoc setup Move from the top of the test and the starting stock.
+    expect(log).toHaveLength(3);
     expect(log[0]).toMatchObject({ kind: "move", reason: "duty", count: 2, fromType: "store", toHolderId: tom.id });
   });
 
@@ -398,7 +403,7 @@ describe("raiseQuantity", () => {
     const portions = await getPortions(db, created.equipmentUnit.id);
     expect(portions).toMatchObject([{ count: 8, whereaboutsType: "store", storeId: home.id }]);
     const log = await listMovementLog(db, created.equipmentUnit.id);
-    expect(log[0]).toMatchObject({ count: 2, conditionNote: "Bought 2" });
+    expect(log[0]).toMatchObject({ kind: "bought", count: 2, conditionNote: null });
   });
 });
 
@@ -419,7 +424,7 @@ describe("lowerQuantity", () => {
     const portions = await getPortions(db, created.equipmentUnit.id);
     expect(portions).toMatchObject([{ count: 6 }]);
     const log = await listMovementLog(db, created.equipmentUnit.id);
-    expect(log[0]).toMatchObject({ count: 2, conditionNote: "Lost 2" });
+    expect(log[0]).toMatchObject({ kind: "lost", count: 2, conditionNote: null });
   });
 
   it("rejects lowering below 1", async () => {
@@ -454,7 +459,7 @@ describe("setQuantity", () => {
 
     expect(result.ok).toBe(true);
     expect((await listEquipmentUnits(db))[0].quantity).toBe(8);
-    expect((await listMovementLog(db, id))[0]).toMatchObject({ count: 2, conditionNote: "Bought 2" });
+    expect((await listMovementLog(db, id))[0]).toMatchObject({ kind: "bought", count: 2, conditionNote: null });
   });
 
   it("lowers to the new Quantity, logged as lost", async () => {
@@ -464,7 +469,7 @@ describe("setQuantity", () => {
 
     expect(result.ok).toBe(true);
     expect((await listEquipmentUnits(db))[0].quantity).toBe(5);
-    expect((await listMovementLog(db, id))[0]).toMatchObject({ count: 3, conditionNote: "Lost 3" });
+    expect((await listMovementLog(db, id))[0]).toMatchObject({ kind: "lost", count: 3, conditionNote: null });
   });
 
   it("does nothing when the Quantity is unchanged", async () => {
@@ -473,7 +478,7 @@ describe("setQuantity", () => {
     const result = await setQuantity(db, id, alex.id, 8);
 
     expect(result.ok).toBe(true);
-    expect(await listMovementLog(db, id)).toEqual([]);
+    expect((await listMovementLog(db, id)).map((e) => e.kind)).toEqual(["added"]);
   });
 
   it("rejects anything below 1", async () => {
@@ -576,7 +581,7 @@ describe("setConditionNote length limit", () => {
 
     expect(result).toEqual({ ok: false, error: "The note is too long. Keep it to 1000 characters or fewer." });
     expect((await listEquipmentUnits(db))[0].conditionNote).toBe("");
-    expect(await listMovementLog(db, created.equipmentUnit.id)).toEqual([]);
+    expect((await listMovementLog(db, created.equipmentUnit.id)).map((e) => e.kind)).toEqual(["added"]);
   });
 });
 
@@ -595,5 +600,96 @@ describe("hasEquipmentUnconfirmedAt", () => {
 
     expect(await hasEquipmentUnconfirmedAt(db, "event-1")).toBe(true);
     expect(await hasEquipmentUnconfirmedAt(db, "event-2")).toBe(false);
+  });
+});
+
+describe("the Movement Log is the source of truth", () => {
+  async function expectReplayMatches(db: Awaited<ReturnType<typeof createTestDb>>, equipmentUnitId: string) {
+    const replayed = await replayWhereabouts(db, equipmentUnitId);
+    if (!replayed.ok) throw new Error(replayed.error);
+    expect(sameWhereabouts(replayed.portions, await getPortions(db, equipmentUnitId))).toBe(true);
+  }
+
+  it("replays to the same Portions after every kind of change to the Whereabouts", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const [other] = await db.insert(store).values({ id: "clubhouse", name: "Clubhouse", address: "W12" }).returning();
+    const alex = await seedUser(db);
+    const sam = await seedUser(db);
+    await seedEvent(db, "match-1");
+
+    const created = await createEquipmentUnit(db, { name: "Cones", homeId: home.id, quantity: 10, addedBy: alex.id });
+    if (!created.ok) throw new Error(created.error);
+    const id = created.equipmentUnit.id;
+    await expectReplayMatches(db, id);
+
+    const atHome = { type: "store" as const, storeId: home.id };
+    const withSam = { type: "holder" as const, holderId: sam.id };
+
+    expect(await recordMove(db, id, alex.id, withSam, "ad_hoc", { count: 4, from: atHome })).toEqual({ ok: true });
+    await expectReplayMatches(db, id);
+
+    expect(
+      await recordSplitMove(db, id, alex.id, "duty", {
+        sources: [{ from: atHome, count: 2 }, { from: withSam, count: 1 }],
+        targets: [{ to: { type: "store", storeId: other.id }, count: 2 }, { to: { type: "holder", holderId: alex.id }, count: 1 }],
+      }),
+    ).toEqual({ ok: true });
+    await expectReplayMatches(db, id);
+
+    await setUnconfirmed(db, id, "match-1", withSam, 2);
+    await expectReplayMatches(db, id);
+
+    expect(await raiseQuantity(db, id, alex.id, 3)).toEqual({ ok: true });
+    await expectReplayMatches(db, id);
+
+    expect(await lowerQuantity(db, id, alex.id, 2, { type: "unconfirmed", lastSeenEventId: "match-1" })).toEqual({ ok: true });
+    await expectReplayMatches(db, id);
+
+    expect(await setConditionNote(db, id, alex.id, "Two split")).toEqual({ ok: true });
+    await expectReplayMatches(db, id);
+
+    // Moving the whole Quantity of a split unit and marking it all Unconfirmed log every Place it left.
+    expect(await recordMove(db, id, alex.id, atHome)).toEqual({ ok: true });
+    await expectReplayMatches(db, id);
+    await recordMove(db, id, alex.id, withSam, "ad_hoc", { count: 5, from: atHome });
+    await setUnconfirmed(db, id, "match-1");
+    await expectReplayMatches(db, id);
+  });
+
+  it("replays a unit whose Quantity is lowered without saying where from", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const alex = await seedUser(db);
+    const created = await createEquipmentUnit(db, { name: "Bibs", homeId: home.id, quantity: 5, addedBy: alex.id });
+    if (!created.ok) throw new Error(created.error);
+
+    expect(await setQuantity(db, created.equipmentUnit.id, alex.id, 3)).toEqual({ ok: true });
+
+    await expectReplayMatches(db, created.equipmentUnit.id);
+  });
+
+  it("orders entries made in the same moment by when they were written", async () => {
+    const db = await createTestDb();
+    await migrate(db);
+    const home = await seedHome(db);
+    const alex = await seedUser(db);
+    const created = await createEquipmentUnit(db, { name: "Tackle pad", homeId: home.id, addedBy: alex.id });
+    if (!created.ok) throw new Error(created.error);
+    const id = created.equipmentUnit.id;
+    const withAlex = { type: "holder" as const, holderId: alex.id };
+
+    // One transaction: every entry gets the same created_at.
+    await db.transaction(async (tx) => {
+      for (let i = 0; i < 5; i++) {
+        await recordMove(tx, id, alex.id, withAlex);
+        await recordMove(tx, id, alex.id, { type: "store", storeId: home.id });
+      }
+      await recordMove(tx, id, alex.id, withAlex);
+    });
+
+    await expectReplayMatches(db, id);
   });
 });

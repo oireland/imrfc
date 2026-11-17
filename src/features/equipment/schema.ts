@@ -1,14 +1,14 @@
 import { sql, type SQL } from "drizzle-orm";
-import { check, index, integer, pgTable, text, timestamp, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { bigint, check, index, integer, pgTable, text, timestamp, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { store } from "@/features/stores";
 import { event } from "@/features/events";
 import { user } from "@/features/users";
 
 const EQUIPMENT_STATUSES = ["active", "missing", "retired"] as const;
 const PLACE_TYPES = ["store", "holder", "unconfirmed"] as const;
-const LOG_KINDS = ["move", "condition_note"] as const;
+// Every kind but condition_note changes the Whereabouts; see ledger.ts.
+const LOG_KINDS = ["added", "bought", "lost", "move", "unconfirmed", "condition_note"] as const;
 const MOVE_REASONS = ["ad_hoc", "duty"] as const;
-const MOVE_TARGET_TYPES = ["store", "holder"] as const;
 
 /** A CHECK that the column holds one of the enum's values (or NULL); Drizzle's text enums are TypeScript-only. */
 function oneOf(column: AnyPgColumn, values: readonly string[]): SQL {
@@ -66,17 +66,20 @@ export const equipmentPortion = pgTable(
   ],
 );
 
+// The ledger: replaying a unit's entries in `seq` order rebuilds its Portions (ledger.ts).
 export const movementLogEntry = pgTable(
   "movement_log_entry",
   {
     id: text("id").primaryKey(),
+    // Order of writing. created_at can't order entries: it's the same for every entry in a transaction.
+    seq: bigint("seq", { mode: "number" }).notNull().generatedAlwaysAsIdentity(),
     equipmentUnitId: text("equipment_unit_id")
       .notNull()
       .references(() => equipmentUnit.id),
     kind: text("kind", { enum: LOG_KINDS }).notNull(),
-    userId: text("user_id")
-      .notNull()
-      .references(() => user.id),
+    // Null for Unconfirmed (nobody records it: it happens when nobody Confirms) and for stock added
+    // with no known User.
+    userId: text("user_id").references(() => user.id),
     // Move fields (kind = "move")
     reason: text("reason", { enum: MOVE_REASONS }),
     // How many moved, and where from — only meaningful for a counted Equipment Unit.
@@ -84,9 +87,12 @@ export const movementLogEntry = pgTable(
     fromType: text("from_type", { enum: PLACE_TYPES }),
     fromStoreId: text("from_store_id").references(() => store.id),
     fromHolderId: text("from_holder_id").references(() => user.id),
-    toType: text("to_type", { enum: MOVE_TARGET_TYPES }),
+    // No foreign key: replay needs the id even after the Event is deleted.
+    fromLastSeenEventId: text("from_last_seen_event_id"),
+    toType: text("to_type", { enum: PLACE_TYPES }),
     toStoreId: text("to_store_id").references(() => store.id),
     toHolderId: text("to_holder_id").references(() => user.id),
+    toLastSeenEventId: text("to_last_seen_event_id"),
     // Condition Note fields (kind = "condition_note")
     conditionNote: text("condition_note"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -96,6 +102,7 @@ export const movementLogEntry = pgTable(
     check("movement_log_entry_kind_valid", oneOf(t.kind, LOG_KINDS)),
     check("movement_log_entry_reason_valid", oneOf(t.reason, MOVE_REASONS)),
     check("movement_log_entry_from_type_valid", oneOf(t.fromType, PLACE_TYPES)),
-    check("movement_log_entry_to_type_valid", oneOf(t.toType, MOVE_TARGET_TYPES)),
+    check("movement_log_entry_to_type_valid", oneOf(t.toType, PLACE_TYPES)),
+    check("movement_log_entry_user_known", sql`${t.userId} is not null or ${t.kind} in ('unconfirmed', 'added')`),
   ],
 );
