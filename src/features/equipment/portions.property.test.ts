@@ -1,4 +1,4 @@
-// Property-based tests for the Portion rules: random sequences of Moves and Quantity changes, each
+// Property-based tests for the Portion and ledger rules: random sequences of Moves and Quantity changes, each
 // checked against a deliberately simple model (a map from Place to count). The rules must accept
 // exactly what the model says is possible, end up exactly where the model does, and never lose or
 // invent equipment.
@@ -26,7 +26,8 @@ import {
   type Model,
   type SourceChoice,
 } from "@/test/whereabouts-model";
-import { lowerQuantity, moveMultiple, movePortion, raiseQuantity, totalQuantity, wholeQuantityMove, type Place, type Portion } from "./portions";
+import { lowerQuantity, moveMultiple, toPlace, totalQuantity, type Place, type Portion } from "./portions";
+import { applyEntry, replay } from "./ledger";
 
 const count = fc.integer({ min: 1, max: 6 });
 
@@ -54,11 +55,15 @@ function apply(portions: Portion[], model: Model, o: Op): { result: Step; expect
   switch (o.kind) {
     case "move": {
       const from = resolveSource(model, o.from);
-      const result = movePortion(portions, { count: o.count, from, to: o.to });
+      const result = applyEntry(portions, { kind: "move", count: o.count, from, to: o.to });
       return { result, expected: o.count <= countAt(model, from) ? shift(model, from, o.to, o.count) : "rejected" };
     }
-    case "moveAll":
-      return { result: { ok: true, portions: wholeQuantityMove(portions, o.to) }, expected: allAt(o.to, modelTotal(model)) };
+    case "moveAll": {
+      // One entry for each Place it's at, as recordMove logs a whole-Quantity Move.
+      let result: Step = { ok: true, portions };
+      for (const p of portions) if (result.ok) result = applyEntry(result.portions, { kind: "move", count: p.count, from: toPlace(p), to: o.to });
+      return { result, expected: allAt(o.to, modelTotal(model)) };
+    }
     case "split": {
       const sources = o.sources.map((s) => ({ from: resolveSource(model, s.from), count: s.count }));
       const sum = sources.reduce((s, x) => s + x.count, 0);
@@ -69,7 +74,7 @@ function apply(portions: Portion[], model: Model, o: Op): { result: Step; expect
     }
     case "raise":
       return {
-        result: { ok: true, portions: raiseQuantity(portions, { storeId: HOME, addCount: o.count }) },
+        result: applyEntry(portions, { kind: "bought", count: o.count, to: { type: "store", storeId: HOME } }),
         expected: add(model, { type: "store", storeId: HOME }, o.count),
       };
     case "lower": {
@@ -84,7 +89,9 @@ function apply(portions: Portion[], model: Model, o: Op): { result: Step; expect
 
 /** An Equipment Unit with `quantity`, all at Home. */
 function start(quantity: number): Portion[] {
-  return [{ id: "p0", equipmentUnitId: "shields", count: quantity, whereaboutsType: "store", storeId: HOME, holderId: null, lastSeenEventId: null }];
+  const added = replay("shields", [{ kind: "added", count: quantity, to: { type: "store", storeId: HOME } }]);
+  if (!added.ok) throw new Error(added.error);
+  return added.portions;
 }
 
 describe("Portion rules under random sequences of Moves and Quantity changes", () => {

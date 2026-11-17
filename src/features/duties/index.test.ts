@@ -207,7 +207,10 @@ describe("Duties", () => {
       expect(await confirmDuty(db, to.id, { id: "tom", role: "member" })).toEqual({ ok: true });
 
       expect(await whereaboutsOf(db, equipment.id)).toMatchObject({ whereaboutsType: "holder", holderId: "tom", storeId: null });
-      expect(await listMovementLog(db, equipment.id)).toMatchObject([{ kind: "move", reason: "duty", userId: "tom", toHolderId: "tom" }]);
+      expect(await listMovementLog(db, equipment.id)).toMatchObject([
+        { kind: "move", reason: "duty", userId: "tom", toHolderId: "tom" },
+        { kind: "added" },
+      ]);
     });
 
     it("a Confirmed From Duty moves the Equipment Unit to Home by default", async () => {
@@ -255,7 +258,7 @@ describe("Duties", () => {
       await claimDuty(db, to.id, "tom");
       await confirmDuty(db, to.id, { id: "tom", role: "member" });
       expect(await confirmDuty(db, to.id, { id: "tom", role: "member" })).toMatchObject({ ok: false });
-      expect(await listMovementLog(db, equipment.id)).toHaveLength(1);
+      expect((await listMovementLog(db, equipment.id)).map((e) => e.kind)).toEqual(["move", "added"]);
     });
 
     it("lets any of several People, not just the confirmer, be a valid confirmer", async () => {
@@ -466,7 +469,12 @@ describe("Duties", () => {
         holderId: null,
         storeId: null,
       });
-      expect(await listMovementLog(db, equipment.id)).toHaveLength(1);
+      // Logged, but not as a Move and not by anyone: nobody did this.
+      expect(await listMovementLog(db, equipment.id)).toMatchObject([
+        { kind: "unconfirmed", userId: null, fromHolderId: "tom", toLastSeenEventId: ev.id },
+        { kind: "move" },
+        { kind: "added" },
+      ]);
     });
 
     it("leaves Equipment Units alone when the From Duty was Confirmed, the Event hasn't ended, or nothing was picked up", async () => {
