@@ -134,3 +134,16 @@ describe("sameWhereabouts", () => {
     expect(sameWhereabouts(a.portions, b.portions)).toBe(false);
   });
 });
+
+describe("opening balance", () => {
+  it("starts replay afresh, ignoring everything logged before it", () => {
+    expect(
+      replayed([
+        { kind: "move", count: 99, from: SHED, to: SAM }, // old, unreplayable history
+        { kind: "opening", count: 6, to: SHED },
+        { kind: "opening", count: 2, to: SAM },
+        { kind: "move", count: 1, from: SHED, to: SAM },
+      ]),
+    ).toEqual({ "store:shed": 5, "holder:sam": 3 });
+  });
+});
