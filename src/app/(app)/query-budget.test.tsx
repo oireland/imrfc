@@ -72,13 +72,18 @@ beforeAll(async () => {
   h.user = { ...me, theme: "system", preferredPosition: null, otherPositions: [], playing: true };
 }, 120_000);
 
-/** How many queries one render of `page` makes. */
-async function queriesFor(page: () => Promise<ReactNode>) {
-  let count = 0;
-  h.db = drizzle(client, { logger: { logQuery: () => void count++ } });
+/** The SQL of every query one render of `page` makes. */
+async function sqlFor(page: () => Promise<ReactNode>) {
+  const sql: string[] = [];
+  h.db = drizzle(client, { logger: { logQuery: (query) => void sql.push(query) } });
   h.requestCache.clear();
   await renderData(await page());
-  return count;
+  return sql;
+}
+
+/** How many queries one render of `page` makes. */
+async function queriesFor(page: () => Promise<ReactNode>) {
+  return (await sqlFor(page)).length;
 }
 
 describe("queries per page render on a seeded season", () => {
@@ -96,15 +101,31 @@ describe("queries per page render on a seeded season", () => {
   // Raise a budget only when the page genuinely needs more, and say why in the report.
   const params = <T,>(value: T) => Promise.resolve(value);
   type Page = (props: never) => Promise<ReactNode>;
-  it.each([
+  const pages = [
     { page: "Home", budget: 30, load: () => import("./page"), props: () => ({}) },
     { page: "Event detail", budget: 43, load: () => import("./events/[id]/page"), props: () => ({ params: params({ id: seeded.nextEventId }) }) },
     { page: "Equipment Unit detail", budget: 15, load: () => import("./equipment/[id]/page"), props: () => ({ params: params({ id: seeded.unitId }) }) },
     { page: "Equipment", budget: 6, load: () => import("./equipment/page"), props: () => ({}) },
     { page: "Events", budget: 15, load: () => import("./events/page"), props: () => ({ searchParams: params({}) }) },
-  ])("$page stays within $budget queries", async ({ load, props, budget }) => {
+  ];
+  it.each(pages)("$page stays within $budget queries", async ({ load, props, budget }) => {
     const page = (await load()).default as Page;
 
     expect(await queriesFor(() => page(props() as never))).toBeLessThanOrEqual(budget);
+  });
+
+  // Rendering a page changes nothing. The one allowed write is `markUnconfirmed` on Home and
+  // Equipment (ADR 0006), and the seeded season has nothing for it to mark.
+  // Event detail's Checklist has Equipment Units with no Duty rows yet, so it must not create them.
+  it.each(pages)("$page writes nothing", async ({ page: name, load, props }) => {
+    const page = (await load()).default as Page;
+    // An upcoming Event nobody has acted on, so none of its Checklist has Duty rows.
+    const { listEvents } = await import("@/features/events");
+    const [, , , untouched] = await listEvents(drizzle(client), { when: "upcoming" });
+    const given = name === "Event detail" ? { params: params({ id: untouched.id }) } : props();
+
+    const writes = (await sqlFor(() => page(given as never))).filter((q) => /^\s*(insert|update|delete)\b/i.test(q));
+
+    expect(writes).toEqual([]);
   });
 });
