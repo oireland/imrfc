@@ -15,12 +15,8 @@ _First written 17 Nov 2026 from a read-through of `src/` that looked for duplica
 | # | Item | Lines | Risk | Touches |
 |---|------|------:|------|---------|
 | 9 | [Portions maths lives in the ledger only](#9-portions-maths-lives-in-the-ledger-only) | ~50 | Medium | `equipment/portions.ts`, `index.ts` |
-| 15 | [Duty actions go through `actOnDuty` only](#15-duty-actions-go-through-actonduty-only) | ~40 | Medium | `duties/index.ts`, tests |
-| 16 | [`ensureDuties` becomes private](#16-ensureduties-becomes-private-after-15) | ~10 | Low, after #15 | `duties/index.ts` |
 | 20 | [Event detail page: move the view model out](#20-event-detail-page-move-the-view-model-out) | ~0 net, −250 in the page | Medium | `events/[id]/page.tsx`, `event-duties.tsx` |
-| 21 | [Equipment detail page: one Portion label](#21-equipment-detail-page-one-portion-label) | ~15 | Low, changes copy | `equipment/[id]/page.tsx` |
-| 22 | [Profile and Player page actions](#22-profile-and-player-page-actions) | ~40 | Low | profile, players, users |
-| 23 | [Remaining leftovers](#23-remaining-leftovers) | ~10 | None | users, `lib/utils.ts`, onboarding |
+| 23 | [Remaining leftovers](#23-remaining-leftovers) | ~10 | None | `lib/utils.ts`, onboarding |
 | 24 | [Cascade deletes inside a feature](#24-cascade-deletes-inside-a-feature-optional) | ~25 | Medium (migration) | duties, injuries, checklists, events |
 | 25 | [Derive Unconfirmed from the ledger](#25-later-derive-unconfirmed-from-the-ledger) | large | High | out of scope for now |
 
@@ -57,42 +53,6 @@ Since L4, production code only uses `moveMultiple` and `lowerQuantity` for their
 
 ---
 
-## Duties
-
-### 15. Duty actions go through `actOnDuty` only
-
-**Where.** `actOnDuty` (`duties/index.ts`) loads the Duty and its People and asks `dutyActions` whether the request is allowed. It then calls `claimDuty`, `leaveDuty`, `handOnDuty`, `assignDuty` or `setDestination`. Each of those loads the Duty and its People **again** and repeats checks that `dutyActions` already made:
-
-- `claimDuty`: "You're already on it." (`dutyActions` only offers `claim` when the viewer isn't on it.)
-- `leaveDuty`: "You're not on that duty." (Only offered when on it.)
-- `setDestination`: "Only the trip back has a destination." (Only offered on a From Duty.)
-- `handOnDuty`: "You can only hand on your own place." (Only offered when on it.)
-
-In production, the five functions are only reached through `actOnDuty`. Tests and `src/test/season.ts` call them directly.
-
-**How.** Make the five functions private and pass them the loaded `row` and `userIds`. That removes five lookups and four branches that can no longer be reached. Keep the checks `dutyActions` can't make: "They're already on it." and the Approved check in `handOnDuty` and `assignDuty`. Move the tests and `season.ts` onto `actOnDuty` (or `actOnEventDuty`) with a viewer, which also tests the path the app really uses.
-
-**Correctness.** `confirmDuty` must keep its own checks: `voidedAt`, nobody on it, `confirmedAt`, and the claim inside the transaction. The concurrency fix (L1) relies on them, so leave `confirmDuty` exported as it is. Most of the work is in the tests: about 60 direct calls across these files:
-
-- `duties/index.test.ts`
-- `event-duties.test.ts`
-- `ledger.property.test.ts`
-- `confirm.pg.test.ts`
-- `push/index.test.ts`
-- `calendar-feed/index.test.ts`
-- `account-deletion/index.test.ts`
-- `src/test/season.ts`
-
-A test helper `claim(db, dutyId, userId)` that calls `actOnDuty` keeps that change mechanical.
-
-### 16. `ensureDuties` becomes private (after #15)
-
-The rest of the duties tidy-ups are done. `ensureDuties` is still exported, but in production only `actOnEventDuty` calls it. Once #15 is done, it can become a private "insert the pair if missing, then load the one row" inside `actOnEventDuty`, and the tests that call it go through `actOnEventDuty` instead.
-
-**Correctness.** The existing duties tests cover this.
-
----
-
 ## The app layer
 
 ### 20. Event detail page: move the view model out
@@ -115,26 +75,6 @@ The page also defines five server actions inline: `cancel`, `remove`, `edit`, `a
 
 **Correctness.** This moves code rather than deleting it, so the risk is in getting the moved text exactly right. The e2e specs `duty-sheet`, `shared-duties`, `confirm`, `kit-list` and `equipment-hand-over` exercise this page. Add a unit test of the extracted function for the `holderOptions` default and the has/have label, since nothing below e2e covers them today.
 
-### 21. Equipment detail page: one Portion label
-
-The rest of #21 is done. The Portion label is still written three ways on `equipment/[id]/page.tsx`:
-
-- the `PortionActions` heading: "in X", "with Y" or "not confirmed — last seen at Z", with an optional "N " prefix;
-- the quantity "which ones?" options: a bare store name, a capitalised person, or "Not confirmed";
-- `describeWhereabouts`, which gives "In X", or "N at X" when split.
-
-**How.** Use `describeWhereabouts([portion], names)` for the single-Portion case, or add one `portionLabel(portion, names, { capitalised })` next to it in `equipment/whereabouts.ts` with a test.
-
-**Correctness.** This was skipped because merging them **changes visible copy**: capitalisation, and "N at X" instead of "N in X". Decide the wording first, checking it against the screens and the glossary in `CONTEXT.md`. Then update `e2e/equipment-hand-over.spec.ts` and `equipment-quantity.spec.ts` if they match on the text.
-
-### 22. Profile and Player page actions
-
-The rest of #22 is done. `savePositions`, `saveMobileNumber` and `togglePlaying` are still each written twice inline, once on the Profile page and once on the Player page. The only differences are the permission check and the paths they revalidate.
-
-**How.** Move them to an `actions.ts` that takes `userId`, with permissions checked in the feature the way `setMobileNumber` already does with `actor`. That would match `away-actions.ts` and `injury-actions.ts`.
-
-**Correctness.** `setPlayerPositions` (players) and `setPlaying` (users, re-exported by players) need an actor parameter, and their tests in `players/index.test.ts` and `users/index.test.ts` move with them. Keep the permission rules exactly as they are: a player edits their own, and the Committee edits anyone's.
-
 ---
 
 ## Leftovers
@@ -143,7 +83,6 @@ The rest of #22 is done. `savePositions`, `saveMobileNumber` and `togglePlaying`
 
 | What | Where | Notes |
 |---|---|---|
-| `setRole`, `blockUser` | `users/index.ts` | Only `changeRole` and `blockUserAs` use them in production. They stay exported because `users/index.test.ts` and `calendar-feed/index.test.ts` import them. Move those tests onto `changeRole` and `blockUserAs`, then make both functions private. |
 | `lib/utils.ts` | `src/lib/utils.ts` | It only re-exports `cn`, and every file now imports `cn` from `"cn"` directly. Delete it and point `components.json` `aliases.utils` at `"cn"`, after checking that the shadcn CLI accepts a package name there. Otherwise keep it, so `shadcn add` keeps working. |
 | `features/onboarding` | whole folder | One five-line pure function plus a re-export. It could live in `users` as `needsOnboarding`. Optional, because ADR 0002 prefers new features to edits. |
 

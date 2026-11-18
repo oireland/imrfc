@@ -6,7 +6,8 @@ import { addToChecklist } from "@/features/checklists";
 import { cancelEvent, createEvent } from "@/features/events";
 import { user } from "@/features/users";
 import { duty } from "./schema";
-import { actOnEventDuty, claimDuty, ensureDuties, listEventDuties, voidDutiesForEvent } from "./index";
+import { claim, ensureDuties } from "@/test/duties";
+import { actOnEventDuty, listEventDuties, voidDutiesForEvent } from "./index";
 
 async function setup() {
   const db = await createTestDb();
@@ -62,7 +63,7 @@ describe("listEventDuties", () => {
   it("keeps stored Duties as they are and blanks only the missing ones", async () => {
     const { db, ev, balls, cones } = await setup();
     const [toRow] = (await ensureDuties(db, ev.id, [balls.id])).filter((d) => d.direction === "to");
-    await claimDuty(db, toRow.id, "tom");
+    await claim(db, toRow.id, "tom");
 
     const duties = await listEventDuties(db, ev.id, [balls.id, cones.id], { cancelled: false });
 

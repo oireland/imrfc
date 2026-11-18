@@ -109,27 +109,27 @@ async function removeUser(db: Db, row: typeof duty.$inferSelect, userId: string)
   if (following) await db.delete(dutyUser).where(and(eq(dutyUser.dutyId, following.id), eq(dutyUser.userId, userId)));
 }
 
-/** Makes sure each Equipment Unit on the Event's Checklist has its To and From Duty, and returns them. */
-export async function ensureDuties(db: Db, eventId: string, equipmentUnitIds: string[]): Promise<Duty[]> {
-  if (equipmentUnitIds.length === 0) return [];
-  const load = (): Promise<(typeof duty.$inferSelect)[]> =>
-    db
+/** An Event's Duty for one Equipment Unit and direction. Creates the To and From pair first if they don't exist yet (usually they do, so this stays read-only). */
+async function ensureDuty(
+  db: Db,
+  eventId: string,
+  equipmentUnitId: string,
+  direction: "to" | "from",
+): Promise<typeof duty.$inferSelect | undefined> {
+  const load = async () => {
+    const [row] = await db
       .select()
       .from(duty)
-      .where(and(eq(duty.eventId, eventId), inArray(duty.equipmentUnitId, equipmentUnitIds)));
-  let rows = await load();
-  // Usually they all exist already, so viewing an Event stays read-only.
-  const missing = equipmentUnitIds.flatMap((equipmentUnitId) =>
-    (["to", "from"] as const)
-      .filter((direction) => !rows.some((r) => r.equipmentUnitId === equipmentUnitId && r.direction === direction))
-      .map((direction) => ({ id: crypto.randomUUID(), eventId, equipmentUnitId, direction })),
-  );
-  if (missing.length > 0) {
-    await db.insert(duty).values(missing).onConflictDoNothing();
-    rows = await load();
-  }
-  const userIdsByDuty = await loadUserIdsFor(db, rows.map((r) => r.id));
-  return rows.map((r) => toDuty(r, userIdsByDuty.get(r.id) ?? []));
+      .where(and(eq(duty.eventId, eventId), eq(duty.equipmentUnitId, equipmentUnitId), eq(duty.direction, direction)));
+    return row;
+  };
+  const existing = await load();
+  if (existing) return existing;
+  await db
+    .insert(duty)
+    .values((["to", "from"] as const).map((d) => ({ id: crypto.randomUUID(), eventId, equipmentUnitId, direction: d })))
+    .onConflictDoNothing();
+  return load();
 }
 
 /** A Duty as an Event shows it: `id` is null while nobody has acted on it, so no row exists yet. */
@@ -198,36 +198,15 @@ export async function actOnEventDuty(
     if (!existing) return { ok: false, error: "That event was cancelled, so there's nothing to do." };
     return actOnDuty(db, existing.id, viewer, request);
   }
-  const target = (await ensureDuties(db, eventId, [equipmentUnitId])).find((d) => d.direction === direction);
+  const target = await ensureDuty(db, eventId, equipmentUnitId, direction);
   if (!target) return { ok: false, error: "That duty no longer exists." };
-  return actOnDuty(db, target.id, viewer, request);
+  return applyDutyRequest(db, target, viewer, request);
 }
 
-/** Any Member joins a Duty — whether it's unfilled or already has other People on it. */
-export async function claimDuty(db: Db, dutyId: string, userId: string): Promise<Result> {
-  const row = await getDuty(db, dutyId);
-  if (!row) return { ok: false, error: "That duty no longer exists." };
-  const ids = await userIdsOf(db, dutyId);
-  if (ids.includes(userId)) return { ok: false, error: "You're already on it." };
-  await addUser(db, row, userId);
-  return { ok: true };
-}
-
-/** A User takes themselves off a Duty. */
-export async function leaveDuty(db: Db, dutyId: string, userId: string): Promise<Result> {
-  const row = await getDuty(db, dutyId);
-  if (!row) return { ok: false, error: "That duty no longer exists." };
-  const ids = await userIdsOf(db, dutyId);
-  if (!ids.includes(userId)) return { ok: false, error: "You're not on that duty." };
-  await removeUser(db, row, userId);
-  return { ok: true };
-}
+type DutyRow = typeof duty.$inferSelect;
 
 /** Committee sets a Duty's whole membership (a multi-select): adds and removes anyone. */
-export async function assignDuty(db: Db, dutyId: string, userIds: string[]): Promise<Result> {
-  const row = await getDuty(db, dutyId);
-  if (!row) return { ok: false, error: "That duty no longer exists." };
-  const current = await userIdsOf(db, dutyId);
+async function assignDuty(db: Db, row: DutyRow, current: string[], userIds: string[]): Promise<Result> {
   const added = userIds.filter((id) => !current.includes(id));
   const approved = await filterApprovedUserIds(db, added);
   if (added.some((id) => !approved.has(id))) return { ok: false, error: "That person isn't a member of the club." };
@@ -237,12 +216,8 @@ export async function assignDuty(db: Db, dutyId: string, userIds: string[]): Pro
 }
 
 /** A User hands their own place on a Duty to someone else. */
-export async function handOnDuty(db: Db, dutyId: string, actorId: string, toUserId: string): Promise<Result> {
-  const row = await getDuty(db, dutyId);
-  if (!row) return { ok: false, error: "That duty no longer exists." };
-  const ids = await userIdsOf(db, dutyId);
-  if (!ids.includes(actorId)) return { ok: false, error: "You can only hand on your own place." };
-  if (ids.includes(toUserId)) return { ok: false, error: "They're already on it." };
+async function handOnDuty(db: Db, row: DutyRow, current: string[], actorId: string, toUserId: string): Promise<Result> {
+  if (current.includes(toUserId)) return { ok: false, error: "They're already on it." };
   if (!(await filterApprovedUserIds(db, [toUserId])).has(toUserId)) {
     return { ok: false, error: "That person isn't a member of the club." };
   }
@@ -251,17 +226,14 @@ export async function handOnDuty(db: Db, dutyId: string, actorId: string, toUser
   return { ok: true };
 }
 
-export async function setDestination(db: Db, dutyId: string, destination: DutyDestination): Promise<Result> {
-  const row = await getDuty(db, dutyId);
-  if (!row) return { ok: false, error: "That duty no longer exists." };
-  if (row.direction !== "from") return { ok: false, error: "Only the trip back has a destination." };
+async function setDestination(db: Db, row: DutyRow, destination: DutyDestination): Promise<Result> {
   await db
     .update(duty)
     .set({
       destinationType: destination.type,
       destinationStoreId: destination.type === "store" ? destination.storeId : null,
     })
-    .where(eq(duty.id, dutyId));
+    .where(eq(duty.id, row.id));
   return { ok: true };
 }
 
@@ -417,7 +389,16 @@ export async function actOnDuty(
 ): Promise<Result> {
   const row = await getDuty(db, dutyId);
   if (!row) return { ok: false, error: "That duty no longer exists." };
-  const userIds = await userIdsOf(db, dutyId);
+  return applyDutyRequest(db, row, viewer, request);
+}
+
+async function applyDutyRequest(
+  db: Db,
+  row: DutyRow,
+  viewer: { id: string; role: Role },
+  request: DutyRequest,
+): Promise<Result> {
+  const userIds = await userIdsOf(db, row.id);
   const allowed: DutyAction[] = dutyActions(
     { direction: row.direction, userIds, confirmed: !!row.confirmedAt, voided: !!row.voidedAt },
     { viewerId: viewer.id, committee: isCommitteeOrAbove(viewer.role) },
@@ -425,20 +406,22 @@ export async function actOnDuty(
   if (!allowed.includes(request.action)) return { ok: false, error: "You can't do that on this duty." };
   switch (request.action) {
     case "claim":
-      return claimDuty(db, dutyId, viewer.id);
+      await addUser(db, row, viewer.id);
+      return { ok: true };
     case "leave":
-      return leaveDuty(db, dutyId, viewer.id);
+      await removeUser(db, row, viewer.id);
+      return { ok: true };
     case "confirm": {
-      const result = await confirmDuty(db, dutyId, viewer, { from: request.from, holders: request.holders });
+      const result = await confirmDuty(db, row.id, viewer, { from: request.from, holders: request.holders });
       if (result.ok) await markUnconfirmed(db);
       return result;
     }
     case "handOn":
-      return handOnDuty(db, dutyId, viewer.id, request.userId);
+      return handOnDuty(db, row, userIds, viewer.id, request.userId);
     case "assign":
-      return assignDuty(db, dutyId, request.userIds);
+      return assignDuty(db, row, userIds, request.userIds);
     case "setDestination":
-      return setDestination(db, dutyId, request.destination);
+      return setDestination(db, row, request.destination);
   }
 }
 

@@ -15,13 +15,14 @@ import { InjuriesCard } from "@/components/injuries-card";
 import { PositionsPicker } from "@/components/positions-picker";
 import { displayName, setName, type RugbyPosition } from "@/features/users";
 import { listInjuries } from "@/features/injuries";
-import { listAway, setPlayerPositions, setPlaying } from "@/features/players";
+import { listAway } from "@/features/players";
 import { londonDay } from "@/lib/london";
-import { getMobileNumber, setMobileNumber } from "@/features/contact";
+import { getMobileNumber } from "@/features/contact";
 import { getFeedToken, resetFeedToken } from "@/features/calendar-feed";
 import { isSubscribed, subscribe, unsubscribe } from "@/features/push";
 import { deleteAccount } from "@/features/account-deletion";
 import { requireApprovedUser } from "@/lib/session";
+import { saveMobileNumberAction, savePositionsAction, togglePlayingAction } from "../player-actions";
 import { addAwayAction, editAwayAction, imBackAction, removeAwayAction } from "../away-actions";
 import { awayItems } from "../away-items";
 import { recentEventOptions } from "../injury-events";
@@ -57,29 +58,6 @@ export default async function ProfilePage() {
     const result = await setName(db, current.id, name);
     if (result.ok) revalidatePath("/", "layout");
     return result;
-  }
-
-  async function saveMobileNumber(input: string) {
-    "use server";
-    const current = await requireApprovedUser();
-    const result = await setMobileNumber(db, current, current.id, input);
-    if (result.ok) revalidatePath("/", "layout");
-    return result;
-  }
-
-  async function savePositions(preferred: RugbyPosition, other: RugbyPosition[]) {
-    "use server";
-    const current = await requireApprovedUser();
-    const result = await setPlayerPositions(db, current.id, preferred, other);
-    if (result.ok) revalidatePath("/profile");
-    return result;
-  }
-
-  async function togglePlaying(formData: FormData) {
-    "use server";
-    const current = await requireApprovedUser();
-    await setPlaying(db, current.id, formData.get("playing") === "true");
-    revalidatePath("/profile");
   }
 
   async function subscribeToPush(subscription: { endpoint: string; p256dh: string; auth: string }) {
@@ -128,7 +106,7 @@ export default async function ProfilePage() {
             label="Your mobile number"
             hint="Only Committee see this — it's so they can message you about availability."
             initialNumber={mobileNumber}
-            save={saveMobileNumber}
+            save={saveMobileNumberAction.bind(null, user.id)}
           />
         </CardContent>
       </Card>
@@ -141,10 +119,10 @@ export default async function ProfilePage() {
           <PositionsPicker
             initialPreferred={user.preferredPosition as RugbyPosition | null}
             initialOther={user.otherPositions as RugbyPosition[]}
-            save={savePositions}
+            save={savePositionsAction.bind(null, user.id)}
           />
 
-          <form action={togglePlaying}>
+          <form action={togglePlayingAction.bind(null, user.id)}>
             <input type="hidden" name="playing" value={(!user.playing).toString()} />
             <SubmitButton variant="outline">{user.playing ? "Switch Playing off" : "Switch Playing on"}</SubmitButton>
           </form>

@@ -80,7 +80,7 @@ export async function approveUser(db: Db, userId: string) {
   await setApproved(db, userId);
 }
 
-export async function blockUser(db: Db, userId: string) {
+async function blockUser(db: Db, userId: string) {
   await db.update(user).set({ accessState: "blocked" }).where(eq(user.id, userId));
   await db.delete(session).where(eq(session.userId, userId));
 }
@@ -113,7 +113,7 @@ export async function unblockUser(db: Db, userId: string) {
   await setApproved(db, userId);
 }
 
-export async function setRole(db: Db, userId: string, role: Role) {
+async function setRole(db: Db, userId: string, role: Role) {
   await db.update(user).set({ role }).where(eq(user.id, userId));
 }
 

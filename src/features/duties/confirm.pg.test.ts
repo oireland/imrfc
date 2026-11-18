@@ -3,7 +3,8 @@ import { expect, it } from "vitest";
 import { createPostgresTestDb, lockWaiters, waitUntil } from "@/test/postgres";
 import { addToChecklist } from "@/features/checklists";
 import { createEquipmentUnit, equipmentPortion, listMovementLog, recordMove } from "@/features/equipment";
-import { claimDuty, confirmDuty, ensureDuties } from "./index";
+import { claim, ensureDuties } from "@/test/duties";
+import { confirmDuty } from "./index";
 
 /**
  * Runs on real Postgres (`pnpm test:pg`): PGlite has one connection, so it can't show two
@@ -28,7 +29,7 @@ async function setup(quantity: number, needed?: number) {
   }
   const duties = await ensureDuties(db, "training", [unitId]);
   const toDutyId = duties.find((d) => d.direction === "to")!.id;
-  await claimDuty(db, toDutyId, "sam");
+  await claim(db, toDutyId, "sam");
 
   const whereabouts = async () =>
     (

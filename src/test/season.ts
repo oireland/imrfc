@@ -1,6 +1,6 @@
 import { createEquipmentUnit } from "@/features/equipment";
 import { addToChecklist } from "@/features/checklists";
-import { claimDuty, ensureDuties } from "@/features/duties";
+import { claim, ensureDuties } from "./duties";
 import { asc, gt } from "drizzle-orm";
 import { createEvents, event, listTeams, type NewEvent } from "@/features/events";
 import { createStore } from "@/features/stores";
@@ -67,7 +67,7 @@ export async function seedSeason(db: TestDb, now = new Date()) {
   const next = await db.select().from(event).where(gt(event.start, now)).orderBy(asc(event.start)).limit(3);
   for (const row of next) {
     const duties = await ensureDuties(db, row.id, [units[3].id]);
-    for (const duty of duties) await claimDuty(db, duty.id, me);
+    for (const duty of duties) await claim(db, duty.id, me);
   }
 
   return { userId: me, unitId: units[3].id, nextEventId: next[0].id };

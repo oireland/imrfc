@@ -30,10 +30,22 @@ describe("listPlayers", () => {
   });
 });
 
+const committee = { id: "chair", role: "committee" as const };
+const hal = { id: "hal", role: "member" as const };
+const fran = { id: "fran", role: "member" as const };
+
 describe("setPlaying", () => {
+  it("lets a Player change their own, but not someone else's", async () => {
+    const db = await setup();
+    expect(await setPlaying(db, fran, "hal", false)).toMatchObject({ ok: false });
+    expect((await listPlayers(db)).notPlaying).toEqual([]);
+    expect(await setPlaying(db, hal, "hal", false)).toEqual({ ok: true });
+    expect((await listPlayers(db)).notPlaying.map((p) => p.name)).toEqual(["Hooker Hal"]);
+  });
+
   it("moves a Player to Not playing", async () => {
     const db = await setup();
-    await setPlaying(db, "hal", false);
+    await setPlaying(db, committee, "hal", false);
     const listing = await listPlayers(db);
     expect(listing.playing.map((p) => p.name)).toEqual(["Fly-half Fran"]);
     expect(listing.notPlaying.map((p) => p.name)).toEqual(["Hooker Hal"]);
@@ -43,19 +55,29 @@ describe("setPlaying", () => {
 describe("setPlayerPositions", () => {
   it("sets Preferred and Other Positions, deduplicated and never repeating the Preferred one", async () => {
     const db = await setup();
-    await setPlayerPositions(db, "hal", "Lock", ["Lock", "Number 8", "Number 8"]);
+    await setPlayerPositions(db, hal, "hal", "Lock", ["Lock", "Number 8", "Number 8"]);
     const player = await getPlayer(db, "hal");
     expect(player?.preferredPosition).toBe("Lock");
     expect(player?.otherPositions).toEqual(["Number 8"]);
   });
 });
 
+describe("setPlayerPositions permissions", () => {
+  it("lets a Player set their own and Committee anyone's, but not another Player's", async () => {
+    const db = await setup();
+    expect(await setPlayerPositions(db, fran, "hal", "Lock", [])).toMatchObject({ ok: false });
+    expect((await getPlayer(db, "hal"))?.preferredPosition).not.toBe("Lock");
+    expect(await setPlayerPositions(db, committee, "hal", "Lock", [])).toEqual({ ok: true });
+    expect((await getPlayer(db, "hal"))?.preferredPosition).toBe("Lock");
+  });
+});
+
 describe("setPlayerPositions validation", () => {
   it("rejects positions that aren't on the list and changes nothing", async () => {
     const db = await setup();
-    const bad = await setPlayerPositions(db, "hal", "Lock", ["Goalkeeper" as never]);
+    const bad = await setPlayerPositions(db, hal, "hal", "Lock", ["Goalkeeper" as never]);
     expect(bad.ok).toBe(false);
-    const bad2 = await setPlayerPositions(db, "hal", "Striker" as never, []);
+    const bad2 = await setPlayerPositions(db, hal, "hal", "Striker" as never, []);
     expect(bad2.ok).toBe(false);
     expect((await getPlayer(db, "hal"))?.preferredPosition).not.toBe("Lock");
   });

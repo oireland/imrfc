@@ -71,25 +71,30 @@ export type WhereaboutsNames = {
 };
 
 /**
+ * One Portion as a label: "In the Shed" or "With Sam", or "4 at the Shed" and "4 with Sam"
+ * when `showCount` is set (the Equipment Unit is split, so the count matters).
+ */
+export function portionLabel(portion: Portion, names: WhereaboutsNames, { showCount }: { showCount: boolean }): string {
+  if (portion.whereaboutsType === "store") {
+    const where = names.storeName(portion.storeId!);
+    return showCount ? `${portion.count} at ${where}` : `In ${where}`;
+  }
+  if (portion.whereaboutsType === "holder") {
+    const who = names.personName(portion.holderId!);
+    return showCount ? `${portion.count} with ${who}` : `With ${who}`;
+  }
+  const event = names.eventName(portion.lastSeenEventId!);
+  return showCount ? `${portion.count} not confirmed — last seen at ${event}` : `Not confirmed — last seen at ${event}`;
+}
+
+/**
  * An Equipment Unit's Whereabouts as a sentence for its detail page: "In the Shed" when it's
  * all in one place, or "4 at the Shed · 4 with Sam" when it's split.
  */
 export function describeWhereabouts(portions: Portion[], names: WhereaboutsNames): string {
   if (portions.length === 0) return "Nowhere yet";
-  const split = portions.length > 1;
-  const lines = portions.map((p) => {
-    if (p.whereaboutsType === "store") {
-      const where = names.storeName(p.storeId!);
-      return split ? `${p.count} at ${where}` : `In ${where}`;
-    }
-    if (p.whereaboutsType === "holder") {
-      const who = names.personName(p.holderId!);
-      return split ? `${p.count} with ${who}` : `With ${who}`;
-    }
-    const event = names.eventName(p.lastSeenEventId!);
-    return split ? `${p.count} not confirmed — last seen at ${event}` : `Not confirmed — last seen at ${event}`;
-  });
-  return lines.join(" · ");
+  const showCount = portions.length > 1;
+  return portions.map((p) => portionLabel(p, names, { showCount })).join(" · ");
 }
 
 export type HistoryNames = {

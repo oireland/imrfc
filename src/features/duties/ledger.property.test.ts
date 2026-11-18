@@ -53,7 +53,8 @@ import {
   type MoveTarget,
   type Place,
 } from "@/features/equipment";
-import { claimDuty, confirmDuty, ensureDuties } from "./index";
+import { claim, ensureDuties } from "@/test/duties";
+import { confirmDuty } from "./index";
 
 type Op =
   | { kind: "move"; from: SourceChoice; to: MoveTarget; count: number | undefined }
@@ -123,7 +124,7 @@ async function newDuties(db: Db, unitId: string, people: string[], count: number
   const duties = await ensureDuties(db, eventId, [unitId]);
   const to = duties.find((d) => d.direction === "to")!;
   const from = duties.find((d) => d.direction === "from")!;
-  for (const person of people) await claimDuty(db, to.id, person);
+  for (const person of people) await claim(db, to.id, person);
   return { toId: to.id, fromId: from.id };
 }
 

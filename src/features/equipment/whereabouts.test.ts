@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupByWhereabouts, historyLine, quickMoveFor, type EquipmentRow, type HistoryNames } from "./whereabouts";
+import { describeWhereabouts, groupByWhereabouts, historyLine, portionLabel, quickMoveFor, type EquipmentRow, type HistoryNames } from "./whereabouts";
 import type { movementLogEntry } from "./schema";
 import type { EquipmentUnit } from "./index";
 import type { Portion } from "./portions";
@@ -198,5 +198,34 @@ describe("historyLine", () => {
     expect(line({ reason: "duty", toType: "holder", toHolderId: "Priya", count: 3 }, true)).toBe(
       "Tom confirmed 3 is with Priya (duty done)",
     );
+  });
+});
+
+describe("portionLabel", () => {
+  const names = {
+    storeName: (id: string) => `the ${id}`,
+    personName: (id: string) => (id === "me" ? "you" : id),
+    eventName: () => "Training",
+  };
+
+  it("names a whole Portion by where it is", () => {
+    expect(portionLabel(portion({ whereaboutsType: "store", storeId: "Shed" }), names, { showCount: false })).toBe("In the Shed");
+    expect(portionLabel(portion({ whereaboutsType: "holder", storeId: null, holderId: "Sam" }), names, { showCount: false })).toBe("With Sam");
+    expect(
+      portionLabel(portion({ whereaboutsType: "unconfirmed", storeId: null, lastSeenEventId: "e1" }), names, { showCount: false }),
+    ).toBe("Not confirmed — last seen at Training");
+  });
+
+  it("puts the count first when the Equipment Unit is split", () => {
+    expect(portionLabel(portion({ count: 4, whereaboutsType: "store", storeId: "Shed" }), names, { showCount: true })).toBe("4 at the Shed");
+    expect(portionLabel(portion({ count: 2, whereaboutsType: "holder", storeId: null, holderId: "me" }), names, { showCount: true })).toBe("2 with you");
+  });
+
+  it("describeWhereabouts joins a split unit's labels", () => {
+    const portions = [
+      portion({ count: 4, whereaboutsType: "store", storeId: "Shed" }),
+      portion({ count: 2, whereaboutsType: "holder", storeId: null, holderId: "Sam" }),
+    ];
+    expect(describeWhereabouts(portions, names)).toBe("4 at the Shed · 2 with Sam");
   });
 });

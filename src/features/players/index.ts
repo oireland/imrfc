@@ -1,7 +1,7 @@
 import type { Db } from "@/db/types";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { listDutyRecordForUser } from "@/features/duties";
-import { displayName, isCommitteeOrAbove, listCommitteeIds, listKnownUsers, loadNames, RUGBY_POSITIONS, setPlaying, setPositions, type Role, type RugbyPosition } from "@/features/users";
+import { displayName, isCommitteeOrAbove, listCommitteeIds, listKnownUsers, loadNames, RUGBY_POSITIONS, setPlaying as setUserPlaying, setPositions, type Role, type RugbyPosition } from "@/features/users";
 import {
   awayLabel,
   awayPushMessage,
@@ -18,7 +18,12 @@ import { normalizePositions } from "./positions-rules";
 import { playerAway } from "./schema";
 import type { Result } from "@/lib/result";
 
-export { setPlaying, setPositions };
+type Actor = { id: string; role: Role };
+
+/** A Player manages their own positions, Playing status and time Away; Committee can for anyone. */
+const mayManage = (actor: Actor, userId: string) => actor.id === userId || isCommitteeOrAbove(actor.role);
+
+export { setPositions };
 export { normalizePositions } from "./positions-rules";
 export type { PlayerListing, PlayerRow } from "./list-rules";
 export { summarizePlayers };
@@ -109,22 +114,26 @@ export async function getPlayer(db: Db, id: string): Promise<(Player & { dutyRec
 /** Sets a Player's Positions, deduplicated and never repeating the Preferred one. */
 export async function setPlayerPositions(
   db: Db,
+  actor: Actor,
   userId: string,
   preferred: RugbyPosition,
   other: RugbyPosition[],
 ): Promise<Result> {
+  if (!mayManage(actor, userId)) return { ok: false, error: "Only Committee can change someone else's positions." };
   const valid = (p: unknown) => (RUGBY_POSITIONS as readonly unknown[]).includes(p);
   if (!valid(preferred) || !other.every(valid)) return { ok: false, error: "Pick positions from the list." };
   await setPositions(db, userId, normalizePositions(preferred, other));
   return { ok: true };
 }
 
+/** Moves a Player between Playing and Not playing. */
+export async function setPlaying(db: Db, actor: Actor, userId: string, playing: boolean): Promise<Result> {
+  if (!mayManage(actor, userId)) return { ok: false, error: "Only Committee can change whether someone else is playing." };
+  await setUserPlaying(db, userId, playing);
+  return { ok: true };
+}
+
 // ---- Time away ----------------------------------------------------------------------------
-
-type Actor = { id: string; role: Role };
-
-/** A Player manages their own time Away; Committee can for anyone. */
-const mayManage = (actor: Actor, userId: string) => actor.id === userId || isCommitteeOrAbove(actor.role);
 
 async function activeAway(db: Db): Promise<(typeof playerAway.$inferSelect)[]> {
   return db.select().from(playerAway).where(isNull(playerAway.removedAt));

@@ -4,8 +4,8 @@ import { createTestDb } from "@/test/db";
 import { store } from "@/features/stores";
 import { createEquipmentUnit, raiseQuantity } from "@/features/equipment";
 import { cancelEvent, createEvent } from "@/features/events";
-import { claimDuty, ensureDuties } from "@/features/duties";
-import { blockUser, user } from "@/features/users";
+import { claim, ensureDuties } from "@/test/duties";
+import { blockUserAs, user } from "@/features/users";
 import { deleteFeedToken, getFeedToken, renderFeed, resetFeedToken } from "./index";
 
 const future = (days: number, hours = 18) => new Date(Date.now() + days * 86_400_000 + hours * 3_600_000);
@@ -71,7 +71,7 @@ describe("renderFeed", () => {
   it("writes only the User's own Duties into the description", async () => {
     const { db, equipment, event } = await setup();
     const [toDuty] = (await ensureDuties(db, event.id, [equipment.id])).filter((d) => d.direction === "to");
-    await claimDuty(db, toDuty.id, "tom");
+    await claim(db, toDuty.id, "tom");
 
     const mine = await renderFeed(db, await getFeedToken(db, "tom"));
     const theirs = await renderFeed(db, await getFeedToken(db, "sam"));
@@ -83,8 +83,8 @@ describe("renderFeed", () => {
     const { db, equipment, event } = await setup();
     await db.update(user).set({ name: "Sam Okafor" }).where(eq(user.id, "sam"));
     const [toDuty] = (await ensureDuties(db, event.id, [equipment.id])).filter((d) => d.direction === "to");
-    await claimDuty(db, toDuty.id, "tom");
-    await claimDuty(db, toDuty.id, "sam");
+    await claim(db, toDuty.id, "tom");
+    await claim(db, toDuty.id, "sam");
 
     const mine = await renderFeed(db, await getFeedToken(db, "tom"));
     expect(mine.status === 200 && mine.body).toContain("You're bringing: Ball bag A with Sam Okafor");
@@ -94,7 +94,7 @@ describe("renderFeed", () => {
     const { db, equipment, event } = await setup();
     await raiseQuantity(db, equipment.id, "tom", 7); // Quantity now 8
     const [toDuty] = (await ensureDuties(db, event.id, [equipment.id])).filter((d) => d.direction === "to");
-    await claimDuty(db, toDuty.id, "tom");
+    await claim(db, toDuty.id, "tom");
 
     const mine = await renderFeed(db, await getFeedToken(db, "tom"));
     expect(mine.status === 200 && mine.body).toContain("You're bringing: Ball bag A ×8");
@@ -110,7 +110,7 @@ describe("renderFeed", () => {
   it("is 410 Gone for a Blocked User", async () => {
     const { db } = await setup();
     const token = await getFeedToken(db, "tom");
-    await blockUser(db, "tom");
+    await blockUserAs(db, { actorId: "an-admin", userId: "tom" });
     expect((await renderFeed(db, token)).status).toBe(410);
   });
 });
@@ -135,7 +135,7 @@ describe("Query efficiency", () => {
       if (!unit.ok) throw new Error(unit.error);
       await addToChecklist(db, { scope: "event", scopeId: event.id }, unit.equipmentUnit.id);
       const [dutyRow] = (await ensureDuties(db, event.id, [unit.equipmentUnit.id])).filter((d) => d.direction === "to");
-      await claimDuty(db, dutyRow.id, "tom");
+      await claim(db, dutyRow.id, "tom");
     };
     const token = await getFeedToken(db, "tom");
 
