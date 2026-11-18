@@ -1,5 +1,5 @@
-import { LIMITS, firstTooLong } from "@/lib/text-limits";
-import { londonParts, londonToUtc } from "@/lib/london";
+import { LIMITS, firstTooLong } from "@/lib/text/text-limits";
+import { londonParts, londonToUtc } from "@/lib/time/london";
 import type { Result } from "@/lib/result";
 
 export type EventType = "training" | "match" | "social";

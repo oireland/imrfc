@@ -1,4 +1,4 @@
-import { emailLayout } from "./email-layout";
+import { emailLayout } from "../messaging/email-layout";
 
 /** The magic-link email, in the Clubhouse layout. The link works once, for 5 minutes (Better Auth's default). */
 export function signInEmail(url: string): { subject: string; text: string; html: string } {

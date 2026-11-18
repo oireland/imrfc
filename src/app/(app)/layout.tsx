@@ -6,7 +6,7 @@ import { OnboardingDialog } from "@/components/onboarding-dialog";
 import { canManageUsers, countPendingUsers, isCommitteeOrAbove } from "@/features/users";
 import { hasMobileNumber } from "@/features/contact";
 import { needsOnboarding } from "@/features/onboarding";
-import { requireApprovedUser } from "@/lib/session";
+import { requireApprovedUser } from "@/lib/auth/session";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await requireApprovedUser();

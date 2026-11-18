@@ -1,6 +1,6 @@
 import type { Competition, EventType, HomeAway, NewEvent } from "./rules";
 import type { SeriesPattern } from "./series-rules";
-import { addDays, londonToUtc } from "@/lib/london";
+import { addDays, londonToUtc } from "@/lib/time/london";
 
 export type QuickEventInput = {
   date: string; // YYYY-MM-DD, London

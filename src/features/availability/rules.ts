@@ -1,6 +1,6 @@
-import { LIMITS, firstTooLong } from "@/lib/text-limits";
+import { LIMITS, firstTooLong } from "@/lib/text/text-limits";
 import { startsAt, type EventType } from "@/features/events";
-import { londonParts } from "@/lib/london";
+import { londonParts } from "@/lib/time/london";
 import type { Result } from "@/lib/result";
 
 export type ReplyStatus = "available" | "not_available";

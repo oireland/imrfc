@@ -1,5 +1,5 @@
 import type { Db } from "@/db/types";
-import { LIMITS, firstTooLong } from "@/lib/text-limits";
+import { LIMITS, firstTooLong } from "@/lib/text/text-limits";
 import { and, asc, desc, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import { equipmentPortion, equipmentUnit, movementLogEntry } from "./schema";
 import { archiveStore } from "@/features/stores";

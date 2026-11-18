@@ -1,5 +1,5 @@
 // ICS (RFC 5545) rendering for the Calendar Feed. Pure, no database or Next.js.
-import { addDays, londonParts } from "@/lib/london";
+import { addDays, londonParts } from "@/lib/time/london";
 
 export type FeedEvent = {
   id: string;

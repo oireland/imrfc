@@ -2,9 +2,9 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Crest } from "@/components/crest";
 import { db } from "@/db/client";
 import { getEvent } from "@/features/events";
-import { formatWhen } from "@/lib/format-time";
-import { signInErrorMessage } from "@/lib/sign-in-error";
-import { eventIdInPath, safeNextPath } from "@/lib/next-path";
+import { formatWhen } from "@/lib/time/format-time";
+import { signInErrorMessage } from "@/lib/auth/sign-in-error";
+import { eventIdInPath, safeNextPath } from "@/lib/auth/next-path";
 import type { Metadata } from "next";
 import { SignInForm } from "./sign-in-form";
 

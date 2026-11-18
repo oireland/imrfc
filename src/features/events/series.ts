@@ -1,5 +1,5 @@
 import type { Db } from "@/db/types";
-import { LIMITS, firstTooLong } from "@/lib/text-limits";
+import { LIMITS, firstTooLong } from "@/lib/text/text-limits";
 import { and, asc, count, eq, gte } from "drizzle-orm";
 import { event, series } from "./schema";
 import { trainingTitle } from "./rules";
@@ -9,7 +9,7 @@ import {
   validateSeries,
   type SeriesPattern,
 } from "./series-rules";
-import { addDays, londonParts, londonToUtc } from "@/lib/london";
+import { addDays, londonParts, londonToUtc } from "@/lib/time/london";
 import type { Failure } from "@/lib/result";
 
 export type NewSeries = SeriesPattern;

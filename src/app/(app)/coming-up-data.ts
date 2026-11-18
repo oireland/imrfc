@@ -4,7 +4,7 @@ import { listMyReplies } from "@/features/availability";
 import { listUpcomingDutiesForUser } from "@/features/duties";
 import { teamsForRequest } from "./request-cache";
 import { listEventsBetween, listVenues } from "@/features/events";
-import { londonDay } from "@/lib/london";
+import { londonDay } from "@/lib/time/london";
 
 /**
  * What the "What's coming up" calendar needs: Events from three months back to a year

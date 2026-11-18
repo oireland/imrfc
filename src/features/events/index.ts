@@ -24,7 +24,7 @@ export {
   readEventsCsv,
   type EventCsvResult,
 } from "./csv-import";
-import { londonParts, londonToUtc } from "@/lib/london";
+import { londonParts, londonToUtc } from "@/lib/time/london";
 import type { Result } from "@/lib/result";
 export type { EventType, HomeAway, Competition, NewEvent, NewMatchDetails } from "./rules";
 

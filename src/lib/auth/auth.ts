@@ -3,7 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink } from "better-auth/plugins";
 import { db } from "@/db/client";
 import { account, resolveNewUser, session, user, verification } from "@/features/users";
-import { getMailSender } from "./mail";
+import { getMailSender } from "../messaging/mail";
 import { signInEmail } from "./sign-in-email";
 import { confirmPageUrl } from "./sign-in-confirm";
 

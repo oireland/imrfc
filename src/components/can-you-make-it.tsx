@@ -5,7 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Check, Loader2, X } from "lucide-react";
 import type { ReplyStatus, WaitingAsk } from "@/features/availability";
-import { formatWhen } from "@/lib/format-time";
+import { formatWhen } from "@/lib/time/format-time";
 import { ReplySheet } from "./availability-card";
 import type { Result } from "@/lib/result";
 

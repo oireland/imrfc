@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Instrument_Serif, Inter_Tight } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { PushRegistration } from "@/components/push-registration";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser } from "@/lib/auth/session";
 import "./globals.css";
 
 const interTight = Inter_Tight({

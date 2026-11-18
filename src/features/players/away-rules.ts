@@ -1,6 +1,6 @@
-import { LIMITS, firstTooLong } from "@/lib/text-limits";
-import { formatDate } from "@/lib/format-time";
-import { addDays } from "@/lib/london";
+import { LIMITS, firstTooLong } from "@/lib/text/text-limits";
+import { formatDate } from "@/lib/time/format-time";
+import { addDays } from "@/lib/time/london";
 import type { Result } from "@/lib/result";
 
 /** A dated period a Player won't be playing for a non-injury reason. Dates are London calendar days, `YYYY-MM-DD`. */

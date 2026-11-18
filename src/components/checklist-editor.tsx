@@ -15,7 +15,7 @@ import {
 import { listEquipmentUnits } from "@/features/equipment";
 import { listStores } from "@/features/stores";
 import { isCommitteeOrAbove } from "@/features/users";
-import { requireApprovedUser } from "@/lib/session";
+import { requireApprovedUser } from "@/lib/auth/session";
 import type { Failure } from "@/lib/result";
 
 async function refuseListChange(): Promise<Failure | null> {

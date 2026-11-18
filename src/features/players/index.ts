@@ -12,7 +12,7 @@ import {
   type AwayInput,
   type AwayPeriod,
 } from "./away-rules";
-import { londonDay } from "@/lib/london";
+import { londonDay } from "@/lib/time/london";
 import { listPlayers as listPlayersRules, summarizePlayers, type PlayerListing, type PlayerRow } from "./list-rules";
 import { normalizePositions } from "./positions-rules";
 import { playerAway } from "./schema";

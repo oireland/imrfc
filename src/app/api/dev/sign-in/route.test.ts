@@ -4,8 +4,8 @@ import { NextRequest } from "next/server";
 vi.mock("@/db/client", () => ({
   db: { select: () => ({ from: () => ({ where: async () => [{ id: "u1" }] }) }) },
 }));
-vi.mock("@/lib/dev-sign-in", () => ({ devSignInEnabled: () => true }));
-vi.mock("@/lib/dev-auth", () => ({
+vi.mock("@/lib/auth/dev-sign-in", () => ({ devSignInEnabled: () => true }));
+vi.mock("@/lib/auth/dev-auth", () => ({
   devAuth: { $context: Promise.resolve({ test: { login: async () => ({ cookies: [] }) } }) },
 }));
 

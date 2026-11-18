@@ -1,8 +1,8 @@
 // The words for Announce and Nudge emails and the WhatsApp chase message. Pure, no
 // database or Next.js.
-import { joinList } from "@/lib/join-names";
-import { emailLayout } from "@/lib/email-layout";
-import { formatDay, formatWhen } from "@/lib/format-time";
+import { joinList } from "@/lib/text/join-names";
+import { emailLayout } from "@/lib/messaging/email-layout";
+import { formatDay, formatWhen } from "@/lib/time/format-time";
 
 export type AskedEvent = { title: string; start: Date };
 

@@ -6,8 +6,8 @@ import { createEquipmentUnit } from "@/features/equipment";
 import { store } from "@/features/stores";
 import { saveReply } from "@/features/availability";
 import { user } from "@/features/users";
-import type { PushMessage, PushSender, PushSubscriptionKeys } from "@/lib/push";
-import { PushSubscriptionGoneError } from "@/lib/push";
+import type { PushMessage, PushSender, PushSubscriptionKeys } from "@/lib/messaging/push";
+import { PushSubscriptionGoneError } from "@/lib/messaging/push";
 import { isSubscribed, notifyMorningOf, sendToUser, subscribe, unsubscribe, unsubscribeEverywhere } from "./index";
 
 function fakePushSender() {

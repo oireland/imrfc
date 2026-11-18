@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db/client";
 import { createStore, listStores, type Store } from "@/features/stores";
 import { archiveStoreIfUnused } from "@/features/equipment";
-import { requireCommittee } from "@/lib/session";
+import { requireCommittee } from "@/lib/auth/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
