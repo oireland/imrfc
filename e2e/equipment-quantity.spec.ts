@@ -52,7 +52,7 @@ test("A split Equipment Unit shows its count in each Whereabouts group, and movi
   await expect(after).toContainText(`3 with ${teammateName}`);
 
   // On the detail page, the count sits beside the button: take 1 more of the Shed's 3.
-  const shedPortion = page.locator("div.rounded-2xl", { has: page.getByText(`3 in Shed ${run}`, { exact: true }) });
+  const shedPortion = page.locator("div.rounded-2xl", { has: page.getByText(`3 at Shed ${run}`, { exact: true }) });
   await shedPortion.getByRole("spinbutton", { name: "How many" }).first().fill("1");
   await shedPortion.getByRole("button", { name: "I've got 1" }).click();
   await expect(page.locator("dd.font-medium")).toContainText("2 at Shed");
