@@ -303,17 +303,3 @@ export function myReplies({
   }
   return result;
 }
-
-export type AskStatus = "sending" | "sent" | "failed";
-
-/** A send that hasn't finished after this long was cut off (e.g. the server timed out). */
-const ASK_CUT_OFF_MS = 15 * 60_000;
-
-/**
- * How an Announce or Nudge's emails went: still sending, sent to everyone, or failed —
- * someone wasn't reached, or the send was cut off before it finished.
- */
-export function askStatus(ask: { createdAt: Date; finishedAt: Date | null; missed: number }, now: Date): AskStatus {
-  if (!ask.finishedAt) return now.getTime() - ask.createdAt.getTime() >= ASK_CUT_OFF_MS ? "failed" : "sending";
-  return ask.missed > 0 ? "failed" : "sent";
-}

@@ -1,10 +1,10 @@
 "use client";
 
-import { joinList } from "@/lib/join-names";
+import { DeliveryLine, failedMessage, people, watchDelivery } from "@/components/delivery";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Send, X } from "lucide-react";
+import { Loader2, Send } from "lucide-react";
 import type { Naming, NoticeStatus } from "@/features/selection";
 import { formatDay } from "@/lib/format-time";
 import { BottomSheet } from "@/components/bottom-sheet";
@@ -19,36 +19,15 @@ export type NamingActions = {
   retry: (eventId: string, noticeId: string) => Promise<SendResult>;
 };
 
-const people = (n: number) => (n === 1 ? "1 person" : `${n} people`);
+const noticeWhat = (notice: NoticeStatus) => (notice.kind === "name" ? "team announcement" : "changes");
 
-function failedMessage(notice: NoticeStatus) {
-  const what = notice.kind === "name" ? "team announcement" : "changes";
-  const others = notice.sent > 0 ? " Everyone else got it." : "";
-  return `${notice.by}'s ${what} didn't reach ${joinList(notice.missed, "and")}.${others}`;
-}
-
-/**
- * Checks on a notice every couple of seconds until its emails are done, then swaps its
- * "Telling…" toast for how it went. Keeps going if the board unmounts.
- */
-async function watchNotice(noticeId: string, refresh: () => void) {
-  for (;;) {
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    let notice: NoticeStatus;
-    try {
-      const response = await fetch(`/api/notices/${noticeId}`, { cache: "no-store" });
-      if (!response.ok) continue;
-      notice = await response.json();
-    } catch {
-      continue;
-    }
-    if (notice.status === "sending") continue;
-    if (notice.status === "sent") toast.success(`Told ${people(notice.sent)}.`, { id: noticeId });
-    else toast.error(failedMessage(notice), { id: noticeId });
-    refresh();
-    return;
-  }
-}
+const watchNotice = (noticeId: string, refresh: () => void) =>
+  watchDelivery<NoticeStatus>(
+    `/api/notices/${noticeId}`,
+    noticeId,
+    { sent: (notice) => `Told ${people(notice.sent)}.`, failed: (notice) => failedMessage(notice.by, noticeWhat(notice), notice) },
+    refresh,
+  );
 
 /** Notify the team (or Send changes) for one Match: who has been told, what's unsent, and how the emails went. */
 export function NameTheTeam({ eventId, label, naming, actions, sheet }: { eventId: string; label: string; naming: Naming; actions: NamingActions; sheet: React.ReactNode }) {
@@ -92,26 +71,17 @@ export function NameTheTeam({ eventId, label, naming, actions, sheet }: { eventI
 
   return (
     <div className="flex flex-col gap-2 rounded-2xl bg-card p-3 shadow-card">
-      {notices.map((notice) =>
-        notice.status === "sending" ? (
-          <p key={notice.id} role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-            Telling {people(notice.total)}…
-          </p>
-        ) : (
-          <div key={notice.id} role="alert" className="flex items-start gap-2 rounded-xl bg-destructive/10 p-3 text-sm text-destructive-text">
-            <div className="flex flex-1 flex-col items-start gap-2">
-              <p>{failedMessage(notice)}</p>
-              <button type="button" onClick={() => retry(notice.id)} disabled={pending} className="rounded-lg bg-destructive/10 px-3 py-1.5 text-sm font-semibold hover:bg-destructive/20 disabled:opacity-60">
-                Try again
-              </button>
-            </div>
-            <button type="button" onClick={() => dismiss(notice.id)} disabled={pending} aria-label="Dismiss" className="-m-1 rounded-lg p-1 hover:bg-destructive/10 disabled:opacity-60">
-              <X className="size-4" aria-hidden="true" />
-            </button>
-          </div>
-        ),
-      )}
+      {notices.map((notice) => (
+        <DeliveryLine
+          key={notice.id}
+          progress={notice}
+          sending={`Telling ${people(notice.total)}…`}
+          failed={failedMessage(notice.by, noticeWhat(notice), notice)}
+          pending={pending}
+          onDismiss={() => dismiss(notice.id)}
+          onRetry={() => retry(notice.id)}
+        />
+      ))}
 
       {named && (
         <p className="text-xs text-muted-foreground">
