@@ -15,7 +15,7 @@ Events and equipment-tracking app for Imperial Medicals RFC. Read before working
 - **Mobile-first UI.** Design at phone width first; shadcn/ui components; colours only from the theme tokens (palette in SPEC → Look and feel).
 - **Times are Europe/London.** Store UTC, convert at the edges, and test across BST changes.
 - **Nothing is hard-deleted** — Equipment Units, Stores and Events are archived, Retired or Cancelled. The one exception: an Admin may delete an Event for good.
-- Deployment to Vercel waits until the app is fully working locally.
+- **The app is live** at `app.imrfc.co.uk` (Vercel `lhr1` + Neon) and club members use it. Production builds run `pnpm db:migrate` (see `vercel.json`), so every migration must be safe on existing data (backfill, don't assume empty tables) and every change must keep working for current users.
 
 ## Environment
 
