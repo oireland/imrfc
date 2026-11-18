@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createTestDb } from "@/test/db";
 import { createEvent, listTeams, type NewEvent } from "@/features/events";
-import { claimDuty, ensureDuties } from "@/features/duties";
+import { claim, ensureDuties } from "@/test/duties";
 import { createEquipmentUnit } from "@/features/equipment";
 import { store } from "@/features/stores";
 import { saveReply } from "@/features/availability";
@@ -130,13 +130,13 @@ describe("notifyMorningOf", () => {
     if (!equipment.ok) throw new Error(equipment.error);
     const todayEventId = await makeEvent(db, { title: "Training", start: new Date("2026-10-01T18:00:00Z") });
     const [to] = await ensureDuties(db, todayEventId, [equipment.equipmentUnit.id]);
-    await claimDuty(db, to.id, "tom");
+    await claim(db, to.id, "tom");
     await saveReply(db, { eventId: todayEventId, playerId: "sam", viewer: { id: "sam", committee: false }, status: "available", note: "", reason: "" }, now);
 
     // Tomorrow's Event shouldn't generate a push today.
     const tomorrowEventId = await makeEvent(db, { title: "Tomorrow's session", start: new Date("2026-10-02T18:00:00Z") });
     const [toTomorrow] = await ensureDuties(db, tomorrowEventId, [equipment.equipmentUnit.id]);
-    await claimDuty(db, toTomorrow.id, "sam");
+    await claim(db, toTomorrow.id, "sam");
 
     const { sender, sent } = fakePushSender();
     const result = await notifyMorningOf(db, now, sender);

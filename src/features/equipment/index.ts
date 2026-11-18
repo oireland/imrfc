@@ -20,7 +20,7 @@ import type { Result } from "@/lib/result";
 export { equipmentUnit, equipmentPortion, movementLogEntry } from "./schema";
 export { validateEquipmentUnit } from "./rules";
 export type { NewEquipmentUnit } from "./rules";
-export { describeWhereabouts, groupByWhereabouts, historyLine, quickMoveFor } from "./whereabouts";
+export { describeWhereabouts, groupByWhereabouts, historyLine, portionLabel, quickMoveFor } from "./whereabouts";
 export type { EquipmentRow, HistoryNames, QuickMove, WhereaboutsGroup, WhereaboutsNames } from "./whereabouts";
 export { parsePlaceKey, placeKey, placeOf, singlePlace, totalQuantity } from "./portions";
 export type { Place, Portion } from "./portions";

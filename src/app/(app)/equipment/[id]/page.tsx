@@ -12,6 +12,7 @@ import { formatWhen } from "@/lib/format-time";
 import { listPlanWarnings } from "@/features/duties";
 import {
   describeWhereabouts,
+  portionLabel,
   historyLine,
   getEquipmentUnit,
   loadPortions,
@@ -68,7 +69,6 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
     const person = personId ? personById.get(personId) : undefined;
     return person ? displayName(person) : "someone";
   };
-  const capitalised = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   const eventNames = await listEventTitles(db, [
     ...portions.flatMap((p) => (p.lastSeenEventId ? [p.lastSeenEventId] : [])),
     ...log.flatMap((e) => (e.toLastSeenEventId ? [e.toLastSeenEventId] : [])),
@@ -78,11 +78,8 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
   const headsUps = warnings.headsUps.filter((h) => h.equipmentUnitId === id);
   const storesById = new Map(stores.map((s: Store) => [s.id, s]));
   const storeName = (storeId: string | null) => (storeId && storesById.get(storeId)?.name) || "a store";
-  const whereaboutsLabel = describeWhereabouts(portions, {
-    storeName,
-    personName,
-    eventName,
-  });
+  const whereaboutNames = { storeName, personName, eventName };
+  const whereaboutsLabel = describeWhereabouts(portions, whereaboutNames);
   const split = unit.quantity > 1;
   const committee = isCommitteeOrAbove(user.role);
 
@@ -105,12 +102,7 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
     return (
       <div className="flex flex-col gap-3 rounded-2xl border border-border p-3">
         <p className="text-sm font-medium">
-          {split ? `${portion.count} ` : ""}
-          {portion.whereaboutsType === "store"
-            ? `in ${storeName(portion.storeId)}`
-            : portion.whereaboutsType === "holder"
-              ? `with ${personName(portion.holderId)}`
-              : `not confirmed — last seen at ${eventNames.get(portion.lastSeenEventId ?? "") ?? "an event"}`}
+          {portionLabel(portion, whereaboutNames, { showCount: split })}
         </p>
 
         <QuickMoveBlockButton
@@ -232,11 +224,7 @@ export default async function EquipmentUnitDetailPage({ params }: PageProps<"/eq
                     </NativeSelectOption>
                     {portions.map((p) => (
                       <NativeSelectOption key={p.id} value={placeKey(placeOf(p))}>
-                        {p.whereaboutsType === "store"
-                          ? storeName(p.storeId)
-                          : p.whereaboutsType === "holder"
-                            ? capitalised(personName(p.holderId))
-                            : "Not confirmed"}
+                        {portionLabel(p, whereaboutNames, { showCount: true })}
                       </NativeSelectOption>
                     ))}
                   </NativeSelect>

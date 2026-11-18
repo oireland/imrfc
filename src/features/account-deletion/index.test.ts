@@ -4,7 +4,7 @@ import { createTestDb } from "@/test/db";
 import { store } from "@/features/stores";
 import { createEquipmentUnit } from "@/features/equipment";
 import { createEvent } from "@/features/events";
-import { claimDuty, ensureDuties } from "@/features/duties";
+import { claim, ensureDuties } from "@/test/duties";
 import { getFeedToken, renderFeed } from "@/features/calendar-feed";
 import { isSubscribed, subscribe } from "@/features/push";
 import { hasMobileNumber, setMobileNumber } from "@/features/contact";
@@ -93,7 +93,7 @@ describe("deleteAccount", () => {
     });
     if (!unit.ok || !event.ok) throw new Error("setup");
     const [toDuty] = await ensureDuties(db, event.event.id, [unit.equipmentUnit.id]);
-    await claimDuty(db, toDuty.id, "tom");
+    await claim(db, toDuty.id, "tom");
     const token = await getFeedToken(db, "tom");
     await subscribe(db, { userId: "tom", subscription: { endpoint: "https://push/tom", p256dh: "k", auth: "a" } });
 

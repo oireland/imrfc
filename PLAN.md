@@ -67,4 +67,4 @@ If L4–L5 overrun, they're the ones to cut.
 - [x] **23. Physio Message** — "Copy physio message" on the Players page (whole club) and on Matches (the picked team only, not Training): open Injuries with Needs physio ticked, each with area and note. Text only.
 - [x] **24. PWA & Push** — manifest, icons (generated from `docs/brand/crest.png`), iOS home-screen meta, service worker; `push` feature (subscriptions, morning-of reminders for Duties/Available replies on today's Events, a push alongside Announce/Nudge); Notifications toggle on Profile; daily Vercel Cron. See [ADR 0004](docs/adr/0004-web-push-over-third-party-and-daily-cron-drift.md).
 
-After v1: deploy to Vercel + Neon, choose production mail sender (it must allow ~300 emails/day for Announce). Follow-ups: scheduled Announce; emails when an announced Event changes or is Cancelled.
+Deployed: the app is live on Vercel + Neon at `app.imrfc.co.uk`, with Resend SMTP as the production mail sender. Follow-ups: scheduled Announce; emails when an announced Event changes or is Cancelled.

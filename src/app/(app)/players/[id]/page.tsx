@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { BackLink } from "@/components/back-link";
 import { Badge } from "@/components/ui/badge";
@@ -11,9 +10,9 @@ import { PositionsPicker } from "@/components/positions-picker";
 import { SubmitButton } from "@/components/submit-button";
 import { getSeasonRecord, type RecordLine, type ReplyCounts } from "@/features/availability";
 import { listEquipmentUnits } from "@/features/equipment";
-import { getMobileNumber, setMobileNumber, whatsappLink } from "@/features/contact";
+import { getMobileNumber, whatsappLink } from "@/features/contact";
 import { listInjuries, STATUS_LABEL, worstFitness, type OpenStatus } from "@/features/injuries";
-import { getPlayer, listAway, setPlayerPositions, setPlaying } from "@/features/players";
+import { getPlayer, listAway } from "@/features/players";
 import { londonDay } from "@/lib/london";
 import { formatWhen } from "@/lib/format-time";
 import type { RugbyPosition } from "@/features/users";
@@ -22,6 +21,7 @@ import { requireCommittee } from "@/lib/session";
 import { addAwayAction, editAwayAction, imBackAction, removeAwayAction } from "../../away-actions";
 import { awayItems } from "../../away-items";
 import { recentEventOptions } from "../../injury-events";
+import { saveMobileNumberAction, savePositionsAction, togglePlayingAction } from "../../player-actions";
 import { clearInjuryAction, logByMistakeAction, reportInjuryAction, updateInjuryAction } from "../../injury-actions";
 import { injuryItems } from "../../injury-items";
 
@@ -43,33 +43,6 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
 
   const fitness = worstFitness(injuries.open.map((i) => i.status as OpenStatus));
   const equipmentName = new Map(equipmentUnits.map((k) => [k.id, k.name]));
-
-  async function savePositions(preferred: RugbyPosition, other: RugbyPosition[]) {
-    "use server";
-    await requireCommittee();
-    const result = await setPlayerPositions(db, id, preferred, other);
-    if (result.ok) {
-      revalidatePath(`/players/${id}`);
-      revalidatePath("/players");
-    }
-    return result;
-  }
-
-  async function saveMobileNumber(input: string) {
-    "use server";
-    const current = await requireCommittee();
-    const result = await setMobileNumber(db, current, id, input);
-    if (result.ok) revalidatePath(`/players/${id}`);
-    return result;
-  }
-
-  async function togglePlaying(formData: FormData) {
-    "use server";
-    await requireCommittee();
-    await setPlaying(db, id, formData.get("playing") === "true");
-    revalidatePath(`/players/${id}`);
-    revalidatePath("/players");
-  }
 
   const { upcoming, season, last } = player.dutyRecord;
   const counts = (c: ReplyCounts) => `available ${c.available} · not ${c.notAvailable} · no reply ${c.noReply}`;
@@ -96,10 +69,10 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
           <PositionsPicker
             initialPreferred={player.preferredPosition as RugbyPosition | null}
             initialOther={player.otherPositions as RugbyPosition[]}
-            save={savePositions}
+            save={savePositionsAction.bind(null, id)}
           />
 
-          <form action={togglePlaying}>
+          <form action={togglePlayingAction.bind(null, id)}>
             <input type="hidden" name="playing" value={(!player.playing).toString()} />
             <SubmitButton variant="outline">{player.playing ? "Switch Playing off" : "Switch Playing on"}</SubmitButton>
           </form>
@@ -148,7 +121,7 @@ export default async function PlayerPage({ params }: PageProps<"/players/[id]">)
             id="player-mobile"
             label={mobileNumber ? "Number" : "Add a number"}
             initialNumber={mobileNumber}
-            save={saveMobileNumber}
+            save={saveMobileNumberAction.bind(null, id)}
           />
           {mobileNumber && (
             <a

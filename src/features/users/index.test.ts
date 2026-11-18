@@ -4,7 +4,6 @@ import { createTestDb } from "@/test/db";
 import { account, session, user } from "./schema";
 import {
   approveUser,
-  blockUser,
   blockUserAs,
   changeRole,
   listApprovedUsers,
@@ -18,7 +17,6 @@ import {
   setName,
   setPreferredPosition,
   setThemePreference,
-  setRole,
   unblockUser,
 } from "./index";
 
@@ -72,12 +70,12 @@ describe("approveUser", () => {
   });
 });
 
-describe("blockUser / unblockUser", () => {
+describe("blockUserAs / unblockUser", () => {
   it("blocks an Approved User and can unblock them back to Approved", async () => {
     const db = await createTestDb();
     const alex = await seedUser(db, { accessState: "approved" });
 
-    await blockUser(db, alex.id);
+    await blockUserAs(db, { actorId: "an-admin", userId: alex.id });
     const [blocked] = await db.select().from(user).where(eq(user.id, alex.id));
     expect(blocked.accessState).toBe("blocked");
 
@@ -96,7 +94,7 @@ describe("blockUser / unblockUser", () => {
       expiresAt: new Date(Date.now() + 1000 * 60 * 60),
     });
 
-    await blockUser(db, alex.id);
+    await blockUserAs(db, { actorId: "an-admin", userId: alex.id });
 
     const remaining = await db.select().from(session).where(eq(session.userId, alex.id));
     expect(remaining).toEqual([]);
@@ -202,12 +200,12 @@ describe("blockUserAs", () => {
   });
 });
 
-describe("setRole", () => {
+describe("changeRole by an Admin", () => {
   it("changes a User's Role", async () => {
     const db = await createTestDb();
     const alex = await seedUser(db, { role: "member" });
 
-    await setRole(db, alex.id, "committee");
+    await changeRole(db, { actorId: "an-admin", userId: alex.id, role: "committee" });
 
     const [updated] = await db.select().from(user).where(eq(user.id, alex.id));
     expect(updated.role).toBe("committee");

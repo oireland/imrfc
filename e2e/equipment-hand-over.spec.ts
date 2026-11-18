@@ -20,7 +20,7 @@ test("Anyone can hand an Equipment Unit to a teammate from its page", async ({ p
   await page.getByLabel("Or give it to someone").selectOption({ label: teammateName });
   await page.getByRole("button", { name: "Give", exact: true }).click();
 
-  await expect(page.getByText(`With ${teammateName}`, { exact: true })).toBeVisible();
+  await expect(page.locator("dd.font-medium")).toHaveText(`With ${teammateName}`);
   await expect(page.getByText(`You gave it to ${teammateName}`)).toBeVisible();
 
   // Test people would otherwise pile up in every person picker on the dev database.

@@ -6,21 +6,17 @@ import { createEquipmentUnit, loadPortions, listMovementLog, raiseQuantity, reco
 import { addToChecklist, setChecklistItemCount } from "@/features/checklists";
 import { cancelEvent, createEvent, event } from "@/features/events";
 import { user } from "@/features/users";
+import { assign, claim, ensureDuties, handOn, leave, setDestination } from "@/test/duties";
 import { duty, dutyUser } from "./schema";
 import {
   actOnDuty,
-  assignDuty,
-  claimDuty,
+  actOnEventDuty,
   confirmDuty,
-  ensureDuties,
-  handOnDuty,
-  leaveDuty,
   listDutyRecordForUser,
   listDutyUserIdsByEvent,
   listPeopleOnEquipment,
   listPlanWarnings,
   listUpcomingDutiesForUser,
-  setDestination,
   markUnconfirmed,
   releaseUpcomingDuties,
   voidDutiesForEvent,
@@ -85,7 +81,7 @@ describe("Duties", () => {
   it("Claiming a To Duty sends the From Duty to the same User (From follows To while empty)", async () => {
     const { db, to, reload } = await setup();
 
-    expect(await claimDuty(db, to.id, "tom")).toEqual({ ok: true });
+    expect(await claim(db, to.id, "tom")).toEqual({ ok: true });
 
     const after = await reload();
     expect(after.to.userIds).toEqual(["tom"]);
@@ -94,9 +90,9 @@ describe("Duties", () => {
 
   it("A second person joining the To Duty also joins the From Duty, as long as it's still following", async () => {
     const { db, to, from, reload } = await setup();
-    await claimDuty(db, to.id, "tom");
+    await claim(db, to.id, "tom");
 
-    await claimDuty(db, to.id, "sam");
+    await claim(db, to.id, "sam");
 
     const after = await reload();
     expect(after.to.userIds).toEqual(["tom", "sam"]);
@@ -107,7 +103,7 @@ describe("Duties", () => {
   it("Claiming a From Duty leaves the To Duty alone", async () => {
     const { db, from, reload } = await setup();
 
-    await claimDuty(db, from.id, "tom");
+    await claim(db, from.id, "tom");
 
     const after = await reload();
     expect(after.from.userIds).toEqual(["tom"]);
@@ -116,16 +112,16 @@ describe("Duties", () => {
 
   it("refuses to claim a Duty you're already on", async () => {
     const { db, to } = await setup();
-    await claimDuty(db, to.id, "tom");
+    await claim(db, to.id, "tom");
 
-    expect(await claimDuty(db, to.id, "tom")).toEqual({ ok: false, error: "You're already on it." });
+    expect(await claim(db, to.id, "tom")).toEqual({ ok: false, error: "You can't do that on this duty." });
   });
 
   it("stops following once the From Duty has been given a different set of People", async () => {
     const { db, to, from, reload } = await setup();
-    await claimDuty(db, from.id, "priya");
+    await claim(db, from.id, "priya");
 
-    await claimDuty(db, to.id, "tom");
+    await claim(db, to.id, "tom");
 
     const after = await reload();
     expect(after.to.userIds).toEqual(["tom"]);
@@ -134,19 +130,19 @@ describe("Duties", () => {
 
   it("Assigning replaces the whole set — adds and removes in one go", async () => {
     const { db, to, reload } = await setup();
-    await claimDuty(db, to.id, "tom");
+    await claim(db, to.id, "tom");
 
-    await assignDuty(db, to.id, ["sam", "priya"]);
+    await assign(db, to.id, ["sam", "priya"]);
 
     expect((await reload()).to.userIds).toEqual(["sam", "priya"]);
   });
 
   it("a leave (or hand-on) on the To Duty removes the same person from a still-following From Duty", async () => {
     const { db, to, reload } = await setup();
-    await claimDuty(db, to.id, "tom");
-    await claimDuty(db, to.id, "sam");
+    await claim(db, to.id, "tom");
+    await claim(db, to.id, "sam");
 
-    expect(await leaveDuty(db, to.id, "tom")).toEqual({ ok: true });
+    expect(await leave(db, to.id, "tom")).toEqual({ ok: true });
 
     const after = await reload();
     expect(after.to.userIds).toEqual(["sam"]);
@@ -155,18 +151,18 @@ describe("Duties", () => {
 
   it("refuses to leave a Duty you're not on", async () => {
     const { db, to } = await setup();
-    expect(await leaveDuty(db, to.id, "tom")).toEqual({ ok: false, error: "You're not on that duty." });
+    expect(await leave(db, to.id, "tom")).toEqual({ ok: false, error: "You can't do that on this duty." });
   });
 
   it("lets a User hand their own place on, and no one else's", async () => {
     const { db, from, reload } = await setup();
-    await claimDuty(db, from.id, "tom");
+    await claim(db, from.id, "tom");
 
-    expect(await handOnDuty(db, from.id, "sam", "priya")).toEqual({
+    expect(await handOn(db, from.id, "sam", "priya")).toEqual({
       ok: false,
-      error: "You can only hand on your own place.",
+      error: "You can't do that on this duty.",
     });
-    expect(await handOnDuty(db, from.id, "tom", "priya")).toEqual({ ok: true });
+    expect(await handOn(db, from.id, "tom", "priya")).toEqual({ ok: true });
 
     expect((await reload()).from.userIds).toEqual(["priya"]);
   });
@@ -190,14 +186,14 @@ describe("Duties", () => {
 
     expect(await setDestination(db, to.id, { type: "holder" })).toEqual({
       ok: false,
-      error: "Only the trip back has a destination.",
+      error: "You can't do that on this duty.",
     });
   });
 
   describe("Confirm", () => {
     it("a Confirmed To Duty moves the Equipment Unit to its Duty's User, logged as a Duty Move", async () => {
       const { db, equipment, to } = await setup();
-      await claimDuty(db, to.id, "tom");
+      await claim(db, to.id, "tom");
 
       expect(await confirmDuty(db, to.id, { id: "tom", role: "member" })).toEqual({ ok: true });
 
@@ -211,7 +207,7 @@ describe("Duties", () => {
     it("a Confirmed From Duty moves the Equipment Unit to Home by default", async () => {
       const { db, equipment, shed, cupboard, to, from } = await setup();
       await recordMove(db, equipment.id, "tom", { type: "store", storeId: cupboard.id });
-      await claimDuty(db, to.id, "tom");
+      await claim(db, to.id, "tom");
 
       await confirmDuty(db, from.id, { id: "tom", role: "member" });
 
@@ -220,7 +216,7 @@ describe("Duties", () => {
 
     it("a Confirmed From Duty honours a Store Destination or staying with the Duty's User", async () => {
       const { db, equipment, cupboard, to, from } = await setup();
-      await claimDuty(db, to.id, "tom");
+      await claim(db, to.id, "tom");
 
       await setDestination(db, from.id, { type: "store", storeId: cupboard.id });
       await confirmDuty(db, from.id, { id: "tom", role: "member" });
@@ -228,7 +224,7 @@ describe("Duties", () => {
 
       const other = await ensureDuties(db, "e2", [equipment.id]);
       const from2 = other.find((d) => d.direction === "from")!;
-      await claimDuty(db, other.find((d) => d.direction === "to")!.id, "sam");
+      await claim(db, other.find((d) => d.direction === "to")!.id, "sam");
       await setDestination(db, from2.id, { type: "holder" });
       await confirmDuty(db, from2.id, { id: "sam", role: "member" });
       expect(await whereaboutsOf(db, equipment.id)).toMatchObject({ whereaboutsType: "holder", holderId: "sam" });
@@ -236,7 +232,7 @@ describe("Duties", () => {
 
     it("lets Committee Confirm any Duty but not another member", async () => {
       const { db, equipment, to } = await setup();
-      await claimDuty(db, to.id, "tom");
+      await claim(db, to.id, "tom");
 
       expect(await confirmDuty(db, to.id, { id: "sam", role: "member" })).toMatchObject({ ok: false });
       expect(await whereaboutsOf(db, equipment.id)).toMatchObject({ whereaboutsType: "store" });
@@ -250,7 +246,7 @@ describe("Duties", () => {
 
       expect(await confirmDuty(db, to.id, { id: "sam", role: "committee" })).toMatchObject({ ok: false });
 
-      await claimDuty(db, to.id, "tom");
+      await claim(db, to.id, "tom");
       await confirmDuty(db, to.id, { id: "tom", role: "member" });
       expect(await confirmDuty(db, to.id, { id: "tom", role: "member" })).toMatchObject({ ok: false });
       expect((await listMovementLog(db, equipment.id)).map((e) => e.kind)).toEqual(["move", "added"]);
@@ -258,8 +254,8 @@ describe("Duties", () => {
 
     it("lets any of several People, not just the confirmer, be a valid confirmer", async () => {
       const { db, equipment, to } = await setup();
-      await claimDuty(db, to.id, "tom");
-      await claimDuty(db, to.id, "sam");
+      await claim(db, to.id, "tom");
+      await claim(db, to.id, "sam");
 
       expect(await confirmDuty(db, to.id, { id: "sam", role: "member" })).toEqual({ ok: true });
       expect(await whereaboutsOf(db, equipment.id)).toMatchObject({ whereaboutsType: "holder", holderId: "sam" });
@@ -298,7 +294,7 @@ describe("Duties", () => {
 
     it("moves only the Checklist line's count to the Duty's User on a Confirmed To Duty", async () => {
       const { db, equipment, shed, to } = await setupCounted();
-      await claimDuty(db, to.id, "tom");
+      await claim(db, to.id, "tom");
 
       expect(await confirmDuty(db, to.id, { id: "tom", role: "member" })).toEqual({ ok: true });
 
@@ -313,7 +309,7 @@ describe("Duties", () => {
 
     it("moves only the count back from the Duty's User on a Confirmed From Duty", async () => {
       const { db, equipment, shed, to, from } = await setupCounted();
-      await claimDuty(db, to.id, "tom");
+      await claim(db, to.id, "tom");
       await confirmDuty(db, to.id, { id: "tom", role: "member" });
 
       expect(await confirmDuty(db, from.id, { id: "tom", role: "member" })).toEqual({ ok: true });
@@ -325,8 +321,8 @@ describe("Duties", () => {
 
     it("defaults 'who has how many' to everything with whoever confirms, for several People", async () => {
       const { db, equipment, to } = await setupCounted();
-      await claimDuty(db, to.id, "tom");
-      await claimDuty(db, to.id, "sam");
+      await claim(db, to.id, "tom");
+      await claim(db, to.id, "sam");
 
       expect(await confirmDuty(db, to.id, { id: "sam", role: "member" })).toEqual({ ok: true });
 
@@ -337,8 +333,8 @@ describe("Duties", () => {
 
     it("honours a given 'who has how many' split across several People", async () => {
       const { db, equipment, to } = await setupCounted();
-      await claimDuty(db, to.id, "tom");
-      await claimDuty(db, to.id, "sam");
+      await claim(db, to.id, "tom");
+      await claim(db, to.id, "sam");
 
       expect(
         await confirmDuty(db, to.id, { id: "sam", role: "member" }, { holders: [{ userId: "tom", count: 3 }, { userId: "sam", count: 1 }] }),
@@ -354,8 +350,8 @@ describe("Duties", () => {
 
     it("rejects a 'who has how many' split that doesn't add up", async () => {
       const { db, to } = await setupCounted();
-      await claimDuty(db, to.id, "tom");
-      await claimDuty(db, to.id, "sam");
+      await claim(db, to.id, "tom");
+      await claim(db, to.id, "sam");
 
       expect(
         await confirmDuty(db, to.id, { id: "sam", role: "member" }, { holders: [{ userId: "tom", count: 1 }, { userId: "sam", count: 1 }] }),
@@ -370,7 +366,7 @@ describe("Duties", () => {
         count: 2,
         from: { type: "store", storeId: shed.id },
       });
-      await claimDuty(db, to.id, "tom");
+      await claim(db, to.id, "tom");
 
       const result = await confirmDuty(
         db,
@@ -390,8 +386,8 @@ describe("Duties", () => {
 
     it("gathers a From Duty's count from each of the Duty's People, when the Destination is a Store", async () => {
       const { db, equipment, shed, to, from } = await setupCounted();
-      await claimDuty(db, to.id, "tom");
-      await claimDuty(db, to.id, "sam");
+      await claim(db, to.id, "tom");
+      await claim(db, to.id, "sam");
       await confirmDuty(db, to.id, { id: "tom", role: "member" }, { holders: [{ userId: "tom", count: 3 }, { userId: "sam", count: 1 }] });
 
       expect(await confirmDuty(db, from.id, { id: "tom", role: "member" })).toEqual({ ok: true });
@@ -401,8 +397,8 @@ describe("Duties", () => {
 
     it("sets final Holders on a From Duty staying with them, defaulting and given a split", async () => {
       const { db, equipment, to, from } = await setupCounted(4, 4);
-      await claimDuty(db, to.id, "tom");
-      await claimDuty(db, to.id, "sam");
+      await claim(db, to.id, "tom");
+      await claim(db, to.id, "sam");
       await confirmDuty(db, to.id, { id: "tom", role: "member" }, { holders: [{ userId: "tom", count: 2 }, { userId: "sam", count: 2 }] });
       await setDestination(db, from.id, { type: "holder" });
 
@@ -416,7 +412,7 @@ describe("Duties", () => {
 
   it("voiding an Event's Duties stops them being Confirmed", async () => {
     const { db, equipment, to } = await setup();
-    await claimDuty(db, to.id, "tom");
+    await claim(db, to.id, "tom");
 
     await voidDutiesForEvent(db, "e1");
 
@@ -426,7 +422,7 @@ describe("Duties", () => {
 
   it("deleteDuties removes an Event's Duties and who was on them, leaving other Events' alone", async () => {
     const { db, equipment, to } = await setup();
-    await claimDuty(db, to.id, "tom");
+    await claim(db, to.id, "tom");
     await ensureDuties(db, "e2", [equipment.id]);
 
     await deleteDuties(db, "e1");
@@ -452,7 +448,7 @@ describe("Duties", () => {
       const { db, shed, equipment } = await setup();
       const ev = await pastEvent(db, shed.id, 1);
       const [to] = (await ensureDuties(db, ev.id, [equipment.id])).filter((d) => d.direction === "to");
-      await claimDuty(db, to.id, "tom");
+      await claim(db, to.id, "tom");
       await confirmDuty(db, to.id, { id: "tom", role: "member" });
 
       await markUnconfirmed(db);
@@ -478,7 +474,7 @@ describe("Duties", () => {
         d.find((x) => x.direction === "to")!,
         d.find((x) => x.direction === "from")!,
       ]);
-      await claimDuty(db, to.id, "tom");
+      await claim(db, to.id, "tom");
       await confirmDuty(db, to.id, { id: "tom", role: "member" });
       await confirmDuty(db, from.id, { id: "tom", role: "member" });
       const ongoing = await createEvent(db, {
@@ -489,7 +485,7 @@ describe("Duties", () => {
       });
       if (!ongoing.ok) throw new Error(ongoing.error);
       const [to2] = (await ensureDuties(db, ongoing.event.id, [equipment.id])).filter((d) => d.direction === "to");
-      await claimDuty(db, to2.id, "sam");
+      await claim(db, to2.id, "sam");
       await confirmDuty(db, to2.id, { id: "sam", role: "member" });
       const never = await pastEvent(db, shed.id, 1);
       await ensureDuties(db, never.id, [equipment.id]);
@@ -508,7 +504,7 @@ describe("Duties", () => {
       await addToChecklist(db, { scope: "event", scopeId: ev.id }, made.equipmentUnit.id);
       await setChecklistItemCount(db, { scope: "event", scopeId: ev.id }, made.equipmentUnit.id, 4);
       const [to] = (await ensureDuties(db, ev.id, [made.equipmentUnit.id])).filter((d) => d.direction === "to");
-      await claimDuty(db, to.id, "tom");
+      await claim(db, to.id, "tom");
       await confirmDuty(db, to.id, { id: "tom", role: "member" });
 
       await markUnconfirmed(db);
@@ -530,8 +526,8 @@ describe("Duties", () => {
       const ev = await pastEvent(db, shed.id, 1);
       await addToChecklist(db, { scope: "event", scopeId: ev.id }, made.equipmentUnit.id);
       const [to] = (await ensureDuties(db, ev.id, [made.equipmentUnit.id])).filter((d) => d.direction === "to");
-      await claimDuty(db, to.id, "tom");
-      await claimDuty(db, to.id, "sam");
+      await claim(db, to.id, "tom");
+      await claim(db, to.id, "sam");
       await confirmDuty(db, to.id, { id: "tom", role: "member" }, { holders: [{ userId: "tom", count: 3 }, { userId: "sam", count: 1 }] });
 
       await markUnconfirmed(db);
@@ -544,7 +540,7 @@ describe("Duties", () => {
       const { db, shed, equipment } = await setup();
       const ev = await pastEvent(db, shed.id, 1);
       const [to] = (await ensureDuties(db, ev.id, [equipment.id])).filter((d) => d.direction === "to");
-      await claimDuty(db, to.id, "tom");
+      await claim(db, to.id, "tom");
       await confirmDuty(db, to.id, { id: "tom", role: "member" });
       await markUnconfirmed(db);
 
@@ -573,8 +569,8 @@ describe("Duties", () => {
     const future = await ensureDuties(db, soon.event.id, [equipment.id]);
     const old = await ensureDuties(db, past.event.id, [equipment.id]);
     for (const d of [...future, ...old]) {
-      await claimDuty(db, d.id, "tom");
-      await claimDuty(db, d.id, "sam");
+      await claim(db, d.id, "tom");
+      await claim(db, d.id, "sam");
     }
 
     await releaseUpcomingDuties(db, "tom");
@@ -606,11 +602,11 @@ describe("listUpcomingDutiesForUser", () => {
     const done = await futureEvent(db, shed.id, "Done", 10);
     for (const e of [later, sooner, cancelled, done]) {
       const [to] = (await ensureDuties(db, e.id, [equipment.id])).filter((d) => d.direction === "to");
-      await claimDuty(db, to.id, "tom");
+      await claim(db, to.id, "tom");
       if (e === done) await confirmDuty(db, to.id, { id: "tom", role: "member" });
     }
     const [samsFrom] = (await ensureDuties(db, sooner.id, [equipment.id])).filter((d) => d.direction === "from");
-    await handOnDuty(db, samsFrom.id, "tom", "sam");
+    await handOn(db, samsFrom.id, "tom", "sam");
     await cancelEvent(db, cancelled.id);
     await voidDutiesForEvent(db, cancelled.id);
 
@@ -723,7 +719,7 @@ describe("Clashes and heads-ups", () => {
     await db.update(user).set({ name: "Sam Okafor" }).where(eq(user.id, "sam"));
     await db.update(user).set({ name: "Tom Reed" }).where(eq(user.id, "tom"));
     await recordMove(db, equipment.id, "sam", { type: "holder", holderId: "sam" });
-    await assignDuty(db, duties.find((d) => d.direction === "to")!.id, ["tom"]);
+    await assign(db, duties.find((d) => d.direction === "to")!.id, ["tom"]);
 
     expect((await listPlanWarnings(db)).headsUps.map((h) => h.message)).toEqual([
       "Sam Okafor needs to pass Balls to Tom Reed before Training @ Harlington.",
@@ -786,7 +782,7 @@ describe("Query efficiency", () => {
       if (!unit.ok) throw new Error(unit.error);
       await addToChecklist(db, { scope: "event", scopeId: made.event.id }, unit.equipmentUnit.id);
       const [dutyRow] = await ensureDuties(db, made.event.id, [unit.equipmentUnit.id]);
-      await claimDuty(db, dutyRow.id, "sam");
+      await claim(db, dutyRow.id, "sam");
     };
 
     await addClaimedDuty("Equipment A");
@@ -813,7 +809,7 @@ describe("Query efficiency", () => {
       const unit = await createEquipmentUnit(db, { name: `Equipment ${i}`, homeId: shed.id });
       if (!unit.ok) throw new Error(unit.error);
       const [to] = (await ensureDuties(db, ev.event.id, [unit.equipmentUnit.id])).filter((d) => d.direction === "to");
-      await claimDuty(db, to.id, "tom");
+      await claim(db, to.id, "tom");
       await confirmDuty(db, to.id, { id: "tom", role: "member" });
     }
     return db;
@@ -860,10 +856,10 @@ describe("Query efficiency", () => {
     expect(again()).toBe(0);
   });
 
-  it("ensureDuties writes nothing when the Duties already exist", async () => {
+  it("acting on an Event's Duty writes nothing when the Duties already exist and the action is refused", async () => {
     const { db, equipment } = await setup();
     const again = countWrites(db);
-    await ensureDuties(db, "e1", [equipment.id]);
+    await actOnEventDuty(db, "e1", equipment.id, "to", { id: "tom", role: "member" }, { action: "leave" });
     expect(again()).toBe(0);
   });
 
@@ -880,7 +876,7 @@ describe("Query efficiency", () => {
       const unit = await createEquipmentUnit(db, { name: `Equipment ${i}`, homeId: shed.id });
       if (!unit.ok) throw new Error(unit.error);
       const [to] = (await ensureDuties(db, ev.event.id, [unit.equipmentUnit.id])).filter((d) => d.direction === "to");
-      await claimDuty(db, to.id, claimant);
+      await claim(db, to.id, claimant);
     }
     return db;
   }
@@ -955,7 +951,7 @@ describe("Query efficiency", () => {
     await addToChecklist(db, { scope: "event_type", scopeId: "training" }, equipment.id);
     const first = await addTraining(db, 24);
     const [to] = (await ensureDuties(db, first.id, [equipment.id])).filter((d) => d.direction === "to");
-    await claimDuty(db, to.id, "sam");
+    await claim(db, to.id, "sam");
 
     const few = countSelects(db);
     await listUpcomingDutiesForUser(db, "sam");
@@ -976,7 +972,7 @@ describe("Query efficiency", () => {
         d.find((x) => x.direction === "to")!,
         d.find((x) => x.direction === "from")!,
       ]);
-      await claimDuty(db, to.id, "tom");
+      await claim(db, to.id, "tom");
       await confirmDuty(db, to.id, { id: "tom", role: "member" });
       await confirmDuty(db, from.id, { id: "tom", role: "member" });
     }
@@ -995,7 +991,7 @@ describe("Query efficiency", () => {
       return original(...args);
     };
 
-    expect(await ensureDuties(db, "e1", [equipment.id])).toHaveLength(2);
+    await actOnEventDuty(db, "e1", equipment.id, "to", { id: "tom", role: "member" }, { action: "leave" });
     expect(inserts).toBe(0);
   });
 
@@ -1028,8 +1024,8 @@ describe("listDutyRecordForUser", () => {
     // each Event contributes a single Duty here, keeping the counts easy to read.
     async function claimToOnly(eventId: string, equipmentUnitId: string) {
       const [to, from] = await ensureDuties(db, eventId, [equipmentUnitId]);
-      await claimDuty(db, to.direction === "to" ? to.id : from.id, "tom");
-      await leaveDuty(db, to.direction === "from" ? to.id : from.id, "tom");
+      await claim(db, to.direction === "to" ? to.id : from.id, "tom");
+      await leave(db, to.direction === "from" ? to.id : from.id, "tom");
       return to.direction === "to" ? to : from;
     }
 
@@ -1071,10 +1067,10 @@ describe("listDutyUserIdsByEvent", () => {
     if (!unitB.ok) throw new Error(unitB.error);
 
     const [toA] = await ensureDuties(db, "e1", [unitA.equipmentUnit.id]);
-    await claimDuty(db, toA.id, "tom");
+    await claim(db, toA.id, "tom");
     const [toB, fromB] = await ensureDuties(db, "e2", [unitB.equipmentUnit.id]);
-    await claimDuty(db, toB.id, "sam");
-    await claimDuty(db, fromB.id, "priya");
+    await claim(db, toB.id, "sam");
+    await claim(db, fromB.id, "priya");
 
     const byEvent = await listDutyUserIdsByEvent(db, ["e1", "e2", "e3"]);
 
@@ -1088,7 +1084,7 @@ describe("listDutyUserIdsByEvent", () => {
     const unit = await createEquipmentUnit(db, { name: "Balls", homeId: shed.id });
     if (!unit.ok) throw new Error(unit.error);
     const [to] = await ensureDuties(db, "e1", [unit.equipmentUnit.id]);
-    await claimDuty(db, to.id, "tom");
+    await claim(db, to.id, "tom");
     await voidDutiesForEvent(db, "e1");
 
     const byEvent = await listDutyUserIdsByEvent(db, ["e1"]);
@@ -1100,8 +1096,8 @@ describe("listDutyUserIdsByEvent", () => {
 describe("Taking Equipment off an Event's list", () => {
   it("names the People on an Equipment Unit's Duties, and drops those Duties", async () => {
     const { db, equipment, to, from } = await setup();
-    await assignDuty(db, to.id, ["tom", "sam"]);
-    await assignDuty(db, from.id, ["sam", "priya"]);
+    await assign(db, to.id, ["tom", "sam"]);
+    await assign(db, from.id, ["sam", "priya"]);
 
     const people = await listPeopleOnEquipment(db, "e1", [equipment.id]);
     expect([...people.get(equipment.id)!].sort()).toEqual(["priya", "sam", "tom"]);
@@ -1138,9 +1134,9 @@ describe("Equipment integrity", () => {
   describe("Confirming never creates or loses equipment", () => {
     it("a From Duty handed to someone else can't be Confirmed by them while the unit is with the carrier", async () => {
       const { db, equipment, to, from } = await setup();
-      await claimDuty(db, to.id, "sam");
+      await claim(db, to.id, "sam");
       await confirmDuty(db, to.id, member("sam"));
-      await handOnDuty(db, from.id, "sam", "tom");
+      await handOn(db, from.id, "sam", "tom");
 
       const result = await confirmDuty(db, from.id, member("tom"));
 
@@ -1151,9 +1147,9 @@ describe("Equipment integrity", () => {
 
     it("a From Duty handed to someone else can be Confirmed from the carrier when the Confirm says so", async () => {
       const { db, equipment, to, from } = await setup();
-      await claimDuty(db, to.id, "sam");
+      await claim(db, to.id, "sam");
       await confirmDuty(db, to.id, member("sam"));
-      await handOnDuty(db, from.id, "sam", "tom");
+      await handOn(db, from.id, "sam", "tom");
 
       const result = await confirmDuty(db, from.id, member("tom"), { from: [{ place: { type: "holder", holderId: "sam" }, count: 1 }] });
 
@@ -1164,7 +1160,7 @@ describe("Equipment integrity", () => {
 
     it("refuses a Confirm whose chosen sources add up to nothing", async () => {
       const { db, equipment, to } = await setup();
-      await claimDuty(db, to.id, "tom");
+      await claim(db, to.id, "tom");
 
       const result = await confirmDuty(db, to.id, member("tom"), { from: [] });
 
@@ -1176,7 +1172,7 @@ describe("Equipment integrity", () => {
   describe("a failed Confirm", () => {
     it("leaves the Duty unconfirmed so it can be retried", async () => {
       const { db, cupboard, equipment, to, reload } = await setup();
-      await claimDuty(db, to.id, "tom");
+      await claim(db, to.id, "tom");
 
       const result = await confirmDuty(db, to.id, member("tom"), { from: [{ place: { type: "store", storeId: cupboard.id }, count: 1 }] });
 
@@ -1192,7 +1188,7 @@ describe("Equipment integrity", () => {
       const ctx = await setup();
       const ev = await pastEvent(ctx.db);
       const { to } = await dutiesFor(ctx.db, ev.id, ctx.equipment.id);
-      await claimDuty(ctx.db, to.id, "tom");
+      await claim(ctx.db, to.id, "tom");
       await confirmDuty(ctx.db, to.id, member("tom"));
       await markUnconfirmed(ctx.db);
       expect(await whereaboutsOf(ctx.db, ctx.equipment.id)).toMatchObject({ whereaboutsType: "unconfirmed" });
@@ -1228,7 +1224,7 @@ describe("Equipment integrity", () => {
       });
       if (!next.ok) throw new Error(next.error);
       const { to } = await dutiesFor(db, next.event.id, equipment.id);
-      await claimDuty(db, to.id, "tom");
+      await claim(db, to.id, "tom");
       await confirmDuty(db, to.id, member("tom"));
 
       await markUnconfirmed(db);
@@ -1244,7 +1240,7 @@ describe("Equipment integrity", () => {
       await addToChecklist(db, { scope: "event", scopeId: ev.id }, made.equipmentUnit.id);
       await setChecklistItemCount(db, { scope: "event", scopeId: ev.id }, made.equipmentUnit.id, 4);
       const { to } = await dutiesFor(db, ev.id, made.equipmentUnit.id);
-      await claimDuty(db, to.id, "tom");
+      await claim(db, to.id, "tom");
       await confirmDuty(db, to.id, member("tom"));
 
       await markUnconfirmed(db);
@@ -1263,18 +1259,18 @@ describe("Equipment integrity", () => {
     it("handOnDuty refuses someone who doesn't exist or isn't approved", async () => {
       const { db, to, reload } = await setup();
       await db.insert(user).values({ id: "bob", name: "bob", email: "bob@x.org", accessState: "blocked" });
-      await claimDuty(db, to.id, "tom");
+      await claim(db, to.id, "tom");
 
-      expect(await handOnDuty(db, to.id, "tom", "nobody")).toMatchObject({ ok: false });
-      expect(await handOnDuty(db, to.id, "tom", "bob")).toMatchObject({ ok: false });
+      expect(await handOn(db, to.id, "tom", "nobody")).toMatchObject({ ok: false });
+      expect(await handOn(db, to.id, "tom", "bob")).toMatchObject({ ok: false });
       expect((await reload()).to.userIds).toEqual(["tom"]);
     });
 
     it("assignDuty refuses a set containing someone unknown or not approved, changing nothing", async () => {
       const { db, to } = await setup();
-      await claimDuty(db, to.id, "tom");
+      await claim(db, to.id, "tom");
 
-      expect(await assignDuty(db, to.id, ["sam", "nobody"])).toMatchObject({ ok: false });
+      expect(await assign(db, to.id, ["sam", "nobody"])).toMatchObject({ ok: false });
       expect(await db.select().from(dutyUser).where(eq(dutyUser.dutyId, to.id))).toHaveLength(1);
     });
   });

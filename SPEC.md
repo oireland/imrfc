@@ -19,7 +19,7 @@ Imperial Medicals RFC keeps forgetting equipment and keeps asking the same quest
 - Free to build and run: Next.js on Vercel (hobby), Neon Postgres (free), no paid services — push notifications use the free Web Push standard rather than a third-party push service.
 - Mobile-first; most use is on phones. ~50–150 users.
 - Single club, single tenant. All times Europe/London (BST-aware).
-- Built test-first (TDD). Vercel deployment only once fully working locally.
+- Built test-first (TDD). Live in production at `app.imrfc.co.uk`; changes ship to real club members, and production builds run the database migrations.
 
 ## Access
 
@@ -371,7 +371,7 @@ Every signed-in screen is checked with axe in light, dark (device) and Dark chos
 | DB | Postgres — Neon (prod), Docker (dev), PGlite (tests) |
 | ORM | Drizzle |
 | Auth | Better Auth: Google, magic link, admin plugin (ban/unban) — see [ADR 0001](docs/adr/0001-better-auth-and-neon-over-supabase.md) |
-| Email | Pluggable mail sender: Mailpit (dev), console (tests), SMTP from `noreply@imrfc.co.uk` (prod). One Announce reaches 50–100 Players, so the production sender's free tier must allow ~300 emails/day (Resend's free tier is believed to be 100/day — check; Brevo is ~300/day) |
+| Email | Pluggable mail sender: Mailpit (dev), console (tests), SMTP from `noreply@imrfc.co.uk` (prod, Resend SMTP). One Announce reaches 50–100 Players, so the production sender's free tier must allow ~300 emails/day |
 | UI | Tailwind, shadcn/ui |
 | Tests | Vitest (unit + integration on PGlite), Playwright (E2E) |
 | Hosting | Vercel (`lhr1`) at `app.imrfc.co.uk`, Neon Postgres (London); DNS at IONOS |
@@ -384,7 +384,7 @@ Features: `users` (access, roles, blocking), `account-deletion`, `onboarding`, `
 
 ## Out of scope for v1
 
-- Duty reminders (email / push), scheduled Announce, and emails when an Event changes or is Cancelled.
+- Duty reminders beyond the daily morning-of push (see [ADR 0004](docs/adr/0004-web-push-over-third-party-and-daily-cron-drift.md)), scheduled Announce, and emails when an Event changes or is Cancelled.
 - Fixture import (BUCS/LUSL scraping or calendar import).
 - Itemised equipment contents (e.g. counting the balls inside a ball bag). Quantity counts things that travel separately, not what's inside a container.
 - Team-filtered Calendar Feeds, team membership.
