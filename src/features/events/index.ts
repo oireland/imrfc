@@ -239,11 +239,11 @@ export async function cancelEvent(db: Db, id: string) {
 }
 
 /**
- * Removes an Event for good, with its Match details. Other features' records of it
- * (Duties, Availability, selection…) go through their own `deleteFor…` functions.
+ * Removes an Event for good. Its Match details go with it (ON DELETE CASCADE); other
+ * features' records of it (Duties, Availability, selection…) must be deleted first through
+ * their own functions, as their foreign keys refuse to dangle.
  */
 export async function deleteEvent(db: Db, id: string) {
-  await db.delete(matchDetails).where(eq(matchDetails.eventId, id));
   await db.delete(event).where(eq(event.id, id));
 }
 

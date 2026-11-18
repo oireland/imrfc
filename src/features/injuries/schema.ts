@@ -38,7 +38,7 @@ export const injuryChange = pgTable(
     id: text("id").primaryKey(),
     injuryId: text("injury_id")
       .notNull()
-      .references(() => injury.id),
+      .references(() => injury.id, { onDelete: "cascade" }),
     kind: text("kind", { enum: ["reported", "updated", "cleared", "mistake"] }).notNull(),
     fromStatus: text("from_status", { enum: [...OPEN_STATUSES, "cleared"] as const }),
     toStatus: text("to_status", { enum: [...OPEN_STATUSES, "cleared"] as const }),

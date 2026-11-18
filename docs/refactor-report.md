@@ -17,7 +17,6 @@ _First written 17 Nov 2026 from a read-through of `src/` that looked for duplica
 | 9 | [Portions maths lives in the ledger only](#9-portions-maths-lives-in-the-ledger-only) | ~50 | Medium | `equipment/portions.ts`, `index.ts` |
 | 20 | [Event detail page: move the view model out](#20-event-detail-page-move-the-view-model-out) | ~0 net, −250 in the page | Medium | `events/[id]/page.tsx`, `event-duties.tsx` |
 | 23 | [Remaining leftovers](#23-remaining-leftovers) | ~10 | None | `lib/utils.ts`, onboarding |
-| 24 | [Cascade deletes inside a feature](#24-cascade-deletes-inside-a-feature-optional) | ~25 | Medium (migration) | duties, injuries, checklists, events |
 | 25 | [Derive Unconfirmed from the ledger](#25-later-derive-unconfirmed-from-the-ledger) | large | High | out of scope for now |
 
 ---
@@ -85,19 +84,6 @@ The page also defines five server actions inline: `cancel`, `remove`, `edit`, `a
 |---|---|---|
 | `lib/utils.ts` | `src/lib/utils.ts` | It only re-exports `cn`, and every file now imports `cn` from `"cn"` directly. Delete it and point `components.json` `aliases.utils` at `"cn"`, after checking that the shadcn CLI accepts a package name there. Otherwise keep it, so `shadcn add` keeps working. |
 | `features/onboarding` | whole folder | One five-line pure function plus a re-export. It could live in `users` as `needsOnboarding`. Optional, because ADR 0002 prefers new features to edits. |
-
-### 24. Cascade deletes inside a feature (optional)
-
-**Where.** In several places, deleting a parent and its own child rows takes two statements and a select of ids:
-
-- `duty` → `duty_user` (`deleteDuties`)
-- `injury` → `injury_change` (`clearInjuries`)
-- `checklist` → `checklist_item` (`clearChecklist`)
-- `event` → `match_details` (`deleteEvent`)
-
-**How.** Add a migration that puts `ON DELETE CASCADE` on those four **feature-internal** foreign keys. Each delete then becomes one statement.
-
-**Correctness.** Don't touch the foreign keys that point at `event` from other features. `src/db/event-foreign-keys.test.ts` deliberately pins them as `NO ACTION`, and ADR 0007 relies on `equipment_portion.last_seen_event_id` blocking a delete. `event-foreign-keys.test.ts` leaves `match_details` out of its check, so it won't object. Make the migration with `drizzle-kit generate` (as `0038_seed-teams` was) so the snapshots stay consistent. Because it's a schema change, it sits low in the list.
 
 ### 25. Later: derive Unconfirmed from the ledger
 

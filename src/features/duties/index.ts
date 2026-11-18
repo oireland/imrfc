@@ -445,14 +445,10 @@ export async function listPeopleOnEquipment(
 /** Deletes an Event's Duties, People and all — only for these Equipment Units when given (they came off its Checklist). */
 export async function deleteDuties(db: Db, eventId: string, equipmentUnitIds?: string[]) {
   if (equipmentUnitIds && equipmentUnitIds.length === 0) return;
-  const rows = await db
-    .select({ id: duty.id })
-    .from(duty)
+  // Who was on each Duty goes with it (ON DELETE CASCADE).
+  await db
+    .delete(duty)
     .where(and(eq(duty.eventId, eventId), equipmentUnitIds ? inArray(duty.equipmentUnitId, equipmentUnitIds) : undefined));
-  const ids = rows.map((r) => r.id);
-  if (ids.length === 0) return;
-  await db.delete(dutyUser).where(inArray(dutyUser.dutyId, ids));
-  await db.delete(duty).where(inArray(duty.id, ids));
 }
 
 export async function voidDutiesForEvent(db: Db, eventId: string) {

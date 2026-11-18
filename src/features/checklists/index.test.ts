@@ -3,8 +3,10 @@ import { createTestDb } from "@/test/db";
 import { store } from "@/features/stores";
 import { createEquipmentUnit, raiseQuantity, setEquipmentStatus } from "@/features/equipment";
 import { user } from "@/features/users";
+import { checklistItem } from "./schema";
 import {
   addToChecklist,
+  clearChecklist,
   getChecklist,
   removeFromChecklist,
   resolveEventChecklist,
@@ -213,6 +215,19 @@ describe("Checklists", () => {
     );
 
     expect(await getChecklist(db, { scope: "event", scopeId: "e1" })).toEqual([{ equipmentUnitId: balls.id, count: 1 }]);
+  });
+
+  it("clearing a level's own Checklist drops it and its lines, leaving other levels alone", async () => {
+    const { db, balls, cones } = await setup();
+    const own = { scope: "event", scopeId: "e1" } as const;
+    await addToChecklist(db, own, balls.id);
+    await addToChecklist(db, { scope: "event", scopeId: "e2" }, cones.id);
+
+    await clearChecklist(db, own);
+    await clearChecklist(db, { scope: "series", scopeId: "none" });
+
+    expect(await getChecklist(db, own)).toBeUndefined();
+    expect(await db.select({ equipmentUnitId: checklistItem.equipmentUnitId }).from(checklistItem)).toEqual([{ equipmentUnitId: cones.id }]);
   });
 });
 

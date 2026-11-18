@@ -38,7 +38,7 @@ export const dutyUser = pgTable(
     id: text("id").primaryKey(),
     dutyId: text("duty_id")
       .notNull()
-      .references(() => duty.id),
+      .references(() => duty.id, { onDelete: "cascade" }),
     userId: text("user_id")
       .notNull()
       .references(() => user.id),
