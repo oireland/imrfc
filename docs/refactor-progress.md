@@ -1,7 +1,7 @@
 # Refactor progress
 
 Tracks the None/Low-risk items from [refactor-report.md](refactor-report.md), on branch `refactor/low-risk-tidy`.
-Medium/High items (#9, #10, #15, #20, #24, #25) and the `ensureDuties` part of #16 (which depends on #15) are out of scope.
+Medium/High items (#9, #15, #20, #24, #25) and the `ensureDuties` part of #16 (which depends on #15) are out of scope.
 
 **Baseline (17 Nov 2026):** `pnpm typecheck` ✅ · `pnpm lint` ✅ · `pnpm test` ✅ 79 files / 851 tests · `pnpm test:pg` ✅ 2 files / 4 tests
 
@@ -18,6 +18,7 @@ Medium/High items (#9, #10, #15, #20, #24, #25) and the `ensureDuties` part of #
 | 9 | #21 equipment pages, #22 app-layer duplicates | ✅ (partial) | tc ✅ lint ✅ test 80/865 ✅ · e2e not run | `quickMove`, `giveTo` and `putInStore` now live in `equipment/actions.ts`. `quickMove` returns when the portion is gone, which is the list page's behaviour. `giveTo` uses `filterApprovedUserIds`. `CountInput` was extracted. `historyLine` moved to `whereabouts.ts` with tests. Also added `pushCommitteeLater`, `viewerOf` (11 sites), `pdfResponse` and `duties.othersOnDuty`, with a test. `listMobileNumbers` was simplified. **Skipped:** the Portion label swap, because the visible text would change; the Profile/Player actions, which need signature changes in `users` and `players`; and deleting `lib/utils.ts`, because it's unclear whether shadcn accepts `"cn"` as an alias. The one odd `cn` import now matches the others. |
 | 10 | #23 dead code and leftovers | ✅ | tc ✅ lint ✅ test: one full run had 1 failure (`csv-import`), which was fixed; events re-run 112/112 ✅. The full suite is re-checked in batch 11. | Deleted `eventStatus` and `canAccessApp` (and its test). `PendingUser` is now `User` and `AppUser` is gone. `approveUser` and `unblockUser` wrap a private `setApproved`. `isRole` is private. New private `latestBy` in `availability/rules`. `settleFields` is now `sheetFieldsFor`, and the stale comment is fixed. `missingTimes` takes `EventWithDetails`. The `quick-add` trims moved into `matchRow`, except `travelMeetPoint`, because `matchRow` doesn't trim it and csv-import expects the key to be absent. The crest now has one copy, `docs/brand/crest.png`: the PDF reads it via `process.cwd()`, and it was added to `outputFileTracingIncludes`. Lint now sets `ignoreRestSiblings`, and the disable comments are gone. **Left:** `setRole` and `blockUser` are still exported because tests import them. `features/onboarding` is kept, per ADR 0002. The `src/assets/crest.png` deletion is staged in git, from the agent's `git rm --cached`. |
 | 11 | #4 Drizzle annotations, #5 one `Result` type | ✅ | tc ✅ lint ✅ test 80/864 ✅ pg 2/4 ✅ | New `lib/result.ts`. It uses `Record<never, never>` as the default because lint forbids `{}`. About 52 files use it now. Named aliases are kept where the name means something (`SendResult`, `AskResult`, `Applied`, `Checked<T>`…). Types with different shapes (`UserChangeResult`, `DeleteAccountResult`, `EventCsvResult`) are left alone. About 50 row annotations and every `(tx: Db)` callback annotation were removed. The 4 `as typeof X.$inferSelect \| undefined` casts stay, because `noUncheckedIndexedAccess` is off, so they add `\| undefined`. |
+| 12 | #10 one email-delivery tracker (code only) | ✅ | tc ✅ lint ✅ test 81/867 ✅ · e2e not run | New `lib/delivery.ts` (with tests): `deliveryStatus`, `deliveryProgress`, `canRetry`, `stillToReach`, `restart`, `finish`, `deliverEach`. `askStatus` moved there from `availability/rules` (its tests moved too), so `selection/naming.ts` no longer imports from `availability`. `deliverAsk`/`deliverNotice`, `retry*` and the status builders use them; each feature keeps its own table, email wording, the nudge rows and its API route. New `components/delivery.tsx` has `watchDelivery`, `DeliveryLine` and `failedMessage`, used by both cards. No schema change; the single `outbound_notice` table was not attempted. A recipient that fails to email is now logged by id if it has no known address (selection). |
 
 ## Final check (after all batches)
 
@@ -26,7 +27,7 @@ Diff against `main`: 110 files changed, +1,094 / −1,301 (new tests and the mov
 
 ## Not done / follow-ups
 
-- Out of scope as Medium/High risk: #9, #10, #15, #20, #24, #25, and the `ensureDuties` bullet of #16.
+- Out of scope as Medium/High risk: #9, #15, #20, #24, #25, and the `ensureDuties` bullet of #16.
 - #21: the Portion label swap was skipped because it would change visible text.
 - #22: the Profile/Player shared actions were skipped because they need actor params in `users` and `players`. `lib/utils.ts` was kept.
 - #23: `setRole` and `blockUser` stay exported because tests import them. `features/onboarding` stays.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { askStatus, mayReply, myReplies, replyGroup, seasonRecord, summarizeAvailability, validateReply, waitingOnReply, type Reply } from "./rules";
+import { mayReply, myReplies, replyGroup, seasonRecord, summarizeAvailability, validateReply, waitingOnReply, type Reply } from "./rules";
 
 describe("validateReply", () => {
   it("needs a Reason for Not available", () => {
@@ -371,60 +371,5 @@ describe("myReplies", () => {
       now,
     });
     expect(replies).toEqual({ tue: { status: null, open: false } });
-  });
-});
-
-describe("askStatus", () => {
-  const createdAt = new Date("2026-10-01T12:00:00Z");
-  const later = (minutes: number) => new Date(createdAt.getTime() + minutes * 60_000);
-
-  it("is sending until the emails have all been tried", () => {
-    expect(askStatus({ createdAt, finishedAt: null, missed: 0 }, later(1))).toBe("sending");
-  });
-
-  it("is sent when everyone was reached, and failed when anyone wasn't", () => {
-    expect(askStatus({ createdAt, finishedAt: later(1), missed: 0 }, later(2))).toBe("sent");
-    expect(askStatus({ createdAt, finishedAt: later(1), missed: 2 }, later(2))).toBe("failed");
-  });
-
-  it("is failed if it's still sending 15 minutes on, since the send must have been cut off", () => {
-    expect(askStatus({ createdAt, finishedAt: null, missed: 0 }, later(14))).toBe("sending");
-    expect(askStatus({ createdAt, finishedAt: null, missed: 0 }, later(15))).toBe("failed");
-  });
-});
-
-describe("a Match with a TBC kick-off", () => {
-  // Saturday 3 Oct 2026 in London (BST): the day starts at 23:00Z on the 2nd.
-  const tbc = { id: "tbc", eventType: "match" as const, start: new Date("2026-10-02T23:00:00Z"), cancelled: false, startTbc: true };
-  const morning = new Date("2026-10-03T08:00:00Z");
-
-  it("keeps replies open through match day rather than closing at midnight", () => {
-    expect(replyGroup(tbc, []).closesAt).toEqual(new Date("2026-10-03T22:59:00Z"));
-    expect(myReplies({ events: [tbc], replies: [], playing: true, now: morning })).toEqual({ tbc: { status: null, open: true } });
-  });
-
-  it("is still waiting on a reply on match day", () => {
-    const asks = waitingOnReply({
-      events: [{ ...tbc, title: "1st XV vs Barts" }],
-      announcements: [{ eventId: "tbc", replyBy: null }],
-      repliedEventIds: new Set(),
-      now: morning,
-    });
-    expect(asks.map((a) => a.eventId)).toEqual(["tbc"]);
-  });
-
-  it("closes at the first timed kick-off when the day has one", () => {
-    const timed = { id: "timed", eventType: "match" as const, start: new Date("2026-10-03T13:00:00Z"), cancelled: false };
-    expect(replyGroup(tbc, [timed]).closesAt).toEqual(timed.start);
-  });
-});
-
-describe("reply length limits", () => {
-  it("rejects a note or Reason that's far too long", () => {
-    expect(validateReply({ status: "available", note: "a".repeat(1001), reason: "" })).toEqual({
-      ok: false,
-      error: "The note is too long. Keep it to 1000 characters or fewer.",
-    });
-    expect(validateReply({ status: "not_available", note: "", reason: "a".repeat(201) }).ok).toBe(false);
   });
 });

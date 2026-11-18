@@ -9,7 +9,6 @@ import type { MailSender } from "@/lib/mail";
 import { askEmail, type AskedEvent } from "./announce-rules";
 import { availabilityAnnouncement, availabilityAsk, availabilityMessaged, availabilityNudge, availabilityReply } from "./schema";
 import {
-  askStatus,
   mayReply,
   myReplies,
   replyGroup,
@@ -18,7 +17,6 @@ import {
   takesReplies,
   validateReply,
   waitingOnReply,
-  type AskStatus,
   type AvailabilitySummary,
   type MyReply,
   type NotChased,
@@ -28,13 +26,14 @@ import {
   type SeasonRecord,
   type WaitingAsk,
 } from "./rules";
+import { canRetry, deliverEach, deliveryProgress, finish, restart, stillToReach, type DeliveryProgress } from "@/lib/delivery";
 import { londonParts, londonToUtc } from "@/lib/london";
 import type { Result } from "@/lib/result";
 
-export { askStatus, takesReplies } from "./rules";
+export { takesReplies } from "./rules";
 export { askPush, chaseMessage, whatsappMessage } from "./announce-rules";
 export type { AskedEvent } from "./announce-rules";
-export type { AskStatus, AvailabilityRow, AvailabilitySummary, MyReply, NotChasedRow, RecordLine, ReplyCounts, ReplyStatus, SeasonRecord, WaitingAsk } from "./rules";
+export type { AvailabilityRow, AvailabilitySummary, MyReply, NotChasedRow, RecordLine, ReplyCounts, ReplyStatus, SeasonRecord, WaitingAsk } from "./rules";
 
 
 type Viewer = { id: string; committee: boolean };
@@ -61,7 +60,7 @@ export type Availability = {
 type AskKind = "announce" | "nudge";
 
 /** How an Announce or Nudge's emails went. `missed` names who they didn't reach. */
-export type AskNotice = { id: string; kind: AskKind; by: string; status: AskStatus; total: number; sent: number; missed: string[] };
+export type AskNotice = DeliveryProgress & { id: string; kind: AskKind; by: string };
 
 /**
  * The Events one reply to `event` covers (every Match that London day), when replies
@@ -372,21 +371,22 @@ export async function deliverAsk(
   try {
     const availability = await getAvailability(db, ask.eventId, { id: ask.askedById, committee: true }, now);
     const people = await listApprovedUsers(db);
-    for (const u of people.filter((p) => ask.playerIds.includes(p.id) && !before.includes(p.id))) {
-      const email = askEmail({
-        kind: ask.kind,
-        events: availability.events,
-        url,
-        replyBy: availability.announcement?.replyBy ?? null,
-        name: displayName(u).split(" ")[0],
-      });
-      try {
+    const sent = await deliverEach(
+      people.filter((p) => ask.playerIds.includes(p.id) && !before.includes(p.id)),
+      async (u) => {
+        const email = askEmail({
+          kind: ask.kind,
+          events: availability.events,
+          url,
+          replyBy: availability.announcement?.replyBy ?? null,
+          name: displayName(u).split(" ")[0],
+        });
         await mail.send({ to: u.email, ...email });
-        reached.push(u.id);
-      } catch (error) {
-        console.error(`[availability] couldn't email ${u.email}`, error);
-      }
-    }
+        return true;
+      },
+      (u, error) => console.error(`[availability] couldn't email ${u.email}`, error),
+    );
+    reached.push(...sent.map((s) => s.recipient.id));
     if (ask.kind === "nudge" && reached.length > 0) {
       await db.insert(availabilityNudge).values(
         reached.map((userId) => ({ id: crypto.randomUUID(), eventId: ask.eventId, userId, nudgedById: ask.askedById, createdAt: now })),
@@ -398,28 +398,13 @@ export async function deliverAsk(
 
   await db
     .update(availabilityAsk)
-    .set({
-      reachedIds: [...before, ...reached],
-      missedIds: ask.playerIds.filter((id) => !before.includes(id) && !reached.includes(id)),
-      finishedAt: now,
-    })
+    .set(finish(ask.playerIds, before, reached, now))
     .where(eq(availabilityAsk.id, askId));
   return { reachedUserIds: reached };
 }
 
 function askNotice(row: typeof availabilityAsk.$inferSelect, name: (id: string) => string, now: Date): AskNotice {
-  const status = askStatus({ createdAt: row.createdAt, finishedAt: row.finishedAt, missed: row.missedIds.length }, now);
-  // A send that was cut off never recorded who it missed: count everyone not reached.
-  const missed = status === "failed" && !row.finishedAt ? row.playerIds.filter((id) => !row.reachedIds.includes(id)) : row.missedIds;
-  return {
-    id: row.id,
-    kind: row.kind,
-    by: name(row.askedById),
-    status,
-    total: row.playerIds.length,
-    sent: row.reachedIds.length,
-    missed: missed.map(name),
-  };
+  return { id: row.id, kind: row.kind, by: name(row.askedById), ...deliveryProgress(row, row.playerIds, name, now) };
 }
 
 /** How an Announce or Nudge's emails are going, for Committee; null for anyone else. */
@@ -444,11 +429,10 @@ export async function dismissAsk(db: Db, askId: string, viewer: Viewer, now: Dat
 export async function retryAsk(db: Db, askId: string, viewer: Viewer, now: Date = new Date()): Promise<AskResult> {
   if (!viewer.committee) return { ok: false, error: "Only committee can do that." };
   const row = await askRow(db, askId);
-  const status = row && !row.dismissedAt ? askStatus({ createdAt: row.createdAt, finishedAt: row.finishedAt, missed: row.missedIds.length }, now) : null;
-  if (!row || status !== "failed") return { ok: false, error: "That one isn't waiting to be retried." };
+  if (!row || row.dismissedAt || !canRetry(row, now)) return { ok: false, error: "That one isn't waiting to be retried." };
 
-  await db.update(availabilityAsk).set({ finishedAt: null, missedIds: [], createdAt: now }).where(eq(availabilityAsk.id, askId));
-  return { ok: true, askId, sending: row.playerIds.filter((id) => !row.reachedIds.includes(id)).length };
+  await db.update(availabilityAsk).set(restart(now)).where(eq(availabilityAsk.id, askId));
+  return { ok: true, askId, sending: stillToReach(row.playerIds, row.reachedIds).length };
 }
 
 async function playerRepliesFor(db: Db, playerId: string, eventIds: string[]): Promise<(Reply & { eventId: string })[]> {

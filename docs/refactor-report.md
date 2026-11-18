@@ -15,7 +15,6 @@ _First written 17 Nov 2026 from a read-through of `src/` that looked for duplica
 | # | Item | Lines | Risk | Touches |
 |---|------|------:|------|---------|
 | 9 | [Portions maths lives in the ledger only](#9-portions-maths-lives-in-the-ledger-only) | ~50 | Medium | `equipment/portions.ts`, `index.ts` |
-| 10 | [One email-delivery tracker, not two](#10-one-email-delivery-tracker-not-two) | ~200 | Medium | availability, selection, 2 API routes, 2 components |
 | 15 | [Duty actions go through `actOnDuty` only](#15-duty-actions-go-through-actonduty-only) | ~40 | Medium | `duties/index.ts`, tests |
 | 16 | [`ensureDuties` becomes private](#16-ensureduties-becomes-private-after-15) | ~10 | Low, after #15 | `duties/index.ts` |
 | 20 | [Event detail page: move the view model out](#20-event-detail-page-move-the-view-model-out) | ~0 net, −250 in the page | Medium | `events/[id]/page.tsx`, `event-duties.tsx` |
@@ -55,48 +54,6 @@ Since L4, production code only uses `moveMultiple` and `lowerQuantity` for their
 - **Keep the per-source check before pairing.** `pairFlows(...).filter(!samePlace)` drops no-op flows, so a source paired with itself is never debited. Today `moveMultiple` still rejects that request if the Place doesn't hold enough. If only `applyEntry` checked, the request would quietly succeed.
 - **Tests pin the messages.** `portions.test.ts` and `equipment/index.test.ts` assert the exact strings and counts. `applyEntry` would report the per-flow count, not the per-source count, which is why the source check must stay up front.
 - `portions.property.test.ts` and `ledger.property.test.ts` cover the maths. Move the cases that target `moveMultiple` onto `checkSplitMove` plus `applyEntry`.
-
----
-
-## Two copies of the same feature
-
-### 10. One email-delivery tracker, not two
-
-**Where.** Two features each built the same machinery, line for line: availability (Announce and Nudge) and selection (Name the team and Send changes). It sends emails after the response, tracks who was reached, retries or dismisses failures, and polls for progress.
-
-| Piece | Availability | Selection |
-|---|---|---|
-| Table | `availability_ask` | `selection_notice` |
-| Status for the UI | `askNotice` (`availability/index.ts`) | `noticeStatus` (`selection/naming.ts`) |
-| Deliver loop | `deliverAsk` | `deliverNotice` |
-| Retry | `retryAsk` | `retryNotice` |
-| Dismiss | `dismissAsk` | `dismissNotice` |
-| Get one | `getAsk` | `getNotice` |
-| Poll route | `api/asks/[id]/route.ts` | `api/notices/[id]/route.ts` |
-| Client poller | `watchAsk` (`availability-card.tsx`) | `watchNotice` (`name-the-team.tsx`) |
-| Failure line and `failedMessage` | `AskLine` in `availability-card.tsx` | inline in `name-the-team.tsx` |
-
-Both share two rules: a send cut off before it finished counts everyone not reached as missed, and a retry sets `createdAt = now` and clears `finishedAt` and `missedIds`. Both `askNotice` and `noticeStatus` already take a `name(id)` function, and the shared `joinList` (`lib/join-names.ts`) is already in place.
-
-**How (code only, no schema change).**
-
-- Add a pure `src/lib/delivery.ts`, written once against the shape `{ createdAt, finishedAt, reachedIds, missedIds, recipientIds }`:
-  - `deliveryStatus(row, now)` wraps `askStatus` and the cut-off rule.
-  - `deliveryProgress(row, nameOf, now)` returns `{ status, total, sent, missed[] }`.
-- Add a generic `deliverEach(recipients, alreadyReached, sendOne)`. It runs the try/catch loop and returns who was reached. Each feature keeps its own email wording and its own `update … set reachedIds, missedIds, finishedAt`.
-- Move `askStatus` out of availability, so `selection/naming.ts` stops importing it from `@/features/availability`.
-- On the client, use one `watchDelivery(url, id, { sent, failed }, refresh)` and one `<DeliveryLine>` component in both cards.
-- Keep the two API routes, because they check different permissions. Each body shrinks to about three lines.
-
-**Further option (schema change, decide separately).** Replace both tables with one `outbound_notice` table whose `kind` is `announce | nudge | name | changes`. That removes a table and a route, but it means a data migration on two live tables, so I'd stop at the code-only version.
-
-**Correctness.** The two copies differ in small ways. Keep each difference:
-
-- Availability's recipients are `playerIds: string[]`, while selection's are `recipients: { userId, kind, shirt }[]`. The shared code works on ids, and each feature maps to and from them.
-- `deliverAsk` also inserts `availability_nudge` rows for a nudge.
-- The success toasts are worded differently: "Announced. Emailed N people." vs "Told N people."
-
-The delivery and retry tests in `availability/index.test.ts` and `selection/index.test.ts` cover this, as does `e2e/notifications.spec.ts`.
 
 ---
 
@@ -222,5 +179,5 @@ It is the largest simplification left, but it changes how Clashes, Whereabouts a
 - **`clashes-rules.ts` and `heads-up-rules.ts`**: dense, but each line carries a rule from SPEC.
 - **`email-layout.ts`**: long because email HTML needs inline styles. Nothing else duplicates it.
 - **`architecture/feature-boundaries.ts`**: small, and it earns its keep.
-- **The large client components** (`availability-card.tsx`, `event-duties.tsx`, `selection-board.tsx`, `coming-up.tsx`): their size is mostly markup for distinct sheets. Apart from the delivery-progress duplication (#10) and the destination parsing (#20), I found no copies worth merging. Splitting each into a file per sheet would make them easier to navigate without removing code. That's a judgement call for whoever next works in them.
+- **The large client components** (`availability-card.tsx`, `event-duties.tsx`, `selection-board.tsx`, `coming-up.tsx`): their size is mostly markup for distinct sheets. Apart from the destination parsing (#20), I found no copies worth merging. Splitting each into a file per sheet would make them easier to navigate without removing code. That's a judgement call for whoever next works in them.
 - **Migrations and `drizzle/meta` snapshots**: generated, so never hand-edited.

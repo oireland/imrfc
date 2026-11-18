@@ -1,6 +1,5 @@
 "use client";
 
-import { joinList } from "@/lib/join-names";
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -8,6 +7,7 @@ import { Check, Copy, Loader2, Megaphone, MessageCircle, Send, X } from "lucide-
 import { cn } from "cn";
 import type { AskNotice, Availability, AvailabilityRow, NotChasedRow, ReplyStatus } from "@/features/availability";
 import { formatAgo, formatDay, formatWhen } from "@/lib/format-time";
+import { DeliveryLine, failedMessage, people, watchDelivery } from "./delivery";
 import { BottomSheet, SheetSaveButton } from "./bottom-sheet";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -391,71 +391,29 @@ function YourReply({
   );
 }
 
-const people = (n: number) => (n === 1 ? "1 person" : `${n} people`);
+const askWhat = (ask: AskNotice) => (ask.kind === "announce" ? "announcement" : "nudge");
 
-/** "Jo", "Jo and Sam", "Jo, Sam and Ray". */
+const watchAsk = (askId: string, refresh: () => void) =>
+  watchDelivery<AskNotice>(
+    `/api/asks/${askId}`,
+    askId,
+    {
+      sent: (ask) => (ask.kind === "announce" ? `Announced. Emailed ${people(ask.sent)}.` : `Nudged ${people(ask.sent)}.`),
+      failed: (ask) => failedMessage(ask.by, askWhat(ask), ask),
+    },
+    refresh,
+  );
 
-function failedMessage(ask: AskNotice) {
-  const what = ask.kind === "announce" ? "announcement" : "nudge";
-  const others = ask.sent > 0 ? ` Everyone else got it.` : "";
-  return `${ask.by}'s ${what} didn't reach ${joinList(ask.missed, "and")}.${others}`;
-}
-
-/**
- * Checks on an Announce or Nudge every couple of seconds until its emails are done, then
- * swaps its "Emailing…" toast for how it went and refreshes the page. Keeps going if the
- * card unmounts, so the toast still shows after moving to another page.
- */
-async function watchAsk(askId: string, refresh: () => void) {
-  for (;;) {
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    let ask: AskNotice;
-    try {
-      const response = await fetch(`/api/asks/${askId}`, { cache: "no-store" });
-      if (!response.ok) continue;
-      ask = await response.json();
-    } catch {
-      continue;
-    }
-    if (ask.status === "sending") continue;
-    if (ask.status === "sent") {
-      toast.success(ask.kind === "announce" ? `Announced. Emailed ${people(ask.sent)}.` : `Nudged ${people(ask.sent)}.`, { id: askId });
-    } else {
-      toast.error(failedMessage(ask), { id: askId });
-    }
-    refresh();
-    return;
-  }
-}
-
-/** An Announce or Nudge still sending, or one that didn't reach everyone, until it's dismissed. */
 function AskLine({ ask, pending, onDismiss, onRetry }: { ask: AskNotice; pending: boolean; onDismiss: () => void; onRetry: () => void }) {
-  if (ask.status === "sending") {
-    return (
-      <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-        {ask.kind === "announce" ? `Emailing the announcement to ${people(ask.total)}…` : `Emailing a nudge to ${people(ask.total)}…`}
-      </p>
-    );
-  }
   return (
-    <div role="alert" className="flex items-start gap-2 rounded-xl bg-destructive/10 p-3 text-sm text-destructive-text">
-      <div className="flex flex-1 flex-col items-start gap-2">
-        <p>{failedMessage(ask)}</p>
-        <button type="button" onClick={onRetry} disabled={pending} className="rounded-lg bg-destructive/10 px-3 py-1.5 text-sm font-semibold hover:bg-destructive/20 disabled:opacity-60">
-          Try again
-        </button>
-      </div>
-      <button
-        type="button"
-        onClick={onDismiss}
-        disabled={pending}
-        aria-label="Dismiss"
-        className="-m-1 rounded-lg p-1 hover:bg-destructive/10 disabled:opacity-60"
-      >
-        <X className="size-4" aria-hidden="true" />
-      </button>
-    </div>
+    <DeliveryLine
+      progress={ask}
+      sending={ask.kind === "announce" ? `Emailing the announcement to ${people(ask.total)}…` : `Emailing a nudge to ${people(ask.total)}…`}
+      failed={failedMessage(ask.by, askWhat(ask), ask)}
+      pending={pending}
+      onDismiss={onDismiss}
+      onRetry={onRetry}
+    />
   );
 }
 

@@ -1,9 +1,9 @@
 import type { Db } from "@/db/types";
 import { eq } from "drizzle-orm";
-import { askStatus, type AskStatus } from "@/features/availability";
 import { refuseMatchChange } from "./guard";
 import { getEvent, getEvents, matchLabel, startsAt } from "@/features/events";
 import { displayName, listApprovedUsers, listCommitteeIds, listKnownUsers, loadNames } from "@/features/users";
+import { canRetry, deliverEach, deliveryProgress, finish, restart, stillToReach, type DeliveryProgress } from "@/lib/delivery";
 import { emailLayout } from "@/lib/email-layout";
 import { formatDay } from "@/lib/format-time";
 import type { MailSender } from "@/lib/mail";
@@ -20,7 +20,7 @@ type Viewer = { id: string; committee: boolean };
 type SendResult = Result<{ noticeId: string | null; sending: number }>;
 
 /** How a Name the team or Send changes went: still sending, reached everyone, or someone wasn't reached. */
-export type NoticeStatus = { id: string; kind: "name" | "changes"; by: string; status: AskStatus; total: number; sent: number; missed: string[] };
+export type NoticeStatus = DeliveryProgress & { id: string; kind: "name" | "changes"; by: string };
 
 export type Naming = {
   named: { at: Date; by: string } | null;
@@ -52,19 +52,8 @@ const unsentLines = (changes: Change[], quiet: number, name: (id: string) => str
 };
 
 function noticeStatus(row: typeof selectionNotice.$inferSelect, name: (id: string) => string, now: Date): NoticeStatus {
-  const status = askStatus({ createdAt: row.createdAt, finishedAt: row.finishedAt, missed: row.missedIds.length }, now);
   const ids = row.recipients.map((r) => r.userId);
-  // A send that was cut off never recorded who it missed: count everyone not reached.
-  const missed = status === "failed" && !row.finishedAt ? ids.filter((id) => !row.reachedIds.includes(id)) : row.missedIds;
-  return {
-    id: row.id,
-    kind: row.kind,
-    by: name(row.sentById),
-    status,
-    total: ids.length,
-    sent: row.reachedIds.length,
-    missed: missed.map(name),
-  };
+  return { id: row.id, kind: row.kind, by: name(row.sentById), ...deliveryProgress(row, ids, name, now) };
 }
 
 /** Whether `viewer` can change this Match's team now; the reason if not. */
@@ -204,28 +193,28 @@ export async function deliverNotice(
     const event = settled?.event ?? (await getEvent(db, notice.eventId));
     const team = { label: event ? matchLabel(event) : "team", date: event ? formatDay(event.start) : "" };
     const people = await listKnownUsers(db);
-    for (const recipient of notice.recipients.filter((r) => !before.includes(r.userId))) {
-      const person = people.find((p) => p.id === recipient.userId);
-      if (!person) continue;
-      const message = noticeMessage(recipient, team);
-      try {
+    const sent = await deliverEach(
+      notice.recipients.filter((r) => !before.includes(r.userId)),
+      async (recipient) => {
+        const person = people.find((p) => p.id === recipient.userId);
+        if (!person) return undefined;
+        const message = noticeMessage(recipient, team);
         await mail.send({
           to: person.email,
           ...noticeEmail(message, displayName(person).split(" ")[0], url, notice.kind === "name" ? "Team named" : "Team change"),
         });
-        reached.push({ userId: recipient.userId, ...message });
-      } catch (error) {
-        console.error(`[selection] couldn't email ${person.email}`, error);
-      }
-    }
+        return { userId: recipient.userId, ...message };
+      },
+      (recipient, error) => console.error(`[selection] couldn't email ${people.find((p) => p.id === recipient.userId)?.email ?? recipient.userId}`, error),
+    );
+    reached.push(...sent.map((s) => s.outcome));
   } catch (error) {
     console.error(`[selection] the ${notice.kind} notice for ${notice.eventId} stopped part way`, error);
   }
 
-  const reachedIds = [...before, ...reached.map((r) => r.userId)];
   await db
     .update(selectionNotice)
-    .set({ reachedIds, missedIds: notice.recipients.map((r) => r.userId).filter((id) => !reachedIds.includes(id)), finishedAt: now })
+    .set(finish(notice.recipients.map((r) => r.userId), before, reached.map((r) => r.userId), now))
     .where(eq(selectionNotice.id, noticeId));
   return { reached };
 }
@@ -246,11 +235,10 @@ export async function retryNotice(db: Db, noticeId: string, viewer: Viewer, now:
   if (!viewer.committee) return { ok: false, error: "Only committee can do that." };
   const [row] = await db.select().from(selectionNotice).where(eq(selectionNotice.id, noticeId));
   const notice = row as typeof selectionNotice.$inferSelect | undefined;
-  const status = notice && !notice.dismissedAt ? askStatus({ createdAt: notice.createdAt, finishedAt: notice.finishedAt, missed: notice.missedIds.length }, now) : null;
-  if (!notice || status !== "failed") return { ok: false, error: "That one isn't waiting to be retried." };
+  if (!notice || notice.dismissedAt || !canRetry(notice, now)) return { ok: false, error: "That one isn't waiting to be retried." };
 
-  await db.update(selectionNotice).set({ finishedAt: null, missedIds: [], createdAt: now }).where(eq(selectionNotice.id, noticeId));
-  return { ok: true, noticeId, sending: notice.recipients.filter((r) => !notice.reachedIds.includes(r.userId)).length };
+  await db.update(selectionNotice).set(restart(now)).where(eq(selectionNotice.id, noticeId));
+  return { ok: true, noticeId, sending: stillToReach(notice.recipients.map((r) => r.userId), notice.reachedIds).length };
 }
 
 /** Takes a failed notice off the board (Committee). */
