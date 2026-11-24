@@ -176,7 +176,7 @@ test("Committee message a Player on WhatsApp and record it with Sent ✓", async
 
   const sheet = page.getByRole("dialog");
   const row = sheet.getByRole("listitem").filter({ hasText: playerName });
-  const link = row.getByRole("link", { name: "WhatsApp" });
+  const link = row.getByRole("link", { name: "WhatsApp", exact: true });
   await expect(link).toHaveAttribute("target", "_blank");
   const href = (await link.getAttribute("href")) ?? "";
   expect(href).toMatch(/^https:\/\/wa\.me\/447912345678\?text=/);
@@ -190,4 +190,26 @@ test("Committee message a Player on WhatsApp and record it with Sent ✓", async
   await sheet.getByRole("button", { name: "Close" }).last().click();
   await card.getByRole("tab", { name: /No reply/ }).click();
   await expect(card.getByRole("tabpanel")).toContainText("messaged");
+});
+
+test("Committee announce Training on WhatsApp, and Sent ✓ records it", async ({ page, context }) => {
+  const title = `Training ${crypto.randomUUID().slice(0, 8)}`;
+  const { eventId } = await seedTraining(title);
+  await context.route("https://wa.me/**", (route) => route.fulfill({ body: "WhatsApp" }));
+
+  await signIn(page);
+  await page.goto(`/events/${eventId}`);
+  await page.getByRole("button", { name: "WhatsApp", exact: true }).click();
+  const sheet = page.getByRole("dialog");
+  const open = sheet.getByRole("link", { name: "Open WhatsApp" });
+  const message = decodeURIComponent(new URL((await open.getAttribute("href"))!).searchParams.get("text")!);
+  expect(message).toContain("Availability time fellas:");
+  expect(message).toContain(title);
+  expect(message).toContain(`/events/${eventId}`);
+
+  await open.click();
+  await sheet.getByRole("button", { name: "Sent ✓" }).click();
+  await expect(page.getByText("Announced on WhatsApp")).toBeVisible();
+  await expect(page.getByText(/Announced .* by E2E Admin/)).toBeVisible();
+  await expect(page.getByRole("link", { name: "WhatsApp", exact: true })).toBeVisible();
 });

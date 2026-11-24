@@ -19,3 +19,8 @@ export function whatsappLink(number: string, message?: string): string {
   const base = `https://wa.me/${number.replace(/\D/g, "")}`;
   return message ? `${base}?text=${encodeURIComponent(message)}` : base;
 }
+
+/** WhatsApp's link with no recipient: opens the chat picker with the message prefilled. */
+export function whatsappShareLink(message: string): string {
+  return `https://wa.me/?text=${encodeURIComponent(message)}`;
+}
