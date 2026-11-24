@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseMobileNumber, whatsappLink } from "./rules";
+import { parseMobileNumber, whatsappLink, whatsappShareLink } from "./rules";
 
 describe("parseMobileNumber", () => {
   it("takes 07… as a UK number and stores it as E.164", () => {
@@ -37,5 +37,11 @@ describe("whatsappLink", () => {
 
   it("ignores an empty message", () => {
     expect(whatsappLink("+447912345678", "")).toBe("https://wa.me/447912345678");
+  });
+});
+
+describe("whatsappShareLink", () => {
+  it("opens WhatsApp's chat picker with the message prefilled", () => {
+    expect(whatsappShareLink("Hi & bye\nhttps://x.org/e?a=1")).toBe("https://wa.me/?text=Hi%20%26%20bye%0Ahttps%3A%2F%2Fx.org%2Fe%3Fa%3D1");
   });
 });

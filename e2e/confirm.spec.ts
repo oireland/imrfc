@@ -23,7 +23,10 @@ test("Committee claims and Confirms Duties, and the Equipment Unit follows", asy
   await page.goto(`/events/${event}?tab=kit`);
   const duties = page.getByRole("region", { name: "Who's bringing what" });
   await duties.getByRole("button", { name: `Bring ${equipmentName}: nobody yet` }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "I'll do it" }).click(); // To Duty; From follows
+  await page.getByRole("dialog").getByRole("button", { name: "I'll do it" }).click(); // To Duty
+  await expect(duties.getByRole("button", { name: `Bring ${equipmentName}: you` })).toBeVisible();
+  await duties.getByRole("button", { name: `Take back ${equipmentName}: nobody yet` }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "I'll do it" }).click(); // From Duty
   await expect(duties.getByRole("button", { name: `Take back ${equipmentName}: you` })).toBeVisible();
   await duties.getByRole("button", { name: `Bring ${equipmentName}: you` }).click();
   await page.getByRole("dialog").getByRole("button", { name: /mark as done/ }).click();

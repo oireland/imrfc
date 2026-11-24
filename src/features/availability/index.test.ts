@@ -6,8 +6,8 @@ import { addAway } from "@/features/players";
 import { user } from "@/features/users";
 import type { MailSender } from "@/lib/messaging/mail";
 import { listEventsBetween } from "@/features/events";
-import { announce, deleteAvailabilityForEvent, deliverAsk, dismissAsk, retryAsk, getAsk, getAvailability, getSeasonRecord, listAvailableUserIds, listMyReplies, listWaitingOnReply, markMessaged, nudge, saveReply } from "./index";
-import { deleteEvent } from "@/features/events";
+import { announce, announceOnWhatsApp, deleteAvailabilityForEvent, getShare, deliverAsk, dismissAsk, retryAsk, getAsk, getAvailability, getSeasonRecord, listAvailableUserIds, listMyReplies, listWaitingOnReply, markMessaged, nudge, saveReply } from "./index";
+import { cancelEvent, deleteEvent } from "@/features/events";
 import { availabilityAnnouncement, availabilityAsk, availabilityMessaged, availabilityReply } from "./schema";
 
 const now = new Date("2026-10-01T12:00:00Z");
@@ -96,6 +96,76 @@ describe("deleteAvailabilityForEvent", () => {
     await deleteAvailabilityForEvent(db, gone);
 
     expect(await db.select().from(availabilityReply)).toMatchObject([{ eventId: kept }]);
+  });
+});
+
+describe("getShare", () => {
+  it("offers Committee the day's Events to share, with their details", async () => {
+    const db = await setup();
+    const firsts = await makeEvent(db, { title: "Barts", eventType: "match", start: new Date("2026-10-03T13:00:00Z") });
+    await makeEvent(db, { title: "UCL", eventType: "match", start: new Date("2026-10-03T15:00:00Z") });
+    const share = await getShare(db, firsts, tom, now);
+    expect(share?.events.map((e) => e.title)).toEqual(["1st XV vs Barts", "1st XV vs UCL"]);
+    expect(share?.events[0]).toMatchObject({ venue: "Harlington", meetTime: new Date("2026-10-03T13:00:00Z") });
+    expect(share?.announcement).toBeNull();
+  });
+
+  it("gives the Announce's Reply By once announced", async () => {
+    const db = await setup();
+    const eventId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
+    const replyBy = new Date("2026-10-02T17:00:00Z");
+    await announceOnWhatsApp(db, { eventId, viewer: tom, replyBy }, now);
+    expect((await getShare(db, eventId, tom, now))?.announcement).toEqual({ replyBy });
+  });
+
+  it("is for Committee only, and only while the Event is still to come", async () => {
+    const db = await setup();
+    const eventId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
+    expect(await getShare(db, eventId, sam, now)).toBeNull();
+    expect(await getShare(db, eventId, tom, new Date("2026-10-04T00:00:00Z"))).toBeNull();
+    await cancelEvent(db, eventId);
+    expect(await getShare(db, eventId, tom, now)).toBeNull();
+  });
+
+  it("is for nothing that doesn't take replies", async () => {
+    const db = await setup();
+    const eventId = await makeEvent(db, { title: "Curry", eventType: "social", start: new Date("2026-10-03T18:00:00Z") });
+    expect(await getShare(db, eventId, tom, now)).toBeNull();
+  });
+});
+
+describe("announceOnWhatsApp", () => {
+  it("records the Announce and its Reply By without emailing anyone", async () => {
+    const db = await setup();
+    const eventId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
+    const replyBy = new Date("2026-10-02T17:00:00Z");
+
+    expect(await announceOnWhatsApp(db, { eventId, viewer: tom, replyBy }, now)).toEqual({ ok: true });
+
+    const availability = await getAvailability(db, eventId, tom, now);
+    expect(availability.announcement).toEqual({ at: now, by: "Tom Hale", replyBy });
+    expect(availability.canAnnounce).toBe(false);
+    expect(await db.select().from(availabilityAsk)).toHaveLength(0);
+  });
+
+  it("only happens once, whether the first Announce was by email or WhatsApp", async () => {
+    const db = await setup();
+    const eventId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
+    await announceOnWhatsApp(db, { eventId, viewer: tom, replyBy: null }, now);
+    const again = { ok: false, error: "This has already been announced." };
+    expect(await announceOnWhatsApp(db, { eventId, viewer: tom, replyBy: null }, now)).toEqual(again);
+    expect(await announce(db, { eventId, viewer: tom, replyBy: null }, now)).toEqual(again);
+    expect(await db.select().from(availabilityAnnouncement)).toHaveLength(1);
+  });
+
+  it("is for Committee only, and needs a Reply By still to come", async () => {
+    const db = await setup();
+    const eventId = await makeEvent(db, { start: new Date("2026-10-03T18:00:00Z") });
+    expect((await announceOnWhatsApp(db, { eventId, viewer: sam, replyBy: null }, now)).ok).toBe(false);
+    expect(await announceOnWhatsApp(db, { eventId, viewer: tom, replyBy: new Date("2026-09-30T00:00:00Z") }, now)).toEqual({
+      ok: false,
+      error: "Pick a reply-by time that's still to come.",
+    });
   });
 });
 

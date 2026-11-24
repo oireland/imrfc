@@ -1,12 +1,13 @@
 import type { Db } from "@/db/types";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { seasonStart } from "@/features/duties";
-import { getEvent, listEventsBetween, listMatchDay, type Event, type EventType } from "@/features/events";
+import { getEvent, getEvents, listEventsBetween, listMatchDay, type Event, type EventType } from "@/features/events";
 import { listFitness, notChasedFor } from "@/features/injuries";
 import { listAwayOn, listPlayers } from "@/features/players";
 import { displayName, listApprovedUsers, loadNames } from "@/features/users";
 import type { MailSender } from "@/lib/messaging/mail";
 import { askEmail, type AskedEvent } from "./announce-rules";
+import type { ShareEvent } from "./share-rules";
 import { availabilityAnnouncement, availabilityAsk, availabilityMessaged, availabilityNudge, availabilityReply } from "./schema";
 import {
   mayReply,
@@ -33,6 +34,8 @@ import type { Result } from "@/lib/result";
 export { takesReplies } from "./rules";
 export { askPush, chaseMessage, whatsappMessage } from "./announce-rules";
 export type { AskedEvent } from "./announce-rules";
+export { shareMessage } from "./share-rules";
+export type { ShareEvent } from "./share-rules";
 export type { AvailabilityRow, AvailabilitySummary, MyReply, NotChasedRow, RecordLine, ReplyCounts, ReplyStatus, SeasonRecord, WaitingAsk } from "./rules";
 
 
@@ -125,6 +128,43 @@ async function notChasedOn(
   }
   for (const [id, period] of away) notChased.set(id, { kind: "away", detail: period.reason });
   return notChased;
+}
+
+/**
+ * What Committee need to announce on WhatsApp: the Events going ahead (the day's Matches, or this
+ * one) and the Announce if there already is one. Null for anyone else, or once it's too late.
+ * Lighter than `getAvailability`, since Event detail's header asks for it alongside the card.
+ */
+export async function getShare(
+  db: Db,
+  eventId: string,
+  viewer: Viewer,
+  now: Date = new Date(),
+): Promise<{ events: ShareEvent[]; announcement: { replyBy: Date | null } | null } | null> {
+  const event = await getEvent(db, eventId);
+  if (!viewer.committee || !event || !takesReplies(event.eventType)) return null;
+  const { eventIds, closesAt, events } = await groupFor(db, event);
+  if (event.cancelled || now >= closesAt) return null;
+  const [announcement, shareEvents] = await Promise.all([announcementFor(db, eventIds), shareEventsFor(db, events)]);
+  return { events: shareEvents, announcement: announcement ? { replyBy: announcement.replyBy } : null };
+}
+
+async function shareEventsFor(db: Db, events: Event[]): Promise<ShareEvent[]> {
+  const goingAhead = events.filter((e) => !e.cancelled);
+  const byId = new Map((await getEvents(db, goingAhead.map((e) => e.id))).map((e) => [e.id, e]));
+  return goingAhead.map((e) => {
+    const { matchDetails } = byId.get(e.id)!;
+    return {
+      title: e.title,
+      start: e.start,
+      end: e.end,
+      startTbc: e.startTbc,
+      venue: e.venue,
+      meetTime: matchDetails?.meetTime ?? null,
+      travelMeetTime: matchDetails?.travelMeetTime ?? null,
+      travelMeetPoint: matchDetails?.travelMeetPoint ?? null,
+    };
+  });
 }
 
 async function announcementFor(db: Db, eventIds: string[]) {
@@ -280,6 +320,30 @@ export async function announce(
   input: { eventId: string; viewer: Viewer; replyBy: Date | null },
   now: Date = new Date(),
 ): Promise<AskResult> {
+  return recordAnnouncement(db, input, now, (tx, availability) =>
+    recordAsk(tx, "announce", input, availability.summary.noReply.map((r) => r.userId), now),
+  );
+}
+
+/**
+ * Records that Committee announced on WhatsApp (they tapped Sent ✓): the same once-only Announce,
+ * with its Reply By, but nobody is emailed.
+ */
+export async function announceOnWhatsApp(
+  db: Db,
+  input: { eventId: string; viewer: Viewer; replyBy: Date | null },
+  now: Date = new Date(),
+): Promise<Result> {
+  return recordAnnouncement(db, input, now, async () => ({ ok: true }) as const);
+}
+
+/** The once-per-Event Announce record (Committee), then `then` in the same transaction. */
+async function recordAnnouncement<R extends Result<object>>(
+  db: Db,
+  input: { eventId: string; viewer: Viewer; replyBy: Date | null },
+  now: Date,
+  then: (tx: Db, availability: Availability) => Promise<R>,
+): Promise<R | { ok: false; error: string }> {
   const availability = await getAvailability(db, input.eventId, input.viewer, now);
   if (availability.announcement) return { ok: false, error: "This has already been announced." };
   if (!availability.canAnnounce) return { ok: false, error: "You can't announce this one." };
@@ -298,7 +362,7 @@ export async function announce(
       replyBy: input.replyBy,
       createdAt: now,
     });
-    return recordAsk(tx, "announce", input, availability.summary.noReply.map((r) => r.userId), now);
+    return then(tx, availability);
   });
 }
 

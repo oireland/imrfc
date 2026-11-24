@@ -16,6 +16,7 @@ import { AvailabilitySlot } from "@/components/availability-slot";
 import { TeamCard } from "@/components/team-card";
 import { EventTabs, type EventTab } from "@/components/event-tabs";
 import { ShareButton } from "@/components/share-button";
+import { WhatsAppAnnounceSlot } from "@/components/whatsapp-announce-slot";
 import { buttonVariants } from "@/components/ui/button";
 import { formatDay, formatWhen } from "@/lib/time/format-time";
 import { joinList } from "@/lib/text/join-names";
@@ -33,6 +34,7 @@ import {
 import { describeWhereabouts, hasEquipmentUnconfirmedAt, listEquipmentUnits, listPortionsFor, placeKey, type EquipmentUnit } from "@/features/equipment";
 import {
   actOnEventDuty,
+  countToMove,
   deleteDuties,
   dutyActions,
   voidDutiesForEvent,
@@ -41,7 +43,10 @@ import {
   listPeopleOnEquipment,
   listPlanWarnings,
   handedOnSources,
+  holdersFromShares,
+  pendingShares,
   needsSourceChoice,
+  unclaimed,
   type EventDuty,
   type DutyRequest,
 } from "@/features/duties";
@@ -246,15 +251,21 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
   const dutyEquipment: DutyEquipment[] = equipmentUnitIds.map((kid) => {
     const unit = equipmentById.get(kid);
     const homeId = unit?.homeId ?? null;
-    const count = countByUnit.get(kid) ?? 1;
+    const wholeCount = countByUnit.get(kid) ?? 1;
+    const count = wholeCount;
     const equipmentPortions = portionsByUnit.get(kid) ?? [];
     const toDuty = dutyFor(kid, "to");
     const fromDuty = dutyFor(kid, "from");
 
     const slot = (d: EventDuty): DutySlot => {
-      const needsSource = d.direction === "to" && needsSourceChoice(equipmentPortions, { dutyUserIds: d.userIds, count });
+      const shares = d.userIds.map((userId) => ({ userId, count: d.shares[userId] ?? null, confirmed: d.confirmedUserIds.includes(userId) }));
+      // What Confirming would act on: when everyone said how many, only the People still to do, and just what they claimed.
+      const pending = pendingShares(shares);
+      const pendingIds = pending.map((p) => p.userId);
+      const count = countToMove(wholeCount, pending);
+      const needsSource = d.direction === "to" && needsSourceChoice(equipmentPortions, { dutyUserIds: pendingIds, count });
       const sourceOptions: SourceOption[] = needsSource
-        ? gatherConfirmSources(equipmentPortions, { dutyUserIds: d.userIds, homeStoreId: homeId ?? "", count }).sources.map((s) => ({
+        ? gatherConfirmSources(equipmentPortions, { dutyUserIds: pendingIds, homeStoreId: homeId ?? "", count }).sources.map((s) => ({
             value: placeKey(s.place),
             label:
               s.place.type === "store"
@@ -265,14 +276,14 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
             count: s.count,
           }))
         : [];
-      const needsHolder = d.userIds.length > 1 && count > 1 && (d.direction === "to" || d.destination.type === "holder");
+      const needsHolder = pendingIds.length > 1 && count > 1 && !holdersFromShares(pending) && (d.direction === "to" || d.destination.type === "holder");
       const holderOptions: HolderOption[] = needsHolder
-        ? d.userIds.map((uid) => ({ userId: uid, name: uid === user.id ? "You" : (nameOf(uid) ?? "Someone"), count: uid === user.id ? count : 0 }))
+        ? pendingIds.map((uid) => ({ userId: uid, name: uid === user.id ? "You" : (nameOf(uid) ?? "Someone"), count: uid === user.id ? count : 0 }))
         : [];
       if (needsHolder && !holderOptions.some((h) => h.count > 0)) holderOptions[0].count = count;
       const handedOn =
-        d.direction === "from" && !d.confirmedAt && !d.voidedAt && d.userIds.length > 0
-          ? handedOnSources(equipmentPortions, { userIds: d.userIds, count }).map((option) => ({
+        d.direction === "from" && !d.confirmedAt && !d.voidedAt && pendingIds.length > 0
+          ? handedOnSources(equipmentPortions, { userIds: pendingIds, count }).map((option) => ({
               label: `${namesOf(d.userIds)} ${d.userIds.length === 1 && d.userIds[0] !== user.id ? "has" : "have"} it from ${nameOf(option.holderId)?.replace("You", "you") ?? "someone"}`,
               sources: option.sources,
             }))
@@ -281,11 +292,14 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
         direction: d.direction,
         userIds: d.userIds,
         people: d.userIds.map((uid) => (uid === user.id ? "You" : (nameOf(uid) ?? "Someone"))),
+        counts: shares.map((s) => s.count),
+        done: shares.map((s) => !!s.confirmed),
+        unclaimed: unclaimed(wholeCount, shares),
         mine: d.userIds.includes(user.id),
         confirmed: !!d.confirmedAt,
         voided: !!d.voidedAt,
         actions: dutyActions(
-          { direction: d.direction, userIds: d.userIds, confirmed: !!d.confirmedAt, voided: !!d.voidedAt },
+          { direction: d.direction, userIds: d.userIds, doneUserIds: d.confirmedUserIds, confirmed: !!d.confirmedAt, voided: !!d.voidedAt },
           { viewerId: user.id, committee },
         ),
         destination:
@@ -453,6 +467,9 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <ShareButton title={eventDetails.title} size="lg" />
+              {committee && (eventDetails.eventType === "match" || eventDetails.eventType === "training") && (
+                <WhatsAppAnnounceSlot eventId={id} viewer={user} />
+              )}
               {committee && eventDetails.eventType === "match" && (
                 <Link href={`/events/${id}/selection`} className={buttonVariants({ size: "lg" })}>
                   Pick the team

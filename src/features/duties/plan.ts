@@ -20,7 +20,8 @@ export type PlanEvent = {
   end: Date;
   /** The Event's resolved Checklist: each Equipment Unit it needs, with its effective count. */
   items: { equipmentUnitId: string; count: number }[];
-  duties: { equipmentUnitId: string; direction: "to" | "from"; userIds: string[] }[];
+  /** `shares`: how many each of `userIds` is taking (same order), null for all of it; left out when nobody gave numbers. */
+  duties: { equipmentUnitId: string; direction: "to" | "from"; userIds: string[]; shares?: (number | null)[] }[];
 };
 
 export const HOUR = 60 * 60 * 1000;
@@ -28,6 +29,16 @@ export const HOUR = 60 * 60 * 1000;
 /** Everyone on the Duty for this Equipment Unit and direction (empty when nobody is). */
 export const dutyUsers = (e: PlanEvent, equipmentUnitId: string, direction: "to" | "from") =>
   e.duties.find((d) => d.equipmentUnitId === equipmentUnitId && d.direction === direction)?.userIds ?? [];
+
+/** How many of the line nobody is taking on this Duty: all of it when nobody is on it, only the unclaimed rest when everyone gave a number. */
+export const uncovered = (e: PlanEvent, equipmentUnitId: string, direction: "to" | "from") => {
+  const total = itemCount(e, equipmentUnitId);
+  const d = e.duties.find((x) => x.equipmentUnitId === equipmentUnitId && x.direction === direction);
+  if (!d || d.userIds.length === 0) return total;
+  const shares = d.shares ?? [];
+  if (shares.length !== d.userIds.length || shares.some((c) => c === null)) return 0;
+  return Math.max(0, total - shares.reduce<number>((sum, c) => sum + (c ?? 0), 0));
+};
 
 /** The count a Checklist line asks the Event for, or 0 if the Equipment Unit isn't on it. */
 export const itemCount = (e: PlanEvent, equipmentUnitId: string) =>

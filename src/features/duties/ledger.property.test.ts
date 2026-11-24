@@ -115,7 +115,7 @@ async function whereabouts(db: Db, unitId: string): Promise<Model> {
 
 type PendingFrom = { dutyId: string; people: string[]; count: number };
 
-/** Creates an Event whose Checklist asks for `count`, and puts `people` on its To Duty (the From Duty follows). */
+/** Creates an Event whose Checklist asks for `count`, and puts `people` on both its To and From Duties. */
 async function newDuties(db: Db, unitId: string, people: string[], count: number) {
   const eventId = crypto.randomUUID();
   await db.insert(event).values({ id: eventId, title: eventId, ...PAST });
@@ -124,7 +124,10 @@ async function newDuties(db: Db, unitId: string, people: string[], count: number
   const duties = await ensureDuties(db, eventId, [unitId]);
   const to = duties.find((d) => d.direction === "to")!;
   const from = duties.find((d) => d.direction === "from")!;
-  for (const person of people) await claim(db, to.id, person);
+  for (const person of people) {
+    await claim(db, to.id, person);
+    await claim(db, from.id, person);
+  }
   return { toId: to.id, fromId: from.id };
 }
 

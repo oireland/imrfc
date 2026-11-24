@@ -20,7 +20,8 @@ export async function ensureDuties(db: Db, eventId: string, equipmentUnitIds: st
   return (await listEventDuties(db, eventId, equipmentUnitIds, { cancelled: false })) as Duty[];
 }
 
-export const claim = (db: Db, dutyId: string, userId: string) => actOnDuty(db, dutyId, member(userId), { action: "claim" });
+export const claim = (db: Db, dutyId: string, userId: string, count?: number) =>
+  actOnDuty(db, dutyId, member(userId), { action: "claim", count });
 export const leave = (db: Db, dutyId: string, userId: string) => actOnDuty(db, dutyId, member(userId), { action: "leave" });
 export const handOn = (db: Db, dutyId: string, actorId: string, toUserId: string) =>
   actOnDuty(db, dutyId, member(actorId), { action: "handOn", userId: toUserId });

@@ -278,8 +278,22 @@
     {
       "idx": 39,
       "version": "7",
-      "when": 1795010647080,
-      "tag": "0039_cascade-deletes",
+      "when": 1795524581907,
+      "tag": "0039_duty-user-count",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1795525494743,
+      "tag": "0040_duty-user-confirmed",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1795530915315,
+      "tag": "0041_cascade-deletes",
       "breakpoints": true
     }
   ]

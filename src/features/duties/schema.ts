@@ -1,4 +1,4 @@
-import { index, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { equipmentUnit } from "@/features/equipment";
 import { store } from "@/features/stores";
 import { event } from "@/features/events";
@@ -42,6 +42,11 @@ export const dutyUser = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id),
+    // How many of the Checklist line this Person is taking; null means all of it.
+    count: integer("count"),
+    // When everyone on the Duty gave a number, each Person's part is Confirmed on its own,
+    // so the unclaimed rest can still be taken afterwards.
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
   },
   (t) => [unique().on(t.dutyId, t.userId), index("duty_user_user_id_idx").on(t.userId)],
 );

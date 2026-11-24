@@ -1,7 +1,7 @@
 // Heads-up rules: pure functions over plain data, no database or Next.js.
 import { startsAt } from "@/features/events";
 import { joinList } from "@/lib/text/join-names";
-import { byStart, dutyUsers, heldBy, inStores, itemCount, needsUnit, HOUR, type PlanEvent, type PlanEquipment } from "./plan";
+import { byStart, dutyUsers, heldBy, inStores, itemCount, needsUnit, uncovered, HOUR, type PlanEvent, type PlanEquipment } from "./plan";
 
 /** A Duty still unfilled this close to its Event is worth a heads-up. */
 const UNFILLED_WARNING_WINDOW = 48 * HOUR;
@@ -79,17 +79,28 @@ export function findHeadsUps({
     const untilStart = startsAt(e).getTime() - now.getTime();
     if (untilStart < 0 || untilStart > UNFILLED_WARNING_WINDOW) continue;
     for (const { equipmentUnitId } of e.items) {
-      const nobodyTo = dutyUsers(e, equipmentUnitId, "to").length === 0;
-      const nobodyFrom = dutyUsers(e, equipmentUnitId, "from").length === 0;
-      if (!nobodyTo && !nobodyFrom) continue;
+      const gaps = (["to", "from"] as const).map((direction) => ({
+        direction,
+        nobody: dutyUsers(e, equipmentUnitId, direction).length === 0,
+        short: uncovered(e, equipmentUnitId, direction),
+      }));
+      if (gaps.every((g) => g.short === 0)) continue;
       const name = equipment.find((k) => k.id === equipmentUnitId)?.name ?? "equipment";
-      const way = nobodyTo && nobodyFrom ? "to or back from" : nobodyTo ? "to" : "back from";
-      headsUps.push({
-        kind: "unfilled_duty",
-        equipmentUnitId,
-        eventIds: [e.id],
-        message: `Nobody is taking ${name} ${way} ${e.title}, and it starts within 48 hours.`,
-      });
+      const way = (direction: "to" | "from") => (direction === "to" ? "to" : "back from");
+      const needed = itemCount(e, equipmentUnitId);
+      const messages =
+        gaps.every((g) => g.nobody)
+          ? [`Nobody is taking ${name} to or back from ${e.title}`]
+          : gaps
+              .filter((g) => g.short > 0)
+              .map((g) =>
+                g.nobody
+                  ? `Nobody is taking ${name} ${way(g.direction)} ${e.title}`
+                  : `Only ${needed - g.short} of ${needed} ${name} are being taken ${way(g.direction)} ${e.title}`,
+              );
+      for (const message of messages) {
+        headsUps.push({ kind: "unfilled_duty", equipmentUnitId, eventIds: [e.id], message: `${message}, and it starts within 48 hours.` });
+      }
     }
   }
 

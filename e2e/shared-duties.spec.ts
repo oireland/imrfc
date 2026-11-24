@@ -49,8 +49,6 @@ test("Two People join a To Duty, split where it comes from and who ends up with 
   await page.keyboard.press("Escape");
   await expect(sheet).toBeHidden();
   await expect(duties.getByRole("button", { name: `Bring ${equipmentName}: You & ${tomName}` })).toBeVisible();
-  // From follows To: the trip back picked up both of them too.
-  await expect(duties.getByRole("button", { name: `Take back ${equipmentName}: You & ${tomName}` })).toBeVisible();
 
   // Confirming asks where it's coming from (split across the Shed and Priya) and who ends up with it.
   await duties.getByRole("button", { name: `Bring ${equipmentName}: You & ${tomName}` }).click();

@@ -1,5 +1,5 @@
 {
-  "id": "8ff43baa-4556-4cd8-9c42-2dfacb9132ad",
+  "id": "e84ac7de-e46a-4b5f-9899-9f7111527d74",
   "prevId": "c33de110-5153-48df-8246-c002bbe48672",
   "version": "7",
   "dialect": "postgresql",
@@ -680,7 +680,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "no action",
           "onUpdate": "no action"
         },
         "checklist_item_equipment_unit_id_equipment_unit_id_fk": {
@@ -922,6 +922,12 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "count": {
+          "name": "count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -952,7 +958,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "no action",
           "onUpdate": "no action"
         },
         "duty_user_user_id_user_id_fk": {
@@ -1674,7 +1680,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "no action",
           "onUpdate": "no action"
         },
         "match_details_team_id_team_id_fk": {
@@ -2052,7 +2058,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "no action",
           "onUpdate": "no action"
         },
         "injury_change_by_id_user_id_fk": {
