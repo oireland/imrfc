@@ -124,11 +124,15 @@ async function insertEvent(db: Db, input: NewEvent, title: string): Promise<Even
   return row;
 }
 
-export async function listEvents(db: Db, { when }: { when: "upcoming" | "past" }): Promise<Event[]> {
+/** Every upcoming or past Event, cancelled included unless `cancelled: false` is passed. */
+export async function listEvents(
+  db: Db,
+  { when, cancelled }: { when: "upcoming" | "past"; cancelled?: false },
+): Promise<Event[]> {
   const now = new Date();
-  return when === "upcoming"
-    ? db.select().from(event).where(gte(event.end, now)).orderBy(asc(event.start))
-    : db.select().from(event).where(lt(event.end, now)).orderBy(desc(event.start));
+  const timing = when === "upcoming" ? gte(event.end, now) : lt(event.end, now);
+  const where = cancelled === false ? and(timing, eq(event.cancelled, false)) : timing;
+  return db.select().from(event).where(where).orderBy(when === "upcoming" ? asc(event.start) : desc(event.start));
 }
 
 /** Events (cancelled included) starting in [from, to), soonest first — for the month calendar. */

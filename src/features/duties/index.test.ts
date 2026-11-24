@@ -1056,6 +1056,22 @@ describe("listDutyRecordForUser", () => {
     expect(record.season).toEqual({ done: 1, neverConfirmed: 1 });
     expect(record.last.map((r) => r.event.title)).toEqual(["Training @ Never confirmed", "Training @ Done", "Training @ Last season"]);
   });
+
+  it("counts an Event as past by the given time, not the real clock", async () => {
+    const { db, shed } = await setup();
+    const unit = await createEquipmentUnit(db, { name: "Balls", homeId: shed.id });
+    if (!unit.ok) throw new Error(unit.error);
+    const ended = await pastEvent(db, "Ended", new Date("2025-10-01T12:00:00Z"));
+    const later = await pastEvent(db, "Later", new Date("2025-12-01T12:00:00Z"));
+    for (const e of [ended, later]) {
+      const [to] = await ensureDuties(db, e.id, [unit.equipmentUnit.id]);
+      await claim(db, to.id, "tom");
+    }
+
+    const record = await listDutyRecordForUser(db, "tom", new Date("2025-11-01T12:00:00Z"));
+
+    expect(new Set(record.last.map((r) => r.event.title))).toEqual(new Set(["Training @ Ended"]));
+  });
 });
 
 describe("listDutyUserIdsByEvent", () => {

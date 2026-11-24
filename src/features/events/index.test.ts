@@ -34,6 +34,23 @@ function countWrites(db: object): () => number {
   return () => count;
 }
 
+describe("listEvents cancelled option", () => {
+  it("leaves out Cancelled Events when asked, and includes them otherwise", async () => {
+    const db = await createTestDb();
+    const base = { eventType: "training" as const, start: new Date("2999-01-07T19:00:00Z"), end: new Date("2999-01-07T20:00:00Z") };
+    const kept = await createEvent(db, { ...base, venue: "Kept" });
+    const gone = await createEvent(db, { ...base, venue: "Gone" });
+    if (!kept.ok || !gone.ok) throw new Error("setup");
+    await cancelEvent(db, gone.event.id);
+
+    const live = await listEvents(db, { when: "upcoming", cancelled: false });
+    const all = await listEvents(db, { when: "upcoming" });
+
+    expect(live.map((e) => e.id)).toEqual([kept.event.id]);
+    expect(all.map((e) => e.id).sort()).toEqual([kept.event.id, gone.event.id].sort());
+  });
+});
+
 describe("listTeams", () => {
   it("seeds and returns 1st XV and 2nd XV", async () => {
     const db = await createTestDb();
