@@ -1,5 +1,5 @@
 import type { Db } from "@/db/types";
-import { and, asc, desc, eq, gte, inArray, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { event, matchDetails, team } from "./schema";
 import { eventTitle, validateEvent, type NewEvent } from "./rules";
 
@@ -176,8 +176,14 @@ export async function listMatchDay(db: Db, event: Pick<Event, "start">): Promise
 
 /** Venues already used, each once, most recently used first — suggestions for typing a new one. */
 export async function listVenues(db: Db): Promise<string[]> {
-  const rows = await db.select({ venue: event.venue }).from(event).orderBy(desc(event.start));
-  return [...new Set(rows.map((r) => r.venue.trim()).filter(Boolean))];
+  const venue = sql<string>`trim(${event.venue})`;
+  const rows = await db
+    .select({ venue })
+    .from(event)
+    .where(sql`${venue} <> ''`)
+    .groupBy(venue)
+    .orderBy(desc(sql`max(${event.start})`));
+  return rows.map((r) => r.venue);
 }
 
 /** The next few upcoming Events that are still happening, soonest first. */

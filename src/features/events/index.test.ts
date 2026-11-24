@@ -568,7 +568,7 @@ describe("listVenues", () => {
       end: new Date(Date.UTC(2999, 0, day, 21)),
       venue,
     });
-    for (const e of [at("Harlington", 1), at("Hyde Park", 2), at("Harlington", 3), at("  ", 4)]) await createEvent(db, e);
+    for (const e of [at("Harlington", 1), at("Hyde Park", 2), at("  Harlington ", 3), at("  ", 4)]) await createEvent(db, e);
 
     expect(await listVenues(db)).toEqual(["Harlington", "Hyde Park"]);
   });
