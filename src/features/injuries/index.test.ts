@@ -3,6 +3,7 @@ import { createTestDb } from "@/test/db";
 import { user, type Role } from "@/features/users";
 import { clearInjuries, clearInjury, listFitness, listInjuries, listPhysioNeeds, logByMistake, reportInjury, updateInjury } from "./index";
 import type { ReportInput } from "./rules";
+import { injury, injuryChange } from "./schema";
 
 const today = "2026-10-10";
 const now = new Date("2026-10-10T12:00:00Z");
@@ -208,8 +209,11 @@ describe("clearInjuries", () => {
   it("wipes a User's Injuries and their history", async () => {
     const db = await setup();
     await reported(db);
+    await reported(db, {}, fran, "fran");
     await clearInjuries(db, "hal");
     expect((await listInjuries(db, tom, "hal", today)).open).toEqual([]);
+    expect(await db.select({ userId: injury.userId }).from(injury)).toEqual([{ userId: "fran" }]);
+    expect(await db.select({ id: injuryChange.id }).from(injuryChange)).toHaveLength(1);
   });
 });
 

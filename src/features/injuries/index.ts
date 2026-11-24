@@ -240,8 +240,6 @@ export async function listPhysioNeeds(db: Db, userIds?: string[]): Promise<Physi
 
 /** Removes a User's Injuries and their history. Not permission-checked: used by account deletion. */
 export async function clearInjuries(db: Db, userId: string) {
-  const rows = await db.select({ id: injury.id }).from(injury).where(eq(injury.userId, userId));
-  if (rows.length === 0) return;
-  await db.delete(injuryChange).where(inArray(injuryChange.injuryId, rows.map((r) => r.id)));
+  // Their history goes with them (ON DELETE CASCADE).
   await db.delete(injury).where(eq(injury.userId, userId));
 }

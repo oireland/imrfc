@@ -52,7 +52,7 @@ export const event = pgTable(
 export const matchDetails = pgTable("match_details", {
   eventId: text("event_id")
     .primaryKey()
-    .references(() => event.id),
+    .references(() => event.id, { onDelete: "cascade" }),
   // A Match is for exactly one Team. Training and Social are for everyone and have none.
   teamId: text("team_id")
     .notNull()

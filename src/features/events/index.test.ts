@@ -419,6 +419,7 @@ describe("deleteEvent", () => {
     await deleteEvent(db, created.event.id);
 
     expect(await getEvent(db, created.event.id)).toBeUndefined();
+    expect(await db.select().from(matchDetails)).toEqual([]);
   });
 });
 

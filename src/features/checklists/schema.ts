@@ -20,7 +20,7 @@ export const checklistItem = pgTable(
     id: text("id").primaryKey(),
     checklistId: text("checklist_id")
       .notNull()
-      .references(() => checklist.id),
+      .references(() => checklist.id, { onDelete: "cascade" }),
     equipmentUnitId: text("equipment_unit_id")
       .notNull()
       .references(() => equipmentUnit.id),

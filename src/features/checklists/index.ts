@@ -129,11 +129,9 @@ export async function removeFromChecklist(db: Db, target: ChecklistScope, equipm
 }
 
 /** Drops this level's own Checklist so the Event falls back to the next level. */
-export async function clearChecklist(db: Db, target: ChecklistScope) {
-  const id = await findChecklistId(db, target);
-  if (!id) return;
-  await db.delete(checklistItem).where(eq(checklistItem.checklistId, id));
-  await db.delete(checklist).where(eq(checklist.id, id));
+export async function clearChecklist(db: Db, { scope, scopeId }: ChecklistScope) {
+  // Its lines go with it (ON DELETE CASCADE).
+  await db.delete(checklist).where(and(eq(checklist.scope, scope), eq(checklist.scopeId, scopeId)));
 }
 
 export type ChecklistEventRef = { id: string; seriesId: string | null; eventType: string };
