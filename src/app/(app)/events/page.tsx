@@ -20,9 +20,9 @@ export default async function EventsPage({ searchParams }: PageProps<"/events">)
   const committee = isCommitteeOrAbove(user.role);
 
   if (tab === "past") {
-    const asked = Number(Array.isArray(pageParam) ? pageParam[0] : pageParam);
-    const page = Number.isInteger(asked) && asked >= 1 ? asked : 1;
-    const { events: past, hasOlder } = await listPastEvents(db, { page });
+    const { events: past, hasOlder, page } = await listPastEvents(db, {
+      page: Number(Array.isArray(pageParam) ? pageParam[0] : pageParam),
+    });
     return (
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">

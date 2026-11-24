@@ -682,7 +682,7 @@ describe("listPastEvents", () => {
 
   it("returns nothing past the end", async () => {
     const db = await seed(3);
-    expect(await listPastEvents(db, { page: 9, pageSize: 2 })).toEqual({ events: [], hasOlder: false });
+    expect(await listPastEvents(db, { page: 9, pageSize: 2 })).toEqual({ events: [], hasOlder: false, page: 9 });
   });
 
   it("treats a bad page as page 1", async () => {
@@ -690,6 +690,7 @@ describe("listPastEvents", () => {
     for (const page of [Number.NaN, 0, -2, 1.5]) {
       const r = await listPastEvents(db, { page, pageSize: 2 });
       expect(r.events.map((e) => e.title)).toEqual(["Past 3", "Past 2"]);
+      expect(r.page).toBe(1);
     }
   });
 });
