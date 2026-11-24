@@ -11,7 +11,7 @@ import {
   listEquipmentUnitsByIds,
   listPortionsFor,
   recordSplitMove,
-  setUnconfirmed,
+  setUnconfirmedOnce,
   withUnitLock,
 } from "@/features/equipment";
 import { filterApprovedUserIds, isCommitteeOrAbove, loadNames, type Role } from "@/features/users";
@@ -530,9 +530,7 @@ export async function markUnconfirmed(db: Db) {
     // sorted it out already: put back, "I've got it", or Confirmed onto the next Event.
     const since = from.toConfirmedAt && from.toConfirmedAt > from.eventEnd ? from.toConfirmedAt : from.eventEnd;
     if (await hasMoveSince(db, equipment.id, since)) continue;
-    for (const source of held.sources) {
-      await setUnconfirmed(db, equipment.id, from.eventId, source.place, source.count);
-    }
+    await setUnconfirmedOnce(db, equipment.id, from.eventId, held.sources);
   }
 }
 
