@@ -16,6 +16,7 @@ import {
   listEventTitles,
   listMatchDay,
   listNextEvents,
+  listPastEvents,
   listTeams,
   type NewEvent,
 } from "./index";
@@ -33,6 +34,23 @@ function countWrites(db: object): () => number {
   }
   return () => count;
 }
+
+describe("listEvents cancelled option", () => {
+  it("leaves out Cancelled Events when asked, and includes them otherwise", async () => {
+    const db = await createTestDb();
+    const base = { eventType: "training" as const, start: new Date("2999-01-07T19:00:00Z"), end: new Date("2999-01-07T20:00:00Z") };
+    const kept = await createEvent(db, { ...base, venue: "Kept" });
+    const gone = await createEvent(db, { ...base, venue: "Gone" });
+    if (!kept.ok || !gone.ok) throw new Error("setup");
+    await cancelEvent(db, gone.event.id);
+
+    const live = await listEvents(db, { when: "upcoming", cancelled: false });
+    const all = await listEvents(db, { when: "upcoming" });
+
+    expect(live.map((e) => e.id)).toEqual([kept.event.id]);
+    expect(all.map((e) => e.id).sort()).toEqual([kept.event.id, gone.event.id].sort());
+  });
+});
 
 describe("listTeams", () => {
   it("seeds and returns 1st XV and 2nd XV", async () => {
@@ -478,6 +496,32 @@ describe("listMatchDay", () => {
   });
 });
 
+describe("listMatchDay at clock changes", () => {
+  it.each([
+    ["2025-10-26", "2025-10-26T23:30:00Z", "2025-10-27T00:30:00Z", "2025-10-26T12:00:00Z"], // clocks go back: 25h day
+    ["2025-03-30", "2025-03-30T22:30:00Z", "2025-03-30T23:30:00Z", "2025-03-30T12:00:00Z"], // clocks go forward: 23h day
+  ])("includes a 23:30 Match and excludes next-day 00:30 and non-Matches on %s", async (_day, lateStart, nextDayStart, socialStart) => {
+    const db = await createTestDb();
+    const [firstXV] = await listTeams(db);
+    const make = async (eventType: "match" | "social", start: string) => {
+      const base = { start: new Date(start), end: new Date(new Date(start).getTime() + 5_400_000), venue: "Harlington" };
+      const result = await createEvent(
+        db,
+        eventType === "match"
+          ? { ...base, eventType, matchDetails: { teamId: firstXV.id, opponent: start, homeAway: "home", competition: "friendly" } }
+          : { ...base, eventType, title: "Social" },
+      );
+      if (!result.ok) throw new Error(result.error);
+      return result.event;
+    };
+    const late = await make("match", lateStart);
+    await make("match", nextDayStart);
+    await make("social", socialStart);
+
+    expect((await listMatchDay(db, late)).map((e) => e.id)).toEqual([late.id]);
+  });
+});
+
 describe("createEvents", () => {
   const training = (venue: string): NewEvent => ({
     eventType: "training",
@@ -513,6 +557,34 @@ describe("createEvents", () => {
     expect(result.ok).toBe(false);
     expect(await listEvents(db, { when: "upcoming" })).toEqual([]);
   });
+
+  it("saves a mixed batch with each Match's Team title and details", async () => {
+    const db = await createTestDb();
+    await listTeams(db);
+
+    const result = await createEvents(db, [match("1st XV"), training("One"), match("2nd XV")]);
+
+    expect(result).toEqual({ ok: true, count: 3 });
+    const events = await listEvents(db, { when: "upcoming" });
+    expect(events.map((e) => e.title).sort()).toEqual(["1st XV vs UCL", "2nd XV vs UCL", "Training @ One"]);
+    const details = await db.select().from(matchDetails);
+    expect(details.map((d) => d.teamId).sort()).toEqual(["1st XV", "2nd XV"]);
+  });
+
+  it("rejects the whole batch for an unknown Team in the middle", async () => {
+    const db = await createTestDb();
+    await listTeams(db);
+
+    const result = await createEvents(db, [match("1st XV"), match("3rd XV"), training("One")]);
+
+    expect(result).toEqual({ ok: false, error: "That team doesn't exist." });
+    expect(await listEvents(db, { when: "upcoming" })).toEqual([]);
+  });
+
+  it("accepts an empty batch", async () => {
+    const db = await createTestDb();
+    expect(await createEvents(db, [])).toEqual({ ok: true, count: 0 });
+  });
 });
 
 describe("listVenues", () => {
@@ -524,7 +596,7 @@ describe("listVenues", () => {
       end: new Date(Date.UTC(2999, 0, day, 21)),
       venue,
     });
-    for (const e of [at("Harlington", 1), at("Hyde Park", 2), at("Harlington", 3), at("  ", 4)]) await createEvent(db, e);
+    for (const e of [at("Harlington", 1), at("Hyde Park", 2), at("  Harlington ", 3), at("  ", 4)]) await createEvent(db, e);
 
     expect(await listVenues(db)).toEqual(["Harlington", "Hyde Park"]);
   });
@@ -581,5 +653,45 @@ describe("getEvents", () => {
     expect(loaded.team?.name).toBe("2nd XV");
     expect(events.find((e) => e.id === training.event.id)).toMatchObject({ matchDetails: null, team: null });
     expect(await getEvents(db, [])).toEqual([]);
+  });
+});
+
+describe("listPastEvents", () => {
+  async function seed(n: number) {
+    const db = await createTestDb();
+    for (let i = 1; i <= n; i++) {
+      await createEvent(db, {
+        title: `Past ${i}`,
+        eventType: "social",
+        start: new Date(Date.UTC(2020, 0, i, 19)),
+        end: new Date(Date.UTC(2020, 0, i, 21)),
+        venue: "Harlington",
+      });
+    }
+    return db;
+  }
+
+  it("pages newest first and says whether there are older ones", async () => {
+    const db = await seed(5);
+    const first = await listPastEvents(db, { page: 1, pageSize: 2 });
+    expect(first.events.map((e) => e.title)).toEqual(["Past 5", "Past 4"]);
+    expect(first.hasOlder).toBe(true);
+    const last = await listPastEvents(db, { page: 3, pageSize: 2 });
+    expect(last.events.map((e) => e.title)).toEqual(["Past 1"]);
+    expect(last.hasOlder).toBe(false);
+  });
+
+  it("returns nothing past the end", async () => {
+    const db = await seed(3);
+    expect(await listPastEvents(db, { page: 9, pageSize: 2 })).toEqual({ events: [], hasOlder: false, page: 9 });
+  });
+
+  it("treats a bad page as page 1", async () => {
+    const db = await seed(3);
+    for (const page of [Number.NaN, 0, -2, 1.5]) {
+      const r = await listPastEvents(db, { page, pageSize: 2 });
+      expect(r.events.map((e) => e.title)).toEqual(["Past 3", "Past 2"]);
+      expect(r.page).toBe(1);
+    }
   });
 });
