@@ -23,6 +23,8 @@ test("Home shows my Duties, what's coming up and the Equipment I hold", async ({
   const eventDuties = page.getByRole("region", { name: "Who's bringing what" });
   await eventDuties.getByRole("button", { name: `Bring ${equipmentName}: nobody yet` }).click();
   await page.getByRole("dialog").getByRole("button", { name: "I'll do it" }).click();
+  await eventDuties.getByRole("button", { name: `Take back ${equipmentName}: nobody yet` }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "I'll do it" }).click();
   await eventDuties.getByRole("button", { name: `Bring ${equipmentName}: you` }).click();
   await page.getByRole("dialog").getByRole("button", { name: /mark as done/ }).click();
   await expect(eventDuties.getByRole("button", { name: `Bring ${equipmentName}: you, done` })).toBeVisible();

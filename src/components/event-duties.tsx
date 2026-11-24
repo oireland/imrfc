@@ -3,7 +3,7 @@
 import { joinList } from "@/lib/text/join-names";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { ArrowDownLeft, ArrowUpRight, Check, ChevronLeft, ChevronRight, CircleAlert, Loader2, Star, X } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Check, ChevronLeft, ChevronRight, CircleAlert, Loader2, Minus, Plus, Star, X } from "lucide-react";
 import { cn } from "cn";
 import { AddEquipmentButton, EditToggle, KitRow, ResetLink, useKitEditing, type KitEditing } from "@/components/kit-editing";
 import { parsePlaceKey } from "@/features/equipment/client";
@@ -21,6 +21,12 @@ export type DutySlot = {
   userIds: string[];
   /** Display names, same order as `userIds`. */
   people: string[];
+  /** How many each of `userIds` is taking, same order; null means all of it. */
+  counts: (number | null)[];
+  /** Who has already marked their own part done, same order (only when everyone gave a number). */
+  done: boolean[];
+  /** How many of the line nobody has claimed yet (0 once someone is on it without a number). */
+  unclaimed: number;
   /** The viewer is one of `userIds`. */
   mine: boolean;
   confirmed: boolean;
@@ -61,6 +67,50 @@ type Place = { value: string; label: string };
 
 /** Search appears in the person picker once the list is longer than this. */
 const SEARCH_FROM = 6;
+
+/** How many of a line of `total` are taken, when only some are (everyone gave a number and it falls short); otherwise null. */
+const partlyTaken = (slot: DutySlot, total: number) => {
+  if (total < 2 || slot.counts.length === 0 || slot.counts.some((c) => c === null)) return null;
+  const taken = slot.counts.reduce<number>((sum, c) => sum + (c ?? 0), 0);
+  return taken < total ? taken : null;
+};
+
+/** Names, with "(2)" after anyone taking only part of a line of more than one. */
+const peopleWithCounts = (slot: DutySlot, total: number) =>
+  joinList(
+    slot.people.map((name, i) => {
+      const bits = [total > 1 && slot.counts[i] != null ? String(slot.counts[i]) : null, slot.done[i] && !slot.confirmed ? "done" : null].filter(Boolean);
+      return bits.length > 0 ? `${name} (${bits.join(", ")})` : name;
+    }),
+  );
+
+function Stepper({ value, max, onChange, label }: { value: number; max: number; onChange: (n: number) => void; label: string }) {
+  return (
+    <span className="flex items-center gap-3">
+      <button
+        type="button"
+        aria-label={`One fewer ${label}`}
+        disabled={value <= 1}
+        onClick={() => onChange(value - 1)}
+        className="rounded-full bg-card p-2 shadow-card disabled:opacity-40"
+      >
+        <Minus className="size-4" aria-hidden="true" />
+      </button>
+      <span className="w-6 text-center text-lg font-medium tabular-nums" aria-live="polite">
+        {value}
+      </span>
+      <button
+        type="button"
+        aria-label={`One more ${label}`}
+        disabled={value >= max}
+        onClick={() => onChange(value + 1)}
+        className="rounded-full bg-card p-2 shadow-card disabled:opacity-40"
+      >
+        <Plus className="size-4" aria-hidden="true" />
+      </button>
+    </span>
+  );
+}
 
 const verb = (d: DutySlot) => (d.direction === "to" ? "Bring" : "Take back");
 const initials = (name: string) =>
@@ -177,7 +227,7 @@ export function EventDuties({
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     {[item.to, item.from].map((slot) => (
-                      <Slot key={slot.direction} slot={slot} equipmentName={item.equipmentName} soon={soon} onOpen={() => setOpen({ equipmentUnitId: item.equipmentUnitId, direction: slot.direction })} />
+                      <Slot key={slot.direction} slot={slot} total={item.count} equipmentName={item.equipmentName} soon={soon} onOpen={() => setOpen({ equipmentUnitId: item.equipmentUnitId, direction: slot.direction })} />
                     ))}
                   </div>
                   {item.headsUps.map((text) => (
@@ -216,11 +266,12 @@ export function EventDuties({
   );
 }
 
-function Slot({ slot, equipmentName, soon, onOpen }: { slot: DutySlot; equipmentName: string; soon: boolean; onOpen: () => void }) {
+function Slot({ slot, total, equipmentName, soon, onOpen }: { slot: DutySlot; total: number; equipmentName: string; soon: boolean; onOpen: () => void }) {
   const Icon = slot.direction === "to" ? ArrowUpRight : ArrowDownLeft;
   const personLabel = joinList(slot.people);
+  const taken = partlyTaken(slot, total);
   const soloYou = slot.mine && slot.people.length === 1;
-  const label = `${verb(slot)} ${equipmentName}: ${slot.voided ? "cancelled" : soloYou ? "you" : personLabel || "nobody yet"}${slot.confirmed ? ", done" : ""}`;
+  const label = `${verb(slot)} ${equipmentName}: ${slot.voided ? "cancelled" : soloYou ? "you" : personLabel || "nobody yet"}${taken !== null ? `, ${taken} of ${total}` : ""}${slot.confirmed ? ", done" : ""}`;
   return (
     <button
       type="button"
@@ -249,13 +300,23 @@ function Slot({ slot, equipmentName, soon, onOpen }: { slot: DutySlot; equipment
             <span className="text-muted-foreground">Up for grabs</span>
           )}
         </span>
+        {taken !== null && (
+          <span className="mt-1 flex items-center gap-1.5">
+            <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-border" aria-hidden="true">
+              <span className="block h-full rounded-full bg-foreground" style={{ width: `${(taken / total) * 100}%` }} />
+            </span>
+            <span className="text-[11px] text-muted-foreground">
+              {taken} of {total}
+            </span>
+          </span>
+        )}
       </span>
       {slot.confirmed && <Check className="size-4 shrink-0" aria-hidden="true" />}
     </button>
   );
 }
 
-type View = "main" | "people" | "assign" | "places" | "confirmSplit" | "handedOn";
+type View = "main" | "people" | "assign" | "share" | "places" | "confirmSplit" | "handedOn";
 
 function DutySheet({
   item,
@@ -276,6 +337,12 @@ function DutySheet({
 }) {
   const [view, setView] = useState<View>("main");
   const [query, setQuery] = useState("");
+  // Who was on it when the "Who's doing it?" list opened: they stay at the top, even as the ticks change.
+  const [pinned, setPinned] = useState<string[]>([]);
+  const [wanted, setWanted] = useState<number | null>(null);
+  const [newShare, setNewShare] = useState<number | null>(null);
+  // The visible area above the on-screen keyboard, so the sheet (and its list) sits above it.
+  const [viewport, setViewport] = useState<{ top: number; height: number } | null>(null);
   const [sources, setSources] = useState<Record<string, number>>(() =>
     Object.fromEntries(slot.sourceOptions.map((s) => [s.value, s.count])),
   );
@@ -284,7 +351,31 @@ function DutySheet({
   );
   const [pending, startTransition] = useTransition();
   const can = (a: DutyAction) => slot.actions.includes(a);
-  const personLabel = joinList(slot.people);
+  const personLabel = peopleWithCounts(slot, item.count);
+  const taken = partlyTaken(slot, item.count);
+  // Only some of the line is left: say how many you're taking, so it isn't all or nothing.
+  const shareable = item.count > 1 && slot.unclaimed > 0;
+  const myIndex = slot.userIds.indexOf(viewerId);
+  const othersTaking = slot.counts.reduce<number>((sum, c, i) => (i === myIndex ? sum : sum + (c ?? 0)), 0);
+  const mostICanTake = item.count - othersTaking;
+  const myShare = Math.min(newShare ?? slot.counts[myIndex] ?? mostICanTake, mostICanTake);
+  const numbered = item.count > 1 && slot.counts.every((c) => c !== null);
+  const take = Math.min(wanted ?? slot.unclaimed, slot.unclaimed);
+  // Taking the whole line from nobody-else is a plain claim; otherwise say how many.
+  const partial = shareable && (take < slot.unclaimed || slot.unclaimed < item.count);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => setViewport({ top: vv.offsetTop, height: vv.height });
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -336,9 +427,15 @@ function DutySheet({
   const trip = slot.direction === "to" ? `Bring to ${eventTitle}` : `Take back from ${eventTitle}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="duty-sheet-title">
+    <div
+      className="fixed inset-x-0 z-50 flex items-end justify-center"
+      style={viewport ? { top: viewport.top, height: viewport.height } : { top: 0, bottom: 0 }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="duty-sheet-title"
+    >
       <button type="button" aria-label="Close" className="absolute inset-0 animate-in bg-black/50 backdrop-blur-sm fade-in" onClick={onClose} />
-      <div className="relative flex max-h-[88dvh] w-full max-w-2xl animate-in flex-col rounded-t-[28px] bg-popover px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+20px)] text-popover-foreground shadow-2xl duration-300 slide-in-from-bottom">
+      <div className="relative flex max-h-[88%] w-full max-w-2xl animate-in flex-col rounded-t-[28px] bg-popover px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+20px)] text-popover-foreground shadow-2xl duration-300 slide-in-from-bottom">
         <div className="mx-auto mb-4 h-1 w-10 shrink-0 rounded-full bg-border" />
         <div className="mb-5 flex shrink-0 items-start justify-between gap-3">
           <div className="min-w-0">
@@ -358,11 +455,13 @@ function DutySheet({
                 ? "Hand it on to"
                 : view === "assign"
                   ? "Who's doing it?"
-                  : view === "places"
-                    ? "Where it goes back to"
-                    : view === "confirmSplit"
-                      ? "Before we mark it done"
-                      : item.equipmentName}
+                  : view === "share"
+                    ? "How many are you taking?"
+                    : view === "places"
+                      ? "Where it goes back to"
+                      : view === "confirmSplit"
+                        ? "Before we mark it done"
+                        : item.equipmentName}
             </p>
             {view === "main" && (
               <p className="text-sm text-muted-foreground">{slot.direction === "to" ? item.now : `Goes back to ${item.goesBackTo}`}</p>
@@ -379,17 +478,31 @@ function DutySheet({
               <Avatar mine={slot.mine} people={slot.people} />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{personLabel || "Nobody yet"}</p>
-                <p className="text-xs text-muted-foreground">{slot.confirmed ? "Done" : slot.people.length > 0 ? "Not done yet" : "Up for grabs"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {slot.confirmed
+                    ? "Done"
+                    : taken !== null
+                      ? `${taken} of ${item.count} taken, ${item.count - taken} still needed`
+                      : slot.people.length > 0
+                        ? "Not done yet"
+                        : "Up for grabs"}
+                </p>
               </div>
               {slot.confirmed && <Check className="size-5" aria-hidden="true" />}
             </div>
 
+            {can("claim") && shareable && slot.unclaimed > 1 && (
+              <div className="flex items-center justify-between gap-3 rounded-2xl bg-muted px-4 py-2">
+                <span className="text-sm">How many will you {slot.direction === "to" ? "bring" : "take back"}?</span>
+                <Stepper value={take} max={slot.unclaimed} onChange={setWanted} label="" />
+              </div>
+            )}
             {can("claim") && (
               <PrimaryButton
                 pending={pending}
                 onClick={() =>
                   run(
-                    { action: "claim" },
+                    partial ? { action: "claim", count: take } : { action: "claim" },
                     slot.direction === "to"
                       ? `You're bringing ${item.equipmentName}`
                       : `You're taking ${item.equipmentName} back`,
@@ -404,8 +517,14 @@ function DutySheet({
                 {slot.direction === "to" ? "It's there — mark as done" : "It's back — mark as done"}
               </PrimaryButton>
             )}
+            {can("setShare") && item.count > 1 && (
+              <RowButton label="Change how many I'm taking" value={String(slot.counts[myIndex] ?? item.count)} onClick={() => setView("share")} />
+            )}
             {can("handOn") && <RowButton label="Hand it on to someone else" onClick={() => setView("people")} />}
-            {can("assign") && <RowButton label="Manage who's doing it" onClick={() => setView("assign")} />}
+            {can("assign") && <RowButton label="Manage who's doing it" onClick={() => {
+              setPinned(slot.userIds);
+              setView("assign");
+            }} />}
             {can("setDestination") && <RowButton label="Goes back to" value={item.goesBackTo} onClick={() => setView("places")} />}
             {can("leave") && (
               <button
@@ -470,35 +589,73 @@ function DutySheet({
               />
             )}
             <ul className="-mx-2 min-h-0 overflow-y-auto">
-              {people
+              {[...people]
+                .sort((a, b) => Number(pinned.includes(b.id)) - Number(pinned.includes(a.id)))
                 .filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()))
                 .map((p) => {
-                  const on = slot.userIds.includes(p.id);
+                  const at = slot.userIds.indexOf(p.id);
+                  const on = at >= 0;
+                  const finished = on && slot.done[at];
+                  const theirs = slot.counts[at];
+                  const toggle = () => {
+                    if (!on && numbered && slot.unclaimed === 0) {
+                      toast.error("It's all taken: lower someone else's number first.");
+                      return;
+                    }
+                    run(
+                      {
+                        action: "assign",
+                        userIds: on ? slot.userIds.filter((id) => id !== p.id) : [...slot.userIds, p.id],
+                        counts: !on && numbered ? { [p.id]: slot.unclaimed } : undefined,
+                      },
+                      on ? `${p.name} is off it` : `${p.name} is on it`,
+                      { close: false },
+                    );
+                  };
                   return (
-                    <li key={p.id}>
+                    <li key={p.id} className="flex items-center gap-2">
                       <button
                         type="button"
-                        disabled={pending}
-                        onClick={() =>
-                          run(
-                            { action: "assign", userIds: on ? slot.userIds.filter((id) => id !== p.id) : [...slot.userIds, p.id] },
-                            on ? `${p.name} is off it` : `${p.name} is on it`,
-                            { close: false },
-                          )
-                        }
-                        className="flex w-full items-center gap-3 rounded-2xl px-2 py-2.5 text-left hover:bg-muted disabled:hover:bg-transparent"
+                        disabled={pending || finished}
+                        onClick={toggle}
+                        className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl px-2 py-2.5 text-left hover:bg-muted disabled:hover:bg-transparent"
                       >
                         <Avatar mine={p.id === viewerId} people={[p.name]} />
                         <span className="min-w-0 flex-1 truncate font-medium">
                           {p.name}
                           {p.id === viewerId && <span className="font-normal text-muted-foreground"> (you)</span>}
                         </span>
-                        {on && <Check className="size-4 shrink-0" aria-label="On it" />}
+                        {finished ? (
+                          <span className="shrink-0 text-xs text-muted-foreground">Done</span>
+                        ) : (
+                          on && <Check className="size-4 shrink-0" aria-label="On it" />
+                        )}
                       </button>
+                      {on && numbered && !finished && theirs !== null && (
+                        <Stepper
+                          value={theirs}
+                          max={theirs + slot.unclaimed}
+                          label={`for ${p.name}`}
+                          onChange={(n) => run({ action: "assign", userIds: slot.userIds, counts: { [p.id]: n } }, `${p.name} is taking ${n}`, { close: false })}
+                        />
+                      )}
+                      {finished && theirs !== null && item.count > 1 && <span className="shrink-0 pr-2 text-sm tabular-nums">{theirs}</span>}
                     </li>
                   );
                 })}
             </ul>
+          </div>
+        )}
+
+        {view === "share" && (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3 rounded-2xl bg-muted px-4 py-2">
+              <span className="text-sm">Out of {item.count}</span>
+              <Stepper value={myShare} max={mostICanTake} onChange={setNewShare} label="" />
+            </div>
+            <PrimaryButton pending={pending} onClick={() => run({ action: "setShare", count: myShare }, `You're taking ${myShare}`)}>
+              Save
+            </PrimaryButton>
           </div>
         )}
 
