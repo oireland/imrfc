@@ -605,6 +605,31 @@ describe("Duties", () => {
       );
     });
 
+    it("marks a done part Unconfirmed when the rest of the line was never all claimed and done", async () => {
+      const { db, shed } = await setup();
+      const made = await createEquipmentUnit(db, { name: "Shields", homeId: shed.id });
+      if (!made.ok) throw new Error(made.error);
+      await raiseQuantity(db, made.equipmentUnit.id, "tom", 7); // Quantity 8, all at the Shed
+      const ev = await pastEvent(db, shed.id, 1);
+      await addToChecklist(db, { scope: "event", scopeId: ev.id }, made.equipmentUnit.id);
+      await setChecklistItemCount(db, { scope: "event", scopeId: ev.id }, made.equipmentUnit.id, 4);
+      const [to] = (await ensureDuties(db, ev.id, [made.equipmentUnit.id])).filter((d) => d.direction === "to");
+      await claim(db, to.id, "tom", 2);
+      await confirmDuty(db, to.id, { id: "tom", role: "member" });
+      await claim(db, to.id, "sam", 1); // claimed, never done
+
+      await markUnconfirmed(db);
+
+      const portions = await loadPortions(db, made.equipmentUnit.id);
+      expect(portions).toHaveLength(2);
+      expect(portions).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ whereaboutsType: "store", storeId: shed.id, count: 6 }),
+          expect.objectContaining({ whereaboutsType: "unconfirmed", lastSeenEventId: ev.id, count: 2 }),
+        ]),
+      );
+    });
+
     it("gathers Unconfirmed from several of the To Duty's People when it was split among them", async () => {
       const { db, shed } = await setup();
       const made = await createEquipmentUnit(db, { name: "Shields", homeId: shed.id });

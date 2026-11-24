@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
-  lowerQuantity,
+  checkLower,
+  checkSplitMove,
   mergePortions,
-  moveMultiple,
+  pairFlows,
   parsePlaceKey,
   placeKey,
   singlePlace,
   totalQuantity,
+  type Place,
   type Portion,
 } from "./portions";
 
@@ -73,104 +75,105 @@ describe("singlePlace", () => {
   });
 });
 
-describe("moveMultiple", () => {
-  it("gathers a count from several source places into one target", () => {
+describe("checkSplitMove", () => {
+  const shedPlace = { type: "store", storeId: "shed" } as const;
+  const tom = { type: "holder", holderId: "tom" } as const;
+
+  it("accepts a count gathered from several source places, or split across several targets", () => {
     const shed = portion({ count: 2, storeId: "shed" });
     const cupboard = portion({ count: 3, storeId: "cupboard" });
-    const result = moveMultiple([shed, cupboard], {
-      sources: [
-        { from: { type: "store", storeId: "shed" }, count: 2 },
-        { from: { type: "store", storeId: "cupboard" }, count: 2 },
-      ],
-      targets: [{ to: { type: "holder", holderId: "tom" }, count: 4 }],
-    });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.portions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ count: 1, whereaboutsType: "store", storeId: "cupboard" }),
-        expect.objectContaining({ count: 4, whereaboutsType: "holder", holderId: "tom" }),
-      ]),
-    );
-  });
-
-  it("splits a count across several target places", () => {
-    const shed = portion({ count: 4, storeId: "shed" });
-    const result = moveMultiple([shed], {
-      sources: [{ from: { type: "store", storeId: "shed" }, count: 4 }],
-      targets: [
-        { to: { type: "holder", holderId: "tom" }, count: 2 },
-        { to: { type: "holder", holderId: "sam" }, count: 2 },
-      ],
-    });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.portions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ count: 2, whereaboutsType: "holder", holderId: "tom" }),
-        expect.objectContaining({ count: 2, whereaboutsType: "holder", holderId: "sam" }),
-      ]),
-    );
+    expect(
+      checkSplitMove([shed, cupboard], {
+        sources: [
+          { from: shedPlace, count: 2 },
+          { from: { type: "store", storeId: "cupboard" }, count: 2 },
+        ],
+        targets: [{ to: tom, count: 4 }],
+      }),
+    ).toEqual({ ok: true });
+    expect(
+      checkSplitMove([shed], {
+        sources: [{ from: shedPlace, count: 2 }],
+        targets: [
+          { to: tom, count: 1 },
+          { to: { type: "holder", holderId: "sam" }, count: 1 },
+        ],
+      }),
+    ).toEqual({ ok: true });
   });
 
   it("rejects sources that don't add up to the targets, so a Quantity can't grow", () => {
     const sam = portion({ count: 1, whereaboutsType: "holder", storeId: null, holderId: "sam" });
+    expect(checkSplitMove([sam], { sources: [], targets: [{ to: tom, count: 1 }] })).toEqual({
+      ok: false,
+      error: "What's being moved doesn't add up.",
+    });
     expect(
-      moveMultiple([sam], { sources: [], targets: [{ to: { type: "holder", holderId: "tom" }, count: 1 }] }),
-    ).toEqual({ ok: false, error: "What's being moved doesn't add up." });
-    expect(
-      moveMultiple([sam], {
-        sources: [{ from: { type: "holder", holderId: "sam" }, count: 1 }],
-        targets: [{ to: { type: "holder", holderId: "tom" }, count: 3 }],
-      }).ok,
+      checkSplitMove([sam], { sources: [{ from: { type: "holder", holderId: "sam" }, count: 1 }], targets: [{ to: tom, count: 3 }] }).ok,
     ).toBe(false);
   });
 
   it("rejects negative or fractional counts", () => {
     const shed = portion({ count: 4 });
-    const from = { type: "store", storeId: "shed" } as const;
-    const to = { type: "holder", holderId: "tom" } as const;
-    expect(moveMultiple([shed], { sources: [{ from, count: -2 }], targets: [{ to, count: -2 }] }).ok).toBe(false);
-    expect(moveMultiple([shed], { sources: [{ from, count: 1.5 }], targets: [{ to, count: 1.5 }] }).ok).toBe(false);
+    expect(checkSplitMove([shed], { sources: [{ from: shedPlace, count: -2 }], targets: [{ to: tom, count: -2 }] }).ok).toBe(false);
+    expect(checkSplitMove([shed], { sources: [{ from: shedPlace, count: 1.5 }], targets: [{ to: tom, count: 1.5 }] }).ok).toBe(false);
   });
 
-  it("rejects a source place that doesn't have enough", () => {
+  it("rejects a source place that doesn't have enough, even when it's also the target", () => {
     const shed = portion({ count: 1, storeId: "shed" });
-    const result = moveMultiple([shed], {
-      sources: [{ from: { type: "store", storeId: "shed" }, count: 2 }],
-      targets: [{ to: { type: "holder", holderId: "tom" }, count: 2 }],
+    expect(checkSplitMove([shed], { sources: [{ from: shedPlace, count: 2 }], targets: [{ to: tom, count: 2 }] })).toEqual({
+      ok: false,
+      error: "There aren't 2 there to move.",
     });
-    expect(result).toEqual({ ok: false, error: "There aren't 2 there to move." });
+    // Pairing drops a flow from a Place to itself, so only this check stops it.
+    expect(checkSplitMove([shed], { sources: [{ from: shedPlace, count: 2 }], targets: [{ to: shedPlace, count: 2 }] })).toEqual({
+      ok: false,
+      error: "There aren't 2 there to move.",
+    });
   });
 });
 
-describe("lowerQuantity", () => {
-  it("removes the count automatically when there is only one portion", () => {
-    const shed = portion({ count: 8, storeId: "shed" });
-    const result = lowerQuantity([shed], { removeCount: 2 });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.portions).toEqual([expect.objectContaining({ count: 6 })]);
+describe("pairFlows", () => {
+  it("pairs sources with targets into flows that move the same totals", () => {
+    const shed = { type: "store", storeId: "shed" } as const;
+    const cupboard = { type: "store", storeId: "cupboard" } as const;
+    const tom = { type: "holder", holderId: "tom" } as const;
+    const sam = { type: "holder", holderId: "sam" } as const;
+    expect(
+      pairFlows<Place>(
+        [
+          { from: shed, count: 2 },
+          { from: cupboard, count: 2 },
+        ],
+        [
+          { to: tom, count: 3 },
+          { to: sam, count: 1 },
+        ],
+      ),
+    ).toEqual([
+      { from: shed, to: tom, count: 2 },
+      { from: cupboard, to: tom, count: 1 },
+      { from: cupboard, to: sam, count: 1 },
+    ]);
+  });
+});
+
+describe("checkLower", () => {
+  const shedPlace = { type: "store", storeId: "shed" } as const;
+
+  it("picks the place automatically when there is only one portion", () => {
+    expect(checkLower([portion({ count: 8, storeId: "shed" })], { removeCount: 2 })).toEqual({ ok: true, place: shedPlace });
   });
 
-  it("asks which place when split, and removes from the one given", () => {
+  it("asks which place when split, and uses the one given", () => {
     const shed = portion({ count: 4, storeId: "shed" });
     const sam = portion({ count: 4, whereaboutsType: "holder", storeId: null, holderId: "sam" });
-    const noPlace = lowerQuantity([shed, sam], { removeCount: 2 });
-    expect(noPlace).toEqual({ ok: false, error: "Choose where to lower it from." });
-
-    const result = lowerQuantity([shed, sam], { removeCount: 2, from: { type: "store", storeId: "shed" } });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.portions).toEqual([
-      expect.objectContaining({ count: 2, storeId: "shed" }),
-      expect.objectContaining({ count: 4, holderId: "sam" }),
-    ]);
+    expect(checkLower([shed, sam], { removeCount: 2 })).toEqual({ ok: false, error: "Choose where to lower it from." });
+    expect(checkLower([shed, sam], { removeCount: 2, from: shedPlace })).toEqual({ ok: true, place: shedPlace });
   });
 
   it("rejects lowering below 1", () => {
-    const shed = portion({ count: 1, storeId: "shed" });
-    expect(lowerQuantity([shed], { removeCount: 1 })).toEqual({
+    expect(checkLower([portion({ count: 1, storeId: "shed" })], { removeCount: 1 })).toEqual({
       ok: false,
       error: "Can't lower an equipment unit's quantity below 1.",
     });
@@ -179,13 +182,12 @@ describe("lowerQuantity", () => {
   it("rejects removing more than is at the chosen place", () => {
     const shed = portion({ count: 4, storeId: "shed" });
     const sam = portion({ count: 4, whereaboutsType: "holder", storeId: null, holderId: "sam" });
-    expect(lowerQuantity([shed, sam], { removeCount: 5, from: { type: "store", storeId: "shed" } })).toEqual({
+    expect(checkLower([shed, sam], { removeCount: 5, from: shedPlace })).toEqual({
       ok: false,
       error: "There aren't 5 there to remove.",
     });
   });
 });
-
 
 describe("place keys", () => {
   it("round-trips every kind of Place, keeping Unconfirmed apart from the Store", () => {

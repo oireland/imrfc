@@ -72,55 +72,60 @@ export function countAt(portions: Portion[], place: Place): number {
   return portions.find((p) => placeKey(placeOf(p)) === key)?.count ?? 0;
 }
 
-
-
 /**
- * Moves counts from several source Places to several target Places in one go (Shared
- * Duties: gathering a count from more than one Place, and/or splitting it across more
- * than one final Holder). The pairing between a given source and target is arbitrary —
- * only the totals at each Place matter — so this just debits every source and credits
- * every target, then merges.
+ * Checks a Move gathered from several source Places and/or split across several targets (Shared
+ * Duties), with the messages people see. The ledger does the maths; this catches what it can't:
+ * totals that don't match, and a source without enough even when pairing would drop it as a no-op.
  */
-export function moveMultiple(
+export function checkSplitMove(
   portions: Portion[],
   { sources, targets }: { sources: { from: Place; count: number }[]; targets: { to: Place; count: number }[] },
-): Result<{ portions: Portion[] }> {
+): Result {
   const counts = [...sources.map((s) => s.count), ...targets.map((t) => t.count)];
   if (counts.some((c) => !Number.isInteger(c) || c < 0)) return { ok: false, error: "Enter how many to move." };
   const sourceTotal = sources.reduce((sum, s) => sum + s.count, 0);
   const targetTotal = targets.reduce((sum, t) => sum + t.count, 0);
   if (sourceTotal !== targetTotal) return { ok: false, error: "What's being moved doesn't add up." };
-
-  let working = portions;
+  const taken = new Map<string, number>();
   for (const { from, count } of sources) {
     if (count <= 0) continue;
-    const available = countAt(working, from);
-    if (count > available) return { ok: false, error: `There aren't ${count} there to move.` };
     const key = placeKey(from);
-    working = working.map((p) => (placeKey(placeOf(p)) === key ? { ...p, count: p.count - count } : p));
+    const already = taken.get(key) ?? 0;
+    if (already + count > countAt(portions, from)) return { ok: false, error: `There aren't ${count} there to move.` };
+    taken.set(key, already + count);
   }
-  const added = targets
-    .filter(({ count }) => count > 0)
-    .map(({ to, count }) => ({ id: crypto.randomUUID(), equipmentUnitId: portions[0]?.equipmentUnitId ?? "", count, ...placeFields(to) }));
-  return { ok: true, portions: mergePortions([...working, ...added]) };
+  return { ok: true };
 }
 
+/** Pairs sources with targets into flows. The pairing is arbitrary: only the totals at each Place matter. */
+export function pairFlows<To extends Place>(
+  sources: { from: Place; count: number }[],
+  targets: { to: To; count: number }[],
+): { from: Place; to: To; count: number }[] {
+  const flows: { from: Place; to: To; count: number }[] = [];
+  let si = 0;
+  let ti = 0;
+  let sRemain = sources[0]?.count ?? 0;
+  let tRemain = targets[0]?.count ?? 0;
+  while (si < sources.length && ti < targets.length) {
+    const take = Math.min(sRemain, tRemain);
+    if (take > 0) flows.push({ from: sources[si].from, to: targets[ti].to, count: take });
+    sRemain -= take;
+    tRemain -= take;
+    if (sRemain === 0) sRemain = sources[++si]?.count ?? 0;
+    if (tRemain === 0) tRemain = targets[++ti]?.count ?? 0;
+  }
+  return flows;
+}
 
-/** Lowering an Equipment Unit's Quantity: Committee picks the Place when split, otherwise it's automatic. */
-export function lowerQuantity(
+/** Lowering an Equipment Unit's Quantity: the Place to take it from (Committee picks when split, otherwise it's automatic). */
+export function checkLower(
   portions: Portion[],
   { removeCount, from }: { removeCount: number; from?: Place },
-): Result<{ portions: Portion[] }> {
-  const total = totalQuantity(portions);
-  if (total - removeCount < 1) return { ok: false, error: "Can't lower an equipment unit's quantity below 1." };
-
+): Result<{ place: Place }> {
+  if (totalQuantity(portions) - removeCount < 1) return { ok: false, error: "Can't lower an equipment unit's quantity below 1." };
   const place = from ?? singlePlace(portions);
   if (!place) return { ok: false, error: "Choose where to lower it from." };
-
-  const available = countAt(portions, place);
-  if (removeCount > available) return { ok: false, error: `There aren't ${removeCount} there to remove.` };
-
-  const key = placeKey(place);
-  const reduced = portions.map((p) => (placeKey(placeOf(p)) === key ? { ...p, count: p.count - removeCount } : p));
-  return { ok: true, portions: mergePortions(reduced) };
+  if (removeCount > countAt(portions, place)) return { ok: false, error: `There aren't ${removeCount} there to remove.` };
+  return { ok: true, place };
 }

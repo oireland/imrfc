@@ -3,8 +3,9 @@ import { expect, it } from "vitest";
 import { createPostgresTestDb, lockWaiters, waitUntil } from "@/test/postgres";
 import { addToChecklist } from "@/features/checklists";
 import { createEquipmentUnit, equipmentPortion, listMovementLog, recordMove } from "@/features/equipment";
-import { claim, ensureDuties } from "@/test/duties";
+import { claim, ensureDuties, leave } from "@/test/duties";
 import { confirmDuty } from "./index";
+import { duty, dutyUser } from "./schema";
 
 /**
  * Runs on real Postgres (`pnpm test:pg`): PGlite has one connection, so it can't show two
@@ -89,6 +90,36 @@ it("a Confirm picks its sources after a Move that got there first", async () => 
   expect(await tomTakesOne).toEqual({ ok: true });
   expect(await samConfirms).toEqual({ ok: true });
   expect(await whereabouts()).toEqual([{ count: 2, storeId: null, holderId: "sam" }]);
+});
+
+it("a Confirm finds nobody left on the Duty and stays open, with nothing moved", async () => {
+  const { db, client, unitId, toDutyId, holdUnit } = await setup(2);
+  const release = await holdUnit();
+
+  // Sam is on it as the Confirm starts, then gone by the time it gets the Equipment Unit.
+  const confirming = confirmDuty(db, toDutyId, sam);
+  await waitUntil(async () => (await lockWaiters(client)) === 1);
+  await db.delete(dutyUser).where(eq(dutyUser.dutyId, toDutyId));
+  await release();
+
+  expect(await confirming).toMatchObject({ ok: false });
+  const [row] = await db.select({ confirmedAt: duty.confirmedAt }).from(duty).where(eq(duty.id, toDutyId));
+  expect(row.confirmedAt).toBeNull();
+  expect((await listMovementLog(db, unitId)).filter((e) => e.kind === "move")).toHaveLength(0);
+});
+
+it("two People claiming at once can't take more than the line needs", async () => {
+  const { db, client, toDutyId, holdUnit } = await setup(4, 4);
+  await leave(db, toDutyId, "sam");
+  const release = await holdUnit();
+
+  const claims = Promise.all([claim(db, toDutyId, "sam", 3), claim(db, toDutyId, "tom", 3)]);
+  await waitUntil(async () => (await lockWaiters(client)) === 2);
+  await release();
+
+  expect((await claims).map((r) => r.ok).sort()).toEqual([false, true]);
+  const taken = await db.select({ count: dutyUser.count }).from(dutyUser).where(eq(dutyUser.dutyId, toDutyId));
+  expect(taken).toEqual([{ count: 3 }]);
 });
 
 it("adding a Duty for an Equipment Unit doesn't wait while someone is moving it", async () => {
