@@ -494,6 +494,32 @@ describe("listMatchDay", () => {
   });
 });
 
+describe("listMatchDay at clock changes", () => {
+  it.each([
+    ["2025-10-26", "2025-10-26T23:30:00Z", "2025-10-27T00:30:00Z", "2025-10-26T12:00:00Z"], // clocks go back: 25h day
+    ["2025-03-30", "2025-03-30T22:30:00Z", "2025-03-30T23:30:00Z", "2025-03-30T12:00:00Z"], // clocks go forward: 23h day
+  ])("includes a 23:30 Match and excludes next-day 00:30 and non-Matches on %s", async (_day, lateStart, nextDayStart, socialStart) => {
+    const db = await createTestDb();
+    const [firstXV] = await listTeams(db);
+    const make = async (eventType: "match" | "social", start: string) => {
+      const base = { start: new Date(start), end: new Date(new Date(start).getTime() + 5_400_000), venue: "Harlington" };
+      const result = await createEvent(
+        db,
+        eventType === "match"
+          ? { ...base, eventType, matchDetails: { teamId: firstXV.id, opponent: start, homeAway: "home", competition: "friendly" } }
+          : { ...base, eventType, title: "Social" },
+      );
+      if (!result.ok) throw new Error(result.error);
+      return result.event;
+    };
+    const late = await make("match", lateStart);
+    await make("match", nextDayStart);
+    await make("social", socialStart);
+
+    expect((await listMatchDay(db, late)).map((e) => e.id)).toEqual([late.id]);
+  });
+});
+
 describe("createEvents", () => {
   const training = (venue: string): NewEvent => ({
     eventType: "training",

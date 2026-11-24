@@ -24,7 +24,7 @@ export {
   readEventsCsv,
   type EventCsvResult,
 } from "./csv-import";
-import { londonParts, londonToUtc } from "@/lib/time/london";
+import { addDays, londonParts, londonToUtc } from "@/lib/time/london";
 import type { Result } from "@/lib/result";
 export type { EventType, HomeAway, Competition, NewEvent, NewMatchDetails } from "./rules";
 
@@ -163,15 +163,20 @@ export async function listEventsBetween(db: Db, from: Date, to: Date): Promise<E
     .orderBy(asc(event.start));
 }
 
-/** Longer than the longest London day (25 hours when the clocks go back), so one window covers any day. */
-const LONGEST_DAY_MS = 26 * 3_600_000;
-
 /** Every Match on the London day of `event` (itself included when it is one), soonest first. */
-export async function listMatchDay(db: Db, event: Pick<Event, "start">): Promise<Event[]> {
-  const date = londonParts(event.start).date;
-  const dayStart = londonToUtc(date, "00:00");
-  const sameDay = await listEventsBetween(db, dayStart, new Date(dayStart.getTime() + LONGEST_DAY_MS));
-  return sameDay.filter((e) => e.eventType === "match" && londonParts(e.start).date === date);
+export async function listMatchDay(db: Db, event_: Pick<Event, "start">): Promise<Event[]> {
+  const date = londonParts(event_.start).date;
+  return db
+    .select()
+    .from(event)
+    .where(
+      and(
+        eq(event.eventType, "match"),
+        gte(event.start, londonToUtc(date, "00:00")),
+        lt(event.start, londonToUtc(addDays(date, 1), "00:00")),
+      ),
+    )
+    .orderBy(asc(event.start));
 }
 
 /** Venues already used, each once, most recently used first — suggestions for typing a new one. */
@@ -270,7 +275,9 @@ export async function cancelEvent(db: Db, id: string) {
  * (Duties, Availability, selection…) go through their own `deleteFor…` functions.
  */
 export async function deleteEvent(db: Db, id: string) {
-  await db.delete(matchDetails).where(eq(matchDetails.eventId, id));
-  await db.delete(event).where(eq(event.id, id));
+  await db.transaction(async (tx) => {
+    await tx.delete(matchDetails).where(eq(matchDetails.eventId, id));
+    await tx.delete(event).where(eq(event.id, id));
+  });
 }
 
