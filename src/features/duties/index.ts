@@ -1,5 +1,5 @@
 import type { Db } from "@/db/types";
-import { and, eq, inArray, isNotNull, isNull, lt } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { resolveEventChecklist, resolveEventChecklists, type ResolvedEventChecklist } from "@/features/checklists";
 import { event, getEvent, listEvents } from "@/features/events";
@@ -83,10 +83,6 @@ async function loadSharesFor(db: Db, dutyIds: string[]): Promise<Map<string, Sha
   if (dutyIds.length === 0) return new Map();
   const rows = await db.select().from(dutyUser).where(inArray(dutyUser.dutyId, dutyIds));
   return new Map([...Map.groupBy(rows, (r) => r.dutyId)].map(([dutyId, group]) => [dutyId, group.map(toShare)]));
-}
-
-async function loadUserIdsFor(db: Db, dutyIds: string[]): Promise<Map<string, string[]>> {
-  return new Map([...(await loadSharesFor(db, dutyIds))].map(([dutyId, shares]) => [dutyId, shares.map((s) => s.userId)]));
 }
 
 async function addUser(db: Db, row: typeof duty.$inferSelect, userId: string, count: number | null = null) {
@@ -511,13 +507,16 @@ export async function voidDutiesForEvent(db: Db, eventId: string) {
  */
 export async function markUnconfirmed(db: Db) {
   // Only From Duties that could need it: not Confirmed, on an ended, uncancelled Event,
-  // whose To Duty was Confirmed. Usually there are none, and this is the only query.
+  // whose To Duty was Confirmed, or had a Person's part Confirmed. Usually there are none, and this is the only query.
   const toDuty = alias(duty, "to_duty");
+  const lastPartConfirmedAt = sql<Date | null>`(select max(${dutyUser.confirmedAt}) from ${dutyUser} where ${dutyUser.dutyId} = ${toDuty.id})`;
+  const toConfirmedAt = sql<Date | null>`coalesce(${toDuty.confirmedAt}, ${lastPartConfirmedAt})`.mapWith(toDuty.confirmedAt);
   const fromRows: {
     eventId: string;
     equipmentUnitId: string;
     toDutyId: string;
     toConfirmedAt: Date | null;
+    toDutyConfirmedAt: Date | null;
     eventEnd: Date;
     seriesId: string | null;
     eventType: string;
@@ -526,7 +525,8 @@ export async function markUnconfirmed(db: Db) {
       eventId: duty.eventId,
       equipmentUnitId: duty.equipmentUnitId,
       toDutyId: toDuty.id,
-      toConfirmedAt: toDuty.confirmedAt,
+      toConfirmedAt,
+      toDutyConfirmedAt: toDuty.confirmedAt,
       eventEnd: event.end,
       seriesId: event.seriesId,
       eventType: event.eventType,
@@ -538,7 +538,7 @@ export async function markUnconfirmed(db: Db) {
         eq(toDuty.eventId, duty.eventId),
         eq(toDuty.equipmentUnitId, duty.equipmentUnitId),
         eq(toDuty.direction, "to"),
-        isNotNull(toDuty.confirmedAt),
+        isNotNull(toConfirmedAt),
         isNull(toDuty.voidedAt),
       ),
     )
@@ -554,8 +554,8 @@ export async function markUnconfirmed(db: Db) {
     );
   if (fromRows.length === 0) return;
   const equipmentUnitIds = [...new Set(fromRows.map((r) => r.equipmentUnitId))];
-  const [userIdsByDuty, checklistsByEvent, equipmentUnits, portions] = await Promise.all([
-    loadUserIdsFor(db, fromRows.map((r) => r.toDutyId)),
+  const [sharesByDuty, checklistsByEvent, equipmentUnits, portions] = await Promise.all([
+    loadSharesFor(db, fromRows.map((r) => r.toDutyId)),
     resolveEventChecklists(db, fromRows.map((r) => ({ id: r.eventId, seriesId: r.seriesId, eventType: r.eventType }))),
     listEquipmentUnitsByIds(db, equipmentUnitIds),
     listPortionsFor(db, equipmentUnitIds),
@@ -564,12 +564,16 @@ export async function markUnconfirmed(db: Db) {
   const portionsByEquipment = Map.groupBy(portions, (p) => p.equipmentUnitId);
 
   for (const from of fromRows) {
-    const toUserIds = userIdsByDuty.get(from.toDutyId) ?? [];
-    if (toUserIds.length === 0) continue;
+    const shares = sharesByDuty.get(from.toDutyId) ?? [];
+    // Part-claimed and never finished: only the done parts were taken.
+    const taken = from.toDutyConfirmedAt ? shares : shares.filter((s) => s.confirmed);
+    if (taken.length === 0) continue;
     const equipment = equipmentById.get(from.equipmentUnitId);
     if (!equipment) continue;
-    const count = countFromResolved(checklistsByEvent.get(from.eventId), from.equipmentUnitId, equipment.quantity);
-    const held = gatherHeldBy(portionsByEquipment.get(equipment.id) ?? [], { userIds: toUserIds, count });
+    const count = from.toDutyConfirmedAt
+      ? countFromResolved(checklistsByEvent.get(from.eventId), from.equipmentUnitId, equipment.quantity)
+      : taken.reduce((sum, s) => sum + (s.count ?? 0), 0);
+    const held = gatherHeldBy(portionsByEquipment.get(equipment.id) ?? [], { userIds: taken.map((s) => s.userId), count });
     if (held.sources.length === 0) continue;
     // Anyone recording a Move since the Event ended (or since the To Duty was Confirmed late) has
     // sorted it out already: put back, "I've got it", or Confirmed onto the next Event.

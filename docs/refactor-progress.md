@@ -29,9 +29,10 @@ Diff against `main`: 110 files changed, +1,094 / −1,301 (new tests and the mov
 
 ## Not done / follow-ups
 
-- Out of scope as Medium/High risk: #9, #15, #20, #24, #25, and the `ensureDuties` bullet of #16.
+- Out of scope as Medium/High risk: #15, #20, #24, #25, and the `ensureDuties` bullet of #16.
 - #21: the Portion label swap was skipped because it would change visible text.
 - #22: the Profile/Player shared actions were skipped because they need actor params in `users` and `players`. `lib/utils.ts` was kept.
 - #23: `setRole` and `blockUser` stay exported because tests import them. `features/onboarding` stays.
 - Playwright e2e hasn't been run. The equipment pages (#21) changed their forms: a hidden `equipmentUnitId` was added and the actions moved. Run `pnpm test:e2e` before merging.
 
+- #9 done later (24 Nov 2026, `fix/part-claimed-unconfirmed`): `moveMultiple` and the `lowerQuantity` rule became `checkSplitMove` and `checkLower`, which only check. `pairFlows` moved into `portions.ts`. `ledger.debit` is now the only code that changes counts. `checkSplitMove` adds up sources at the same Place before checking, as `moveMultiple` did.

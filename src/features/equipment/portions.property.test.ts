@@ -26,7 +26,7 @@ import {
   type Model,
   type SourceChoice,
 } from "@/test/whereabouts-model";
-import { lowerQuantity, moveMultiple, placeOf as portionPlace, totalQuantity, type Place, type Portion } from "./portions";
+import { checkLower, checkSplitMove, pairFlows, placeOf as portionPlace, samePlace, totalQuantity, type Place, type Portion } from "./portions";
 import { applyEntry, replay } from "./ledger";
 import type { Result } from "@/lib/result";
 
@@ -69,7 +69,12 @@ function apply(portions: Portion[], model: Model, o: Op): { result: Step; expect
       const sources = o.sources.map((s) => ({ from: resolveSource(model, s.from), count: s.count }));
       const sum = sources.reduce((s, x) => s + x.count, 0);
       const targets = splitAcross(Math.max(0, sum + o.skew), o.targets, o.cuts);
-      const result = moveMultiple(portions, { sources, targets });
+      // As recordSplitMove does it: check, then apply each flow that isn't a no-op.
+      const checked = checkSplitMove(portions, { sources, targets });
+      let result: Step = checked.ok ? { ok: true, portions } : checked;
+      for (const f of pairFlows(sources, targets).filter((f) => !samePlace(f.from, f.to))) {
+        if (result.ok) result = applyEntry(result.portions, { kind: "move", count: f.count, from: f.from, to: f.to });
+      }
       const balanced = targets.reduce((s, t) => s + t.count, 0) === sum;
       return { result, expected: balanced && canTake(model, sources) ? moveMany(model, sources, targets) : "rejected" };
     }
@@ -80,7 +85,8 @@ function apply(portions: Portion[], model: Model, o: Op): { result: Step; expect
       };
     case "lower": {
       const from = o.from && resolveSource(model, o.from);
-      const result = lowerQuantity(portions, { removeCount: o.count, from });
+      const checked = checkLower(portions, { removeCount: o.count, from });
+      const result: Step = checked.ok ? applyEntry(portions, { kind: "lost", count: o.count, from: checked.place }) : checked;
       const where = from ?? (model.size === 1 ? placeOf([...model.keys()][0]) : undefined);
       const possible = modelTotal(model) - o.count >= 1 && where !== undefined && o.count <= countAt(model, where);
       return { result, expected: possible ? add(model, where, -o.count) : "rejected" };

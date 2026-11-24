@@ -5,10 +5,10 @@ import { equipmentPortion, equipmentUnit, movementLogEntry } from "./schema";
 import { archiveStore } from "@/features/stores";
 import { validateEquipmentUnit, type NewEquipmentUnit } from "./rules";
 import {
+  checkLower,
+  checkSplitMove,
   countAt,
-  lowerQuantity as lowerQuantityRule,
-  moveMultiple,
-  singlePlace,
+  pairFlows,
   placeOf,
   samePlace,
   type Place,
@@ -288,27 +288,6 @@ export async function recordMove(
   });
 }
 
-/** Pairs sources with targets into loggable flows (the pairing is arbitrary — see `moveMultiple`). */
-function pairFlows(
-  sources: { from: Place; count: number }[],
-  targets: { to: MoveTarget; count: number }[],
-): { from: Place; to: MoveTarget; count: number }[] {
-  const flows: { from: Place; to: MoveTarget; count: number }[] = [];
-  let si = 0;
-  let ti = 0;
-  let sRemain = sources[0]?.count ?? 0;
-  let tRemain = targets[0]?.count ?? 0;
-  while (si < sources.length && ti < targets.length) {
-    const take = Math.min(sRemain, tRemain);
-    if (take > 0) flows.push({ from: sources[si].from, to: targets[ti].to, count: take });
-    sRemain -= take;
-    tRemain -= take;
-    if (sRemain === 0) sRemain = sources[++si]?.count ?? 0;
-    if (tRemain === 0) tRemain = targets[++ti]?.count ?? 0;
-  }
-  return flows;
-}
-
 /**
  * Records a Move gathered from several source Places and/or split across several
  * target Places (Shared Duties: several People bringing or holding an Equipment Unit).
@@ -325,7 +304,7 @@ export async function recordSplitMove(
   const { sources, targets } = moves;
   return withUnitLock(db, equipmentUnitId, async (tx) => {
     // Checks the whole Move adds up and each source has enough, with the messages people see.
-    const checked = moveMultiple(await loadPortions(tx, equipmentUnitId), { sources, targets });
+    const checked = checkSplitMove(await loadPortions(tx, equipmentUnitId), { sources, targets });
     if (!checked.ok) return checked;
     const flows = pairFlows(sources, targets).filter((f) => !samePlace(f.from, f.to));
     return appendToLedger(
@@ -483,13 +462,11 @@ async function lose(
   const [unit, portions] = await Promise.all([getEquipmentUnit(tx, equipmentUnitId), loadPortions(tx, equipmentUnitId)]);
   if (!unit) return { ok: false, error: "That equipment no longer exists." };
 
-  const result = lowerQuantityRule(portions, { removeCount, from });
-  if (!result.ok) return result;
-  // The rule only succeeds with a `from` or a unit at a single Place.
-  const place = (from ?? singlePlace(portions))!;
+  const checked = checkLower(portions, { removeCount, from });
+  if (!checked.ok) return checked;
 
   await tx.update(equipmentUnit).set({ quantity: unit.quantity - removeCount }).where(eq(equipmentUnit.id, equipmentUnitId));
-  return appendToLedger(tx, equipmentUnitId, userId, [{ kind: "lost", count: removeCount, from: place }]);
+  return appendToLedger(tx, equipmentUnitId, userId, [{ kind: "lost", count: removeCount, from: checked.place }]);
 }
 
 export async function listMovementLog(db: Db, equipmentUnitId: string): Promise<MovementLogEntry[]> {

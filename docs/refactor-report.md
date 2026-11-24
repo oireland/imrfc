@@ -14,41 +14,9 @@ _First written 17 Nov 2026 from a read-through of `src/` that looked for duplica
 
 | # | Item | Lines | Risk | Touches |
 |---|------|------:|------|---------|
-| 9 | [Portions maths lives in the ledger only](#9-portions-maths-lives-in-the-ledger-only) | ~50 | Medium | `equipment/portions.ts`, `index.ts` |
 | 20 | [Event detail page: move the view model out](#20-event-detail-page-move-the-view-model-out) | ~0 net, −250 in the page | Medium | `events/[id]/page.tsx`, `event-duties.tsx` |
 | 23 | [Remaining leftovers](#23-remaining-leftovers) | ~10 | None | `lib/utils.ts`, onboarding |
 | 25 | [Derive Unconfirmed from the ledger](#25-later-derive-unconfirmed-from-the-ledger) | large | High | out of scope for now |
-
----
-
-## Equipment and the ledger
-
-### 9. Portions maths lives in the ledger only
-
-**Where.** "Take `count` away from one Place" is written three times:
-
-- `ledger.ts` `debit` is the real one, used by `appendToLedger` and `replay`.
-- `portions.ts` `moveMultiple`.
-- `portions.ts` `lowerQuantity`, imported into `equipment/index.ts` as `lowerQuantityRule`.
-
-Since L4, production code only uses `moveMultiple` and `lowerQuantity` for their **checks**. `recordSplitMove` throws away the portions `moveMultiple` returns, and the private `lose` helper throws away the portions `lowerQuantityRule` returns. `appendToLedger` then applies the entries again through `applyEntry`, which repeats the per-Place check.
-
-**How.**
-
-- Replace `moveMultiple` with a small `checkSplitMove({ sources, targets }, portions)`. It does only what `applyEntry` can't:
-  - whole-number counts;
-  - `sourceTotal === targetTotal` ("What's being moved doesn't add up.");
-  - each source's total against `countAt` ("There aren't N there to move.").
-
-  Then append the flows.
-- Replace the `lowerQuantity` rule with `checkLower(portions, removeCount, from)`. It returns either the Place to debit or an error: below 1, "Choose where to lower it from.", or "There aren't N there to remove."
-- `ledger.debit` stays the only code that changes counts.
-
-**Correctness.** This one needs care:
-
-- **Keep the per-source check before pairing.** `pairFlows(...).filter(!samePlace)` drops no-op flows, so a source paired with itself is never debited. Today `moveMultiple` still rejects that request if the Place doesn't hold enough. If only `applyEntry` checked, the request would quietly succeed.
-- **Tests pin the messages.** `portions.test.ts` and `equipment/index.test.ts` assert the exact strings and counts. `applyEntry` would report the per-flow count, not the per-source count, which is why the source check must stay up front.
-- `portions.property.test.ts` and `ledger.property.test.ts` cover the maths. Move the cases that target `moveMultiple` onto `checkSplitMove` plus `applyEntry`.
 
 ---
 
