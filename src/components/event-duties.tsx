@@ -1,6 +1,6 @@
 "use client";
 
-import { joinList } from "@/lib/join-names";
+import { joinList } from "@/lib/text/join-names";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { ArrowDownLeft, ArrowUpRight, Check, ChevronLeft, ChevronRight, CircleAlert, Loader2, Star, X } from "lucide-react";

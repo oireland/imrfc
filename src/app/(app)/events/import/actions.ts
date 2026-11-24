@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { createEvents, listTeams, readEventsCsv } from "@/features/events";
 import { isCommitteeOrAbove } from "@/features/users";
-import { requireApprovedUser } from "@/lib/session";
+import { requireApprovedUser } from "@/lib/auth/session";
 
 export type ImportState = { ok: true; count: number } | { ok: false; errors: string[] } | null;
 

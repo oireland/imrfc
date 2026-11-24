@@ -8,10 +8,10 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { formatPhysioList, listFitness, listPhysioNeeds } from "@/features/injuries";
 import { listPlayers } from "@/features/players";
-import { londonDay } from "@/lib/london";
+import { londonDay } from "@/lib/time/london";
 import type { PlayerRow } from "@/features/players";
-import { formatDay } from "@/lib/format-time";
-import { requireCommittee } from "@/lib/session";
+import { formatDay } from "@/lib/time/format-time";
+import { requireCommittee } from "@/lib/auth/session";
 
 export default async function PlayersPage({ searchParams }: PageProps<"/players">) {
   await requireCommittee();

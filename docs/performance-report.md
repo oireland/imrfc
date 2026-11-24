@@ -109,7 +109,7 @@ Home calls it directly and again inside `loadComingUp` (`src/app/(app)/coming-up
 
 ### 5. The session is looked up 3+ times per request, from the database each time
 
-`getCurrentUser` (`src/lib/session.ts`) calls `auth.api.getSession`. It isn't wrapped in `cache()`, and it runs in:
+`getCurrentUser` (`src/lib/auth/session.ts`) calls `auth.api.getSession`. It isn't wrapped in `cache()`, and it runs in:
 
 - the root layout (for the theme);
 - the `(app)` layout;
@@ -121,7 +121,7 @@ Better Auth has no `cookieCache` configured, so each call reads the session and 
 **Fix:**
 
 - Wrap `getCurrentUser` in React `cache()`. That's one line, and the request then does a single lookup.
-- Optionally, enable `session: { cookieCache: { enabled: true, maxAge: 60 * 5 } }` in `src/lib/auth.ts`. This skips the DB entirely on most requests. **Trade-off:** a Block or role change takes up to `maxAge` to take effect on that User's open session. Keep the server actions that matter (admin actions, `requireApprovedUser` inside mutations) on a fresh read (`disableCookieCache: true`) if that matters to you.
+- Optionally, enable `session: { cookieCache: { enabled: true, maxAge: 60 * 5 } }` in `src/lib/auth/auth.ts`. This skips the DB entirely on most requests. **Trade-off:** a Block or role change takes up to `maxAge` to take effect on that User's open session. Keep the server actions that matter (admin actions, `requireApprovedUser` inside mutations) on a fresh read (`disableCookieCache: true`) if that matters to you.
 
 ### 6. The root layout reads the session just for the theme
 

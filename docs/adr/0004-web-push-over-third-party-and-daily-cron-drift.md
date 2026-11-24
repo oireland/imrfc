@@ -4,7 +4,7 @@ Push notifications (morning-of reminders, and a push alongside Announce/Nudge) u
 Web Push standard (VAPID keys, the `web-push` npm package) rather than a third-party
 push provider. It needs no account, no paid tier and no data leaving our own Postgres —
 in keeping with the "free to build and run" constraint — and it mirrors the existing
-`MailSender` pattern (`src/lib/mail.ts`): a `PushSender` interface in `src/lib/push.ts`
+`MailSender` pattern (`src/lib/messaging/mail.ts`): a `PushSender` interface in `src/lib/messaging/push.ts`
 with a real implementation and a console one for tests.
 
 The morning-of reminder is triggered by a single Vercel Cron job

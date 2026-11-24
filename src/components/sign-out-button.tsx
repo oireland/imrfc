@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { authClient } from "@/lib/auth-client";
-import { unsubscribeThisDevice } from "@/lib/push-client";
+import { authClient } from "@/lib/auth/auth-client";
+import { unsubscribeThisDevice } from "@/lib/messaging/push-client";
 
 /** Signing out also stops this device getting notifications for the account. */
 export function SignOutButton({ unsubscribe }: { unsubscribe: (endpoint: string) => Promise<void> }) {

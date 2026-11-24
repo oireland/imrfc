@@ -1,5 +1,5 @@
 import type { Db } from "@/db/types";
-import { LIMITS, firstTooLong } from "@/lib/text-limits";
+import { LIMITS, firstTooLong } from "@/lib/text/text-limits";
 import { and, count, eq, inArray, ne, sql } from "drizzle-orm";
 import type { Role } from "./access";
 import type { RugbyPosition } from "./positions";

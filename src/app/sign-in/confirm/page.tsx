@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Crest } from "@/components/crest";
-import { verifyUrlFromConfirmParams } from "@/lib/sign-in-confirm";
+import { verifyUrlFromConfirmParams } from "@/lib/auth/sign-in-confirm";
 import { ConfirmButton } from "./confirm-button";
 
 export default async function ConfirmSignInPage({ searchParams }: PageProps<"/sign-in/confirm">) {

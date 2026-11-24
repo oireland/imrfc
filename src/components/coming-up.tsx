@@ -8,8 +8,8 @@ import { Beer, Check, ChevronLeft, ChevronRight, Dumbbell, Loader2, MapPin, Plus
 import { cn } from "cn";
 import type { MyReply, ReplyStatus } from "@/features/availability";
 import type { QuickEventInput } from "@/features/events";
-import { monthGrid } from "@/lib/calendar";
-import { londonDay, londonTime } from "@/lib/london";
+import { monthGrid } from "@/lib/time/calendar";
+import { londonDay, londonTime } from "@/lib/time/london";
 import { comingUpSearch, readComingUpView, type ComingUpView } from "@/lib/coming-up-view";
 import { ReplySheet } from "@/components/availability-card";
 import { QuickAddSheet } from "@/components/quick-add-sheet";

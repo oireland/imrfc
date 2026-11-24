@@ -5,7 +5,7 @@ import { getEvent, listEventsBetween, listMatchDay, type Event, type EventType }
 import { listFitness, notChasedFor } from "@/features/injuries";
 import { listAwayOn, listPlayers } from "@/features/players";
 import { displayName, listApprovedUsers, loadNames } from "@/features/users";
-import type { MailSender } from "@/lib/mail";
+import type { MailSender } from "@/lib/messaging/mail";
 import { askEmail, type AskedEvent } from "./announce-rules";
 import { availabilityAnnouncement, availabilityAsk, availabilityMessaged, availabilityNudge, availabilityReply } from "./schema";
 import {
@@ -26,8 +26,8 @@ import {
   type SeasonRecord,
   type WaitingAsk,
 } from "./rules";
-import { canRetry, deliverEach, deliveryProgress, finish, restart, stillToReach, type DeliveryProgress } from "@/lib/delivery";
-import { londonParts, londonToUtc } from "@/lib/london";
+import { canRetry, deliverEach, deliveryProgress, finish, restart, stillToReach, type DeliveryProgress } from "@/lib/messaging/delivery";
+import { londonParts, londonToUtc } from "@/lib/time/london";
 import type { Result } from "@/lib/result";
 
 export { takesReplies } from "./rules";

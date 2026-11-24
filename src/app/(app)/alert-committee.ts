@@ -3,7 +3,7 @@ import { db } from "@/db/client";
 import { awayAlert } from "@/features/players";
 import { sendToUser } from "@/features/push";
 import { alertOnNotAvailable } from "@/features/selection";
-import { getPushSender } from "@/lib/push";
+import { getPushSender } from "@/lib/messaging/push";
 
 type Alert = { title: string; body: string; userIds: string[] };
 

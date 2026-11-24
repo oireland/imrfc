@@ -1,5 +1,5 @@
 // Clash rules: pure functions over plain data, no database or Next.js.
-import { joinList } from "@/lib/join-names";
+import { joinList } from "@/lib/text/join-names";
 import { byStart, dutyUsers, itemCount, needsUnit, HOUR, type PlanEvent, type PlanEquipment } from "./plan";
 
 /** Events closer together than this count as back-to-back. */

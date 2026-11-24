@@ -1,6 +1,6 @@
 import { Download } from "lucide-react";
 import type { TeamCard as Card } from "@/features/selection";
-import { formatDay } from "@/lib/format-time";
+import { formatDay } from "@/lib/time/format-time";
 
 /** Event detail's Team card: the team as last sent, for everyone signed in, with the PDF. */
 export function TeamCard({ card }: { card: Card }) {

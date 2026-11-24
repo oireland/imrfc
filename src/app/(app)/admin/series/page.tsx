@@ -2,7 +2,7 @@ import { BackLink } from "@/components/back-link";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { createSeries, extendSeries, listSeries, listVenues } from "@/features/events";
-import { requireCommittee } from "@/lib/session";
+import { requireCommittee } from "@/lib/auth/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

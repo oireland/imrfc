@@ -6,9 +6,9 @@ import { after } from "next/server";
 import { db } from "@/db/client";
 import { sendToUser } from "@/features/push";
 import { addShirt, clearShirt, deliverNotice, dismissNotice, nameTheTeam, pickGuest, pickPlayer, removeShirt, retryNotice, sendChanges, setRoles, swapShirts, type Role } from "@/features/selection";
-import { getMailSender } from "@/lib/mail";
-import { getPushSender } from "@/lib/push";
-import { requireApprovedUser, viewerOf } from "@/lib/session";
+import { getMailSender } from "@/lib/messaging/mail";
+import { getPushSender } from "@/lib/messaging/push";
+import { requireApprovedUser, viewerOf } from "@/lib/auth/session";
 
 type Ref = { eventId: string; shirt: number };
 

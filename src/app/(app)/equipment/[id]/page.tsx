@@ -8,7 +8,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { QuickMoveBlockButton } from "@/components/quick-move-button";
 import { ClashList } from "@/components/clash-list";
 import { HeadsUpList } from "@/components/heads-up-list";
-import { formatWhen } from "@/lib/format-time";
+import { formatWhen } from "@/lib/time/format-time";
 import { listPlanWarnings } from "@/features/duties";
 import {
   describeWhereabouts,
@@ -28,7 +28,7 @@ import {
 import { listEventTitles } from "@/features/events";
 import { displayName, isCommitteeOrAbove, listKnownUsers } from "@/features/users";
 import { listStores, type Store } from "@/features/stores";
-import { requireApprovedUser } from "@/lib/session";
+import { requireApprovedUser } from "@/lib/auth/session";
 import { giveTo, putInStore, quickMove } from "../actions";
 
 const CARD_TITLE_CLASS = "font-heading text-[22px] leading-tight";

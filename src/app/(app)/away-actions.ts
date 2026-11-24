@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { addAway, editAway, imBack, removeAway, type AwayInput } from "@/features/players";
-import { requireApprovedUser } from "@/lib/session";
+import { requireApprovedUser } from "@/lib/auth/session";
 import { alertCommitteeOfAway } from "./alert-committee";
 import type { Result } from "@/lib/result";
 

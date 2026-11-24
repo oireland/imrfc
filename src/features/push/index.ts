@@ -3,10 +3,10 @@ import { eq, and } from "drizzle-orm";
 import { listDutyUserIdsByEvent } from "@/features/duties";
 import { listAvailableUserIds } from "@/features/availability";
 import { listEventsBetween } from "@/features/events";
-import { PushSubscriptionGoneError, type PushSender, type PushSubscriptionKeys } from "@/lib/push";
+import { PushSubscriptionGoneError, type PushSender, type PushSubscriptionKeys } from "@/lib/messaging/push";
 import { morningOfMessage, morningOfRecipients } from "./rules";
 import { pushSubscription } from "./schema";
-import { londonParts, londonToUtc } from "@/lib/london";
+import { londonParts, londonToUtc } from "@/lib/time/london";
 
 
 /** Records a device's subscription; re-subscribing the same endpoint replaces its keys. */

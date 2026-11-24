@@ -4,7 +4,7 @@ const markUnconfirmed = vi.fn(async () => {});
 vi.mock("@/db/client", () => ({ db: {} }));
 vi.mock("@/features/duties", () => ({ markUnconfirmed: () => markUnconfirmed() }));
 vi.mock("@/features/push", () => ({ notifyMorningOf: async () => ({ sent: 0 }) }));
-vi.mock("@/lib/push", () => ({ getPushSender: () => ({}) }));
+vi.mock("@/lib/messaging/push", () => ({ getPushSender: () => ({}) }));
 
 import { GET } from "./route";
 

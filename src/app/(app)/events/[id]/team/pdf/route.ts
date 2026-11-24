@@ -1,7 +1,7 @@
 import { db } from "@/db/client";
 import { getTeamCard } from "@/features/selection";
 import { pdfResponse } from "@/components/team-sheet-pdf";
-import { requireApprovedUser, viewerOf } from "@/lib/session";
+import { requireApprovedUser, viewerOf } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 

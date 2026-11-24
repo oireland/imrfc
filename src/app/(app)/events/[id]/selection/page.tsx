@@ -5,7 +5,7 @@ import { SelectionBoard } from "@/components/selection-board";
 import { getEvent } from "@/features/events";
 import { getBoard, getNaming, getTeamSheet } from "@/features/selection";
 import { displayName } from "@/features/users";
-import { requireApprovedUser, viewerOf } from "@/lib/session";
+import { requireApprovedUser, viewerOf } from "@/lib/auth/session";
 import { add, clear, dismissTeamNotice, guest, nameTeam, pick, remove, retryTeamNotice, roles, sendTeamChanges, swap } from "./actions";
 
 export default async function SelectionPage({ params }: PageProps<"/events/[id]/selection">) {

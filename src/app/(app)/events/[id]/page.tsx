@@ -17,8 +17,8 @@ import { TeamCard } from "@/components/team-card";
 import { EventTabs, type EventTab } from "@/components/event-tabs";
 import { ShareButton } from "@/components/share-button";
 import { buttonVariants } from "@/components/ui/button";
-import { formatDay, formatWhen } from "@/lib/format-time";
-import { joinList } from "@/lib/join-names";
+import { formatDay, formatWhen } from "@/lib/time/format-time";
+import { joinList } from "@/lib/text/join-names";
 import { mapsSearchUrl } from "@/lib/maps";
 import {
   addToChecklist,
@@ -61,8 +61,8 @@ import { deleteSelectionForEvent, getTeamCard, listPickedPlayerIds } from "@/fea
 import { formatPhysioList, listPhysioNeeds } from "@/features/injuries";
 import { listStores, type Store } from "@/features/stores";
 import { canDeleteEvent, displayName, isCommitteeOrAbove, listKnownUsers } from "@/features/users";
-import { requireApprovedUser } from "@/lib/session";
-import { londonParts } from "@/lib/london";
+import { requireApprovedUser } from "@/lib/auth/session";
+import { londonParts } from "@/lib/time/london";
 import type { Result, Failure } from "@/lib/result";
 
 /** Why the signed-in User can't change this Event's list, or null if they can: Committee only, and not once it's Cancelled. */

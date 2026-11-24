@@ -5,7 +5,7 @@ import { db } from "@/db/client";
 import { setMobileNumber } from "@/features/contact";
 import { setPlayerPositions, setPlaying } from "@/features/players";
 import type { RugbyPosition } from "@/features/users";
-import { requireApprovedUser } from "@/lib/session";
+import { requireApprovedUser } from "@/lib/auth/session";
 import type { Result } from "@/lib/result";
 
 // Shared by the Profile page (your own) and the Player page (Committee, anyone's).

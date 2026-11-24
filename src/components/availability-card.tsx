@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Check, Copy, Loader2, Megaphone, MessageCircle, Send, X } from "lucide-react";
 import { cn } from "cn";
 import type { AskNotice, Availability, AvailabilityRow, NotChasedRow, ReplyStatus } from "@/features/availability";
-import { formatAgo, formatDay, formatWhen } from "@/lib/format-time";
+import { formatAgo, formatDay, formatWhen } from "@/lib/time/format-time";
 import { DeliveryLine, failedMessage, people, watchDelivery } from "./delivery";
 import { BottomSheet, SheetSaveButton } from "./bottom-sheet";
 import { Button } from "./ui/button";

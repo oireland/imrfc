@@ -20,12 +20,12 @@ import {
 import { listMobileNumbers, whatsappLink } from "@/features/contact";
 import { sendToUser } from "@/features/push";
 import { isCommitteeOrAbove } from "@/features/users";
-import { getMailSender } from "@/lib/mail";
-import { getPushSender } from "@/lib/push";
-import { requireApprovedUser, type CurrentUser, viewerOf } from "@/lib/session";
+import { getMailSender } from "@/lib/messaging/mail";
+import { getPushSender } from "@/lib/messaging/push";
+import { requireApprovedUser, type CurrentUser, viewerOf } from "@/lib/auth/session";
 import { alertCommitteeLater } from "@/app/(app)/alert-committee";
 import { AvailabilityCard } from "./availability-card";
-import { londonToUtc } from "@/lib/london";
+import { londonToUtc } from "@/lib/time/london";
 
 async function currentViewer() {
   const current = await requireApprovedUser();

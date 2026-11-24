@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { setMobileNumber } from "@/features/contact";
 import { RUGBY_POSITIONS, setName, setPreferredPosition, type RugbyPosition } from "@/features/users";
-import { requireApprovedUser } from "@/lib/session";
+import { requireApprovedUser } from "@/lib/auth/session";
 import type { Result } from "@/lib/result";
 
 export type OnboardingState = Result | null;

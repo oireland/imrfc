@@ -1,6 +1,6 @@
 "use client";
 
-import { joinList } from "@/lib/join-names";
+import { joinList } from "@/lib/text/join-names";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Minus, Pencil, Plus } from "lucide-react";

@@ -1,5 +1,5 @@
 import type { Db } from "@/db/types";
-import { LIMITS, firstTooLong } from "@/lib/text-limits";
+import { LIMITS, firstTooLong } from "@/lib/text/text-limits";
 import { eq } from "drizzle-orm";
 import { store } from "./schema";
 import type { Result } from "@/lib/result";

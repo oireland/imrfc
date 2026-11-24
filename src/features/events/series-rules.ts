@@ -1,4 +1,4 @@
-import { LIMITS, firstTooLong } from "@/lib/text-limits";
+import { LIMITS, firstTooLong } from "@/lib/text/text-limits";
 import type { Result } from "@/lib/result";
 // Match isn't a Series Event Type: it needs an opponent and other Match-only details a Series pattern doesn't model.
 export type SeriesEventType = "training" | "social";

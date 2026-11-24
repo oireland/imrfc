@@ -1,4 +1,4 @@
-import { londonParts, londonToUtc } from "@/lib/london";
+import { londonParts, londonToUtc } from "@/lib/time/london";
 
 /** The season (1 Sep–31 Aug, Europe/London) containing `now`, as its start instant. */
 export function seasonStart(now: Date): Date {

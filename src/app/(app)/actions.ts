@@ -5,7 +5,7 @@ import { db } from "@/db/client";
 import { saveReply, type ReplyStatus } from "@/features/availability";
 import { buildQuickEvent, buildQuickSeries, createEvent, createSeries, type QuickEventInput } from "@/features/events";
 import { isCommitteeOrAbove, setThemePreference, type ThemePreference } from "@/features/users";
-import { requireApprovedUser, viewerOf } from "@/lib/session";
+import { requireApprovedUser, viewerOf } from "@/lib/auth/session";
 import { alertCommitteeLater } from "./alert-committee";
 import type { Result } from "@/lib/result";
 

@@ -1,5 +1,5 @@
-import { LIMITS, firstTooLong } from "@/lib/text-limits";
-import { formatDate } from "@/lib/format-time";
+import { LIMITS, firstTooLong } from "@/lib/text/text-limits";
+import { formatDate } from "@/lib/time/format-time";
 import type { Result } from "@/lib/result";
 
 export const BODY_AREAS = [

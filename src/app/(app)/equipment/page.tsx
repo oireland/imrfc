@@ -17,7 +17,7 @@ import { markUnconfirmedOnce } from "../request-cache";
 import { listEventTitles } from "@/features/events";
 import { displayName, isCommitteeOrAbove, listKnownUsers } from "@/features/users";
 import { listStores, type Store } from "@/features/stores";
-import { requireApprovedUser } from "@/lib/session";
+import { requireApprovedUser } from "@/lib/auth/session";
 import { addEquipmentUnit, quickMove } from "./actions";
 
 export default async function EquipmentViewPage() {
