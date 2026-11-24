@@ -6,7 +6,7 @@ import { listEventsBetween } from "@/features/events";
 import { PushSubscriptionGoneError, type PushSender, type PushSubscriptionKeys } from "@/lib/messaging/push";
 import { morningOfMessage, morningOfRecipients } from "./rules";
 import { pushSubscription } from "./schema";
-import { londonParts, londonToUtc } from "@/lib/time/london";
+import { addDays, londonParts, londonToUtc } from "@/lib/time/london";
 
 
 /** Records a device's subscription; re-subscribing the same endpoint replaces its keys. */
@@ -70,7 +70,7 @@ export async function sendToUser(
  */
 export async function notifyMorningOf(db: Db, now: Date, push: PushSender): Promise<{ notified: number }> {
   const dayStart = londonToUtc(londonParts(now).date, "00:00");
-  const dayEnd = new Date(dayStart.getTime() + 24 * 3_600_000);
+  const dayEnd = londonToUtc(addDays(londonParts(now).date, 1), "00:00");
   const events = (await listEventsBetween(db, dayStart, dayEnd)).filter((e) => !e.cancelled);
   if (events.length === 0) return { notified: 0 };
 

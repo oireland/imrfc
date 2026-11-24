@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "@/test/db";
 import { store } from "@/features/stores";
-import { createEquipmentUnit, loadPortions, listMovementLog, raiseQuantity, recordMove } from "@/features/equipment";
+import { createEquipmentUnit, loadPortions, movementLogEntry, listMovementLog, raiseQuantity, recordMove } from "@/features/equipment";
 import { addToChecklist, setChecklistItemCount } from "@/features/checklists";
 import { cancelEvent, createEvent, event } from "@/features/events";
 import { user } from "@/features/users";
@@ -1265,6 +1265,31 @@ describe("Equipment integrity", () => {
       expect(await loadPortions(db, made.equipmentUnit.id)).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ whereaboutsType: "store", storeId: shed.id, count: 4 }),
+          expect.objectContaining({ whereaboutsType: "unconfirmed", count: 4 }),
+        ]),
+      );
+    });
+
+    it("doesn't mark a holder's extra stock Unconfirmed on a later run", async () => {
+      const { db, shed } = await setup();
+      const made = await createEquipmentUnit(db, { name: "Shields", homeId: shed.id, quantity: 8 });
+      if (!made.ok) throw new Error(made.error);
+      const ev = await pastEvent(db);
+      await addToChecklist(db, { scope: "event", scopeId: ev.id }, made.equipmentUnit.id);
+      await setChecklistItemCount(db, { scope: "event", scopeId: ev.id }, made.equipmentUnit.id, 4);
+      const { to } = await dutiesFor(db, ev.id, made.equipmentUnit.id);
+      await claim(db, to.id, "tom");
+      await confirmDuty(db, to.id, member("tom"));
+      // Tom took all 8 before the Event ended, so it's no later Move that excuses the other 4.
+      await recordMove(db, made.equipmentUnit.id, "tom", { type: "holder", holderId: "tom" });
+      await db.update(movementLogEntry).set({ createdAt: new Date(ev.end.getTime() - 3600_000) });
+
+      await markUnconfirmed(db);
+      await markUnconfirmed(db);
+
+      expect(await loadPortions(db, made.equipmentUnit.id)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ whereaboutsType: "holder", holderId: "tom", count: 4 }),
           expect.objectContaining({ whereaboutsType: "unconfirmed", count: 4 }),
         ]),
       );

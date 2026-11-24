@@ -153,4 +153,19 @@ describe("notifyMorningOf", () => {
     expect(await notifyMorningOf(db, new Date("2026-10-01T09:00:00Z"), sender)).toEqual({ notified: 0 });
     expect(sent).toEqual([]);
   });
+
+  it("covers the whole 25-hour day when the clocks go back", async () => {
+    const db = await setup();
+    await subscribe(db, { userId: "tom", subscription: { endpoint: "https://push/tom", p256dh: "k", auth: "a" } });
+    const [shed] = await db.insert(store).values({ id: "shed", name: "Shed", address: "x" }).returning();
+    const equipment = await createEquipmentUnit(db, { name: "Balls", homeId: shed.id });
+    if (!equipment.ok) throw new Error(equipment.error);
+    // 23:30 GMT on 2026-10-25 is more than 24h after that day's London midnight (BST, 23:00Z the day before).
+    const eventId = await makeEvent(db, { title: "Late", start: new Date("2026-10-25T23:30:00Z") });
+    const [to] = await ensureDuties(db, eventId, [equipment.equipmentUnit.id]);
+    await claim(db, to.id, "tom");
+
+    const { sender } = fakePushSender();
+    expect(await notifyMorningOf(db, new Date("2026-10-25T06:30:00Z"), sender)).toEqual({ notified: 1 });
+  });
 });

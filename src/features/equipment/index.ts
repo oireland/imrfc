@@ -344,22 +344,51 @@ export async function recordSplitMove(
  * a Move: nobody did this.
  */
 export async function setUnconfirmed(db: Db, equipmentUnitId: string, lastSeenEventId: string, from?: Place, count?: number) {
+  return withUnitLock(db, equipmentUnitId, (tx) => unconfirm(tx, equipmentUnitId, lastSeenEventId, from, count));
+}
+
+/**
+ * Marks each source Unconfirmed after the Event, unless this Event already did so for the unit
+ * (a holder who keeps more than the list's count must not be swept up on every later run).
+ */
+export async function setUnconfirmedOnce(
+  db: Db,
+  equipmentUnitId: string,
+  lastSeenEventId: string,
+  sources: { place: Place; count: number }[],
+) {
   return withUnitLock(db, equipmentUnitId, async (tx) => {
-    const portions = await loadPortions(tx, equipmentUnitId);
-    const to: Place = { type: "unconfirmed", lastSeenEventId };
-    let entries: LedgerEntry[];
-    if (from) {
-      const available = countAt(portions, from);
-      const moveCount = count !== undefined ? Math.min(count, available) : available;
-      if (moveCount < 1) return;
-      entries = [{ kind: "unconfirmed", count: moveCount, from, to }];
-    } else {
-      entries = portions
-        .filter((p) => p.lastSeenEventId !== lastSeenEventId)
-        .map((p) => ({ kind: "unconfirmed", count: p.count, from: placeOf(p), to }));
-    }
-    await appendToLedger(tx, equipmentUnitId, null, entries);
+    const [done] = await tx
+      .select({ id: movementLogEntry.id })
+      .from(movementLogEntry)
+      .where(
+        and(
+          eq(movementLogEntry.equipmentUnitId, equipmentUnitId),
+          eq(movementLogEntry.kind, "unconfirmed"),
+          eq(movementLogEntry.toLastSeenEventId, lastSeenEventId),
+        ),
+      )
+      .limit(1);
+    if (done) return;
+    for (const s of sources) await unconfirm(tx, equipmentUnitId, lastSeenEventId, s.place, s.count);
   });
+}
+
+async function unconfirm(tx: Db, equipmentUnitId: string, lastSeenEventId: string, from?: Place, count?: number) {
+  const portions = await loadPortions(tx, equipmentUnitId);
+  const to: Place = { type: "unconfirmed", lastSeenEventId };
+  let entries: LedgerEntry[];
+  if (from) {
+    const available = countAt(portions, from);
+    const moveCount = count !== undefined ? Math.min(count, available) : available;
+    if (moveCount < 1) return;
+    entries = [{ kind: "unconfirmed", count: moveCount, from, to }];
+  } else {
+    entries = portions
+      .filter((p) => p.lastSeenEventId !== lastSeenEventId)
+      .map((p) => ({ kind: "unconfirmed", count: p.count, from: placeOf(p), to }));
+  }
+  await appendToLedger(tx, equipmentUnitId, null, entries);
 }
 
 /** Whether any equipment is Unconfirmed, last seen at this Event. */
