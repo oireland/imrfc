@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Send } from "lucide-react";
 import type { Naming, NoticeStatus } from "@/features/selection";
-import { formatDay } from "@/lib/format-time";
+import { formatDay } from "@/lib/time/format-time";
 import { BottomSheet } from "@/components/bottom-sheet";
 import type { Result } from "@/lib/result";
 

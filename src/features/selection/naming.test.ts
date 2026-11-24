@@ -3,7 +3,7 @@ import { createTestDb } from "@/test/db";
 import { saveReply } from "@/features/availability";
 import { cancelEvent, createEvent, listTeams, type NewEvent } from "@/features/events";
 import { user } from "@/features/users";
-import type { MailSender } from "@/lib/mail";
+import type { MailSender } from "@/lib/messaging/mail";
 import {
   alertOnNotAvailable,
   deliverNotice,

@@ -1,4 +1,4 @@
-import { LIMITS, firstTooLong } from "@/lib/text-limits";
+import { LIMITS, firstTooLong } from "@/lib/text/text-limits";
 import type { Result } from "@/lib/result";
 export type NewEquipmentUnit = {
   name: string;

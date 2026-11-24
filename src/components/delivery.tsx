@@ -2,8 +2,8 @@
 
 import { Loader2, X } from "lucide-react";
 import { toast } from "sonner";
-import { joinList } from "@/lib/join-names";
-import type { DeliveryProgress } from "@/lib/delivery";
+import { joinList } from "@/lib/text/join-names";
+import type { DeliveryProgress } from "@/lib/messaging/delivery";
 
 export const people = (n: number) => (n === 1 ? "1 person" : `${n} people`);
 

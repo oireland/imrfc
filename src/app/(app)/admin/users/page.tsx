@@ -14,7 +14,7 @@ import {
   type User,
   type Role,
 } from "@/features/users";
-import { requireAdmin } from "@/lib/session";
+import { requireAdmin } from "@/lib/auth/session";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { ConfirmSubmit } from "@/components/confirm-submit";

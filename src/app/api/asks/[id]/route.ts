@@ -1,6 +1,6 @@
 import { db } from "@/db/client";
 import { getAsk } from "@/features/availability";
-import { getCurrentUser, viewerOf } from "@/lib/session";
+import { getCurrentUser, viewerOf } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 

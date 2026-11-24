@@ -1,5 +1,5 @@
 import { STATUS_LABEL, type InjuryStatus, type InjuryView } from "@/features/injuries";
-import { formatDate, formatDay } from "@/lib/format-time";
+import { formatDate, formatDay } from "@/lib/time/format-time";
 
 export type InjuryItem = {
   id: string;

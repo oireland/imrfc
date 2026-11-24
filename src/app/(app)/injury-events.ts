@@ -1,6 +1,6 @@
 import { db } from "@/db/client";
 import { listEventsBetween } from "@/features/events";
-import { formatDay } from "@/lib/format-time";
+import { formatDay } from "@/lib/time/format-time";
 
 /** Training and Matches from the last three weeks, newest first, for "Happened at…". */
 export async function recentEventOptions(now: Date = new Date()) {

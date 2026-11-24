@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { unsubscribeThisDevice } from "@/lib/push-client";
+import { unsubscribeThisDevice } from "@/lib/messaging/push-client";
 import { Button } from "@/components/ui/button";
 
 type Subscription = { endpoint: string; p256dh: string; auth: string };

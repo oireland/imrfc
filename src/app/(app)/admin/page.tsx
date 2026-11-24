@@ -4,7 +4,7 @@ import { db } from "@/db/client";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { canManageUsers, countPendingUsers } from "@/features/users";
-import { requireCommittee } from "@/lib/session";
+import { requireCommittee } from "@/lib/auth/session";
 
 const LINKS = [
   { href: "/stores", label: "Stores" },

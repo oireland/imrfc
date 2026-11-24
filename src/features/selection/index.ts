@@ -1,5 +1,5 @@
 import type { Db } from "@/db/types";
-import { LIMITS, firstTooLong } from "@/lib/text-limits";
+import { LIMITS, firstTooLong } from "@/lib/text/text-limits";
 import { and, eq, inArray } from "drizzle-orm";
 import { getAvailability } from "@/features/availability";
 import { getEvent, getEvents, listMatchDay, matchLabel, startsAt, type Event, type EventWithDetails } from "@/features/events";

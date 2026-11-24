@@ -1,7 +1,7 @@
 import { Download } from "lucide-react";
 import { db } from "@/db/client";
 import { EVENT_CSV_COLUMNS, MAX_EVENTS_PER_IMPORT, eventCsvTemplate, listTeams } from "@/features/events";
-import { requireCommittee } from "@/lib/session";
+import { requireCommittee } from "@/lib/auth/session";
 import { BackLink } from "@/components/back-link";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";

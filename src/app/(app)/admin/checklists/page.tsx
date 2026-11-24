@@ -2,7 +2,7 @@ import { BackLink } from "@/components/back-link";
 import { db } from "@/db/client";
 import { ChecklistEditor } from "@/components/checklist-editor";
 import { listSeries } from "@/features/events";
-import { requireCommittee } from "@/lib/session";
+import { requireCommittee } from "@/lib/auth/session";
 import { Card, CardContent } from "@/components/ui/card";
 
 const EVENT_TYPES = ["training", "match", "social"] as const;

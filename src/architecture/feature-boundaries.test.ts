@@ -50,12 +50,12 @@ describe("findBoundaryViolations outside the features", () => {
   it("reports a component reaching into a feature's internals", () => {
     const violations = findBoundaryViolations([
       { path: "src/components/board.tsx", source: `import { sortForShirt } from "@/features/selection/shirts";` },
-      { path: "src/lib/auth.ts", source: `import { user } from "../features/users/schema";` },
+      { path: "src/lib/auth/auth.ts", source: `import { user } from "../../features/users/schema";` },
     ]);
 
     expect(violations).toEqual([
       { file: "src/components/board.tsx", imports: "@/features/selection/shirts" },
-      { file: "src/lib/auth.ts", imports: "../features/users/schema" },
+      { file: "src/lib/auth/auth.ts", imports: "../../features/users/schema" },
     ]);
   });
 

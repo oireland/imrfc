@@ -4,10 +4,10 @@ import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { clearInjury, logByMistake, reportInjury, updateInjury, type InjuryAlert, type ReportInput, type UpdateInput } from "@/features/injuries";
-import { londonDay } from "@/lib/london";
+import { londonDay } from "@/lib/time/london";
 import { sendToUser } from "@/features/push";
-import { getPushSender } from "@/lib/push";
-import { requireApprovedUser } from "@/lib/session";
+import { getPushSender } from "@/lib/messaging/push";
+import { requireApprovedUser } from "@/lib/auth/session";
 import type { Result } from "@/lib/result";
 
 

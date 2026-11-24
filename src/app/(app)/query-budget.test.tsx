@@ -16,7 +16,7 @@ vi.mock("@/db/client", () => ({
     return h.db;
   },
 }));
-vi.mock("@/lib/session", () => ({
+vi.mock("@/lib/auth/session", () => ({
   getCurrentUser: async () => h.user,
   requireApprovedUser: async () => h.user,
   requireCommittee: async () => h.user,

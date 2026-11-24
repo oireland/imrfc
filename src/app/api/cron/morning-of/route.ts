@@ -1,7 +1,7 @@
 import { db } from "@/db/client";
 import { markUnconfirmed } from "@/features/duties";
 import { notifyMorningOf } from "@/features/push";
-import { getPushSender } from "@/lib/push";
+import { getPushSender } from "@/lib/messaging/push";
 
 export const dynamic = "force-dynamic";
 

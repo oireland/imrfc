@@ -1,4 +1,4 @@
-import { joinList } from "@/lib/join-names";
+import { joinList } from "@/lib/text/join-names";
 
 /** A shared Duty reads as everyone's: "with Sam", "with Sam & Priya"; null when the viewer's on it alone. */
 export function othersOnDuty(userIds: string[], viewerId: string, name: (id: string) => string): string | null {

@@ -7,10 +7,10 @@ import { ComingUp } from "@/components/coming-up";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatWhen } from "@/lib/format-time";
+import { formatWhen } from "@/lib/time/format-time";
 import { listEvents, type Event } from "@/features/events";
 import { isCommitteeOrAbove } from "@/features/users";
-import { requireApprovedUser } from "@/lib/session";
+import { requireApprovedUser } from "@/lib/auth/session";
 import { quickAddEvent, saveMyReply } from "../actions";
 import { loadComingUp } from "../coming-up-data";
 

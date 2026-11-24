@@ -12,7 +12,7 @@ import {
   type MoveTarget,
 } from "@/features/equipment";
 import { filterApprovedUserIds, isCommitteeOrAbove } from "@/features/users";
-import { requireApprovedUser } from "@/lib/session";
+import { requireApprovedUser } from "@/lib/auth/session";
 import type { Result } from "@/lib/result";
 
 /** Adds an Equipment Unit from the Equipment page's sheet. Committee and above only. */

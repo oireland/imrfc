@@ -4,7 +4,7 @@ import { createEvent, listTeams, type NewEvent } from "@/features/events";
 import { reportInjury } from "@/features/injuries";
 import { addAway } from "@/features/players";
 import { user } from "@/features/users";
-import type { MailSender } from "@/lib/mail";
+import type { MailSender } from "@/lib/messaging/mail";
 import { listEventsBetween } from "@/features/events";
 import { announce, deleteAvailabilityForEvent, deliverAsk, dismissAsk, retryAsk, getAsk, getAvailability, getSeasonRecord, listAvailableUserIds, listMyReplies, listWaitingOnReply, markMessaged, nudge, saveReply } from "./index";
 import { deleteEvent } from "@/features/events";

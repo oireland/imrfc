@@ -2,8 +2,8 @@ import { eq } from "drizzle-orm";
 import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/db/client";
 import { user } from "@/features/users";
-import { devSignInEnabled } from "@/lib/dev-sign-in";
-import { safeNextPath } from "@/lib/next-path";
+import { devSignInEnabled } from "@/lib/auth/dev-sign-in";
+import { safeNextPath } from "@/lib/auth/next-path";
 
 /**
  * Dev and e2e only: `/api/dev/sign-in?email=…&next=/events` signs in as an existing User
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   const [found] = email ? await db.select({ id: user.id }).from(user).where(eq(user.email, email)) : [];
   if (!found) return new NextResponse(`No User with email ${email ?? "(none)"}`, { status: 404 });
 
-  const { devAuth } = await import("@/lib/dev-auth");
+  const { devAuth } = await import("@/lib/auth/dev-auth");
   const { cookies } = await (await devAuth.$context).test.login({ userId: found.id });
 
   const next = safeNextPath(request.nextUrl.searchParams.get("next"));

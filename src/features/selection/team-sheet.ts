@@ -1,7 +1,7 @@
 import type { Db } from "@/db/types";
 import { and, eq } from "drizzle-orm";
 import { getEvent, type EventWithDetails } from "@/features/events";
-import { formatDay } from "@/lib/format-time";
+import { formatDay } from "@/lib/time/format-time";
 import { refuseMatchChange } from "./guard";
 import { getBoard, type Board } from "./index";
 import { selectionShirt } from "./schema";
@@ -15,7 +15,7 @@ import {
   type SheetLayout,
   type SheetPerson,
 } from "./sheet";
-import { londonParts } from "@/lib/london";
+import { londonParts } from "@/lib/time/london";
 import type { Result } from "@/lib/result";
 
 type Viewer = { id: string; committee: boolean };
