@@ -182,9 +182,9 @@ export async function listEventsBetween(db: Db, from: Date, to: Date): Promise<E
     .orderBy(asc(event.start));
 }
 
-/** Every Match on the London day of `event` (itself included when it is one), soonest first. */
-export async function listMatchDay(db: Db, event_: Pick<Event, "start">): Promise<Event[]> {
-  const date = londonParts(event_.start).date;
+/** Every Match on the London day of `day` (itself included when it is one), soonest first. */
+export async function listMatchDay(db: Db, day: Pick<Event, "start">): Promise<Event[]> {
+  const date = londonParts(day.start).date;
   return db
     .select()
     .from(event)
