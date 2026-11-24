@@ -529,6 +529,34 @@ describe("createEvents", () => {
     expect(result.ok).toBe(false);
     expect(await listEvents(db, { when: "upcoming" })).toEqual([]);
   });
+
+  it("saves a mixed batch with each Match's Team title and details", async () => {
+    const db = await createTestDb();
+    await listTeams(db);
+
+    const result = await createEvents(db, [match("1st XV"), training("One"), match("2nd XV")]);
+
+    expect(result).toEqual({ ok: true, count: 3 });
+    const events = await listEvents(db, { when: "upcoming" });
+    expect(events.map((e) => e.title).sort()).toEqual(["1st XV vs UCL", "2nd XV vs UCL", "Training @ One"]);
+    const details = await db.select().from(matchDetails);
+    expect(details.map((d) => d.teamId).sort()).toEqual(["1st XV", "2nd XV"]);
+  });
+
+  it("rejects the whole batch for an unknown Team in the middle", async () => {
+    const db = await createTestDb();
+    await listTeams(db);
+
+    const result = await createEvents(db, [match("1st XV"), match("3rd XV"), training("One")]);
+
+    expect(result).toEqual({ ok: false, error: "That team doesn't exist." });
+    expect(await listEvents(db, { when: "upcoming" })).toEqual([]);
+  });
+
+  it("accepts an empty batch", async () => {
+    const db = await createTestDb();
+    expect(await createEvents(db, [])).toEqual({ ok: true, count: 0 });
+  });
 });
 
 describe("listVenues", () => {

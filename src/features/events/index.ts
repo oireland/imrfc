@@ -68,17 +68,32 @@ export async function createEvents(
   db: Db,
   inputs: NewEvent[],
 ): Promise<Result<{ count: number }>> {
-  const titles: string[] = [];
   for (const input of inputs) {
     const result = validateEvent(input);
     if (!result.ok) return { ok: false, error: `"${eventTitle(input)}": ${result.error}` };
-    const title = await titleFor(db, input);
-    if (!title.ok) return title;
-    titles.push(title.title);
   }
+  const teamIds = [...new Set(inputs.flatMap((i) => (i.eventType === "match" ? [i.matchDetails.teamId] : [])))];
+  const teams = new Map(
+    teamIds.length ? (await db.select().from(team).where(inArray(team.id, teamIds))).map((t) => [t.id, t.name]) : [],
+  );
+  const rows: { input: NewEvent; row: ReturnType<typeof eventRow> }[] = [];
+  for (const input of inputs) {
+    let title = eventTitle(input);
+    if (input.eventType === "match") {
+      const name = teams.get(input.matchDetails.teamId);
+      if (name === undefined) return { ok: false, error: "That team doesn't exist." };
+      title = eventTitle(input, name);
+    }
+    rows.push({ input, row: eventRow(input, title, crypto.randomUUID()) });
+  }
+  if (rows.length === 0) return { ok: true, count: 0 };
   try {
     await db.transaction(async (tx) => {
-      for (const [i, input] of inputs.entries()) await insertEvent(tx, input, titles[i]);
+      await tx.insert(event).values(rows.map((r) => r.row));
+      const matches = rows.flatMap(({ input, row }) =>
+        input.eventType === "match" ? [{ eventId: row.id, ...matchRow(input.matchDetails) }] : [],
+      );
+      if (matches.length) await tx.insert(matchDetails).values(matches);
     });
   } catch {
     return { ok: false, error: "Couldn't save the events, so none were added." };
@@ -102,19 +117,23 @@ function matchRow(details: Extract<NewEvent, { eventType: "match" }>["matchDetai
   };
 }
 
+function eventRow(input: NewEvent, title: string, id: string) {
+  return {
+    id,
+    title,
+    eventType: input.eventType,
+    start: input.start,
+    end: input.end,
+    startTbc: !!input.startTbc,
+    venue: input.venue.trim(),
+    notes: input.notes ?? "",
+  };
+}
+
 async function insertEvent(db: Db, input: NewEvent, title: string): Promise<Event> {
   const [row] = await db
     .insert(event)
-    .values({
-      id: crypto.randomUUID(),
-      title,
-      eventType: input.eventType,
-      start: input.start,
-      end: input.end,
-      startTbc: !!input.startTbc,
-      venue: input.venue.trim(),
-      notes: input.notes ?? "",
-    })
+    .values(eventRow(input, title, crypto.randomUUID()))
     .returning();
 
   if (input.eventType === "match") {
