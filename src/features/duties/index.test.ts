@@ -14,6 +14,7 @@ import {
   confirmDuty,
   listDutyRecordForUser,
   listDutyUserIdsByEvent,
+  listEventDuties,
   listPeopleOnEquipment,
   listPlanWarnings,
   listUpcomingDutiesForUser,
@@ -78,28 +79,6 @@ describe("Duties", () => {
     expect(await ensureDuties(db, "e2", [])).toEqual([]);
   });
 
-  it("Claiming a To Duty sends the From Duty to the same User (From follows To while empty)", async () => {
-    const { db, to, reload } = await setup();
-
-    expect(await claim(db, to.id, "tom")).toEqual({ ok: true });
-
-    const after = await reload();
-    expect(after.to.userIds).toEqual(["tom"]);
-    expect(after.from.userIds).toEqual(["tom"]);
-  });
-
-  it("A second person joining the To Duty also joins the From Duty, as long as it's still following", async () => {
-    const { db, to, from, reload } = await setup();
-    await claim(db, to.id, "tom");
-
-    await claim(db, to.id, "sam");
-
-    const after = await reload();
-    expect(after.to.userIds).toEqual(["tom", "sam"]);
-    expect(after.from.userIds).toEqual(["tom", "sam"]);
-    expect(from).toBeDefined();
-  });
-
   it("Claiming a From Duty leaves the To Duty alone", async () => {
     const { db, from, reload } = await setup();
 
@@ -117,17 +96,6 @@ describe("Duties", () => {
     expect(await claim(db, to.id, "tom")).toEqual({ ok: false, error: "You can't do that on this duty." });
   });
 
-  it("stops following once the From Duty has been given a different set of People", async () => {
-    const { db, to, from, reload } = await setup();
-    await claim(db, from.id, "priya");
-
-    await claim(db, to.id, "tom");
-
-    const after = await reload();
-    expect(after.to.userIds).toEqual(["tom"]);
-    expect(after.from.userIds).toEqual(["priya"]);
-  });
-
   it("Assigning replaces the whole set — adds and removes in one go", async () => {
     const { db, to, reload } = await setup();
     await claim(db, to.id, "tom");
@@ -135,18 +103,6 @@ describe("Duties", () => {
     await assign(db, to.id, ["sam", "priya"]);
 
     expect((await reload()).to.userIds).toEqual(["sam", "priya"]);
-  });
-
-  it("a leave (or hand-on) on the To Duty removes the same person from a still-following From Duty", async () => {
-    const { db, to, reload } = await setup();
-    await claim(db, to.id, "tom");
-    await claim(db, to.id, "sam");
-
-    expect(await leave(db, to.id, "tom")).toEqual({ ok: true });
-
-    const after = await reload();
-    expect(after.to.userIds).toEqual(["sam"]);
-    expect(after.from.userIds).toEqual(["sam"]);
   });
 
   it("refuses to leave a Duty you're not on", async () => {
@@ -205,9 +161,9 @@ describe("Duties", () => {
     });
 
     it("a Confirmed From Duty moves the Equipment Unit to Home by default", async () => {
-      const { db, equipment, shed, cupboard, to, from } = await setup();
+      const { db, equipment, shed, cupboard, from } = await setup();
       await recordMove(db, equipment.id, "tom", { type: "store", storeId: cupboard.id });
-      await claim(db, to.id, "tom");
+      await claim(db, from.id, "tom");
 
       await confirmDuty(db, from.id, { id: "tom", role: "member" });
 
@@ -215,8 +171,8 @@ describe("Duties", () => {
     });
 
     it("a Confirmed From Duty honours a Store Destination or staying with the Duty's User", async () => {
-      const { db, equipment, cupboard, to, from } = await setup();
-      await claim(db, to.id, "tom");
+      const { db, equipment, cupboard, from } = await setup();
+      await claim(db, from.id, "tom");
 
       await setDestination(db, from.id, { type: "store", storeId: cupboard.id });
       await confirmDuty(db, from.id, { id: "tom", role: "member" });
@@ -224,7 +180,7 @@ describe("Duties", () => {
 
       const other = await ensureDuties(db, "e2", [equipment.id]);
       const from2 = other.find((d) => d.direction === "from")!;
-      await claim(db, other.find((d) => d.direction === "to")!.id, "sam");
+      await claim(db, from2.id, "sam");
       await setDestination(db, from2.id, { type: "holder" });
       await confirmDuty(db, from2.id, { id: "sam", role: "member" });
       expect(await whereaboutsOf(db, equipment.id)).toMatchObject({ whereaboutsType: "holder", holderId: "sam" });
@@ -292,6 +248,132 @@ describe("Duties", () => {
       };
     }
 
+    it("lets People take part of the count: Confirming moves only what they claimed, split as claimed", async () => {
+      const { db, equipment, shed, to } = await setupCounted();
+      await claim(db, to.id, "tom", 2);
+      await claim(db, to.id, "sam", 1);
+
+      expect(await confirmDuty(db, to.id, { id: "tom", role: "member" })).toEqual({ ok: true });
+
+      expect(await loadPortions(db, equipment.id)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ whereaboutsType: "store", storeId: shed.id, count: 5 }),
+          expect.objectContaining({ whereaboutsType: "holder", holderId: "tom", count: 2 }),
+          expect.objectContaining({ whereaboutsType: "holder", holderId: "sam", count: 1 }),
+        ]),
+      );
+    });
+
+    it("refuses a claim for more than is left, and keeps each Person's share on the Duty", async () => {
+      const { db, event, equipment, to } = await setupCounted();
+      await claim(db, to.id, "tom", 3);
+
+      expect(await claim(db, to.id, "sam", 2)).toEqual({ ok: false, error: "Only 1 left to take." });
+      expect(await claim(db, to.id, "sam", 1)).toEqual({ ok: true });
+
+      const [after] = await listEventDuties(db, event.id, [equipment.id], { cancelled: false });
+      expect(after.shares).toEqual({ tom: 3, sam: 1 });
+    });
+
+    it("hands a share on with the place", async () => {
+      const { db, event, equipment, to } = await setupCounted();
+      await claim(db, to.id, "tom", 2);
+
+      await handOn(db, to.id, "tom", "sam");
+
+      const [after] = await listEventDuties(db, event.id, [equipment.id], { cancelled: false });
+      expect(after.shares).toEqual({ sam: 2 });
+    });
+
+    it("confirms each Person's part on its own: the Duty stays open until all of it is claimed and done", async () => {
+      const { db, event, equipment, shed, to } = await setupCounted();
+      await claim(db, to.id, "tom", 2);
+      expect(await confirmDuty(db, to.id, { id: "tom", role: "member" })).toEqual({ ok: true });
+
+      const [open] = await listEventDuties(db, event.id, [equipment.id], { cancelled: false });
+      expect(open).toMatchObject({ confirmedAt: null, confirmedUserIds: ["tom"] });
+      expect(await confirmDuty(db, to.id, { id: "tom", role: "member" })).toEqual({ ok: false, error: "That's already confirmed." });
+
+      expect(await claim(db, to.id, "sam", 2)).toEqual({ ok: true });
+      expect(await confirmDuty(db, to.id, { id: "sam", role: "member" })).toEqual({ ok: true });
+
+      const [done] = await listEventDuties(db, event.id, [equipment.id], { cancelled: false });
+      expect(done.confirmedAt).not.toBeNull();
+      expect(await loadPortions(db, equipment.id)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ whereaboutsType: "store", storeId: shed.id, count: 4 }),
+          expect.objectContaining({ whereaboutsType: "holder", holderId: "tom", count: 2 }),
+          expect.objectContaining({ whereaboutsType: "holder", holderId: "sam", count: 2 }),
+        ]),
+      );
+    });
+
+    it("moves only the Persons still to do when a later one confirms", async () => {
+      const { db, equipment, shed, to } = await setupCounted();
+      await claim(db, to.id, "tom", 2);
+      await confirmDuty(db, to.id, { id: "tom", role: "member" });
+      await claim(db, to.id, "sam", 1);
+
+      await confirmDuty(db, to.id, { id: "sam", role: "member" });
+
+      expect(await loadPortions(db, equipment.id)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ whereaboutsType: "store", storeId: shed.id, count: 5 }),
+          expect.objectContaining({ whereaboutsType: "holder", holderId: "tom", count: 2 }),
+          expect.objectContaining({ whereaboutsType: "holder", holderId: "sam", count: 1 }),
+        ]),
+      );
+    });
+
+    it("refuses a claim with no number once someone's part is done, and won't let a done Person leave or change", async () => {
+      const { db, to } = await setupCounted();
+      await claim(db, to.id, "tom", 2);
+      await confirmDuty(db, to.id, { id: "tom", role: "member" });
+
+      expect(await claim(db, to.id, "sam")).toMatchObject({ ok: false });
+      expect(await leave(db, to.id, "tom")).toMatchObject({ ok: false });
+      expect(await actOnDuty(db, to.id, { id: "tom", role: "member" }, { action: "setShare", count: 3 })).toMatchObject({ ok: false });
+      expect(await assign(db, to.id, ["sam"])).toMatchObject({ ok: false });
+    });
+
+    it("lets a Person change how many they're taking, within what's left", async () => {
+      const { db, event, equipment, to } = await setupCounted();
+      await claim(db, to.id, "tom", 2);
+      await claim(db, to.id, "sam", 1);
+      const act = (id: string, count: number) => actOnDuty(db, to.id, { id, role: "member" }, { action: "setShare", count });
+
+      expect(await act("tom", 3)).toEqual({ ok: true });
+      expect(await act("tom", 4)).toEqual({ ok: false, error: "Only 3 left to take." });
+      expect(await act("sam", 0)).toMatchObject({ ok: false });
+
+      const [after] = await listEventDuties(db, event.id, [equipment.id], { cancelled: false });
+      expect(after.shares).toEqual({ tom: 3, sam: 1 });
+    });
+
+    it("lets Committee assign People with numbers, and change them", async () => {
+      const { db, event, equipment, to } = await setupCounted();
+      const act = (userIds: string[], counts?: Record<string, number>) =>
+        actOnDuty(db, to.id, { id: "priya", role: "committee" }, { action: "assign", userIds, counts });
+
+      expect(await act(["tom", "sam"], { tom: 1, sam: 3 })).toEqual({ ok: true });
+      expect(await act(["tom", "sam"], { sam: 2 })).toEqual({ ok: true });
+      expect(await act(["tom", "sam"], { sam: 4 })).toEqual({ ok: false, error: "That's more than the 4 needed." });
+
+      const [after] = await listEventDuties(db, event.id, [equipment.id], { cancelled: false });
+      expect(after.shares).toEqual({ tom: 1, sam: 2 });
+    });
+
+    it("heads-ups say only some are being taken when a near Event's Duty is part claimed", async () => {
+      const { db, to } = await setupCounted();
+      await claim(db, to.id, "tom", 2);
+
+      const { headsUps } = await listPlanWarnings(db);
+
+      expect(headsUps.map((h) => h.message)).toEqual(
+        expect.arrayContaining([expect.stringContaining("Only 2 of 4 Shields are being taken to")]),
+      );
+    });
+
     it("moves only the Checklist line's count to the Duty's User on a Confirmed To Duty", async () => {
       const { db, equipment, shed, to } = await setupCounted();
       await claim(db, to.id, "tom");
@@ -311,6 +393,7 @@ describe("Duties", () => {
       const { db, equipment, shed, to, from } = await setupCounted();
       await claim(db, to.id, "tom");
       await confirmDuty(db, to.id, { id: "tom", role: "member" });
+      await claim(db, from.id, "tom");
 
       expect(await confirmDuty(db, from.id, { id: "tom", role: "member" })).toEqual({ ok: true });
 
@@ -389,6 +472,8 @@ describe("Duties", () => {
       await claim(db, to.id, "tom");
       await claim(db, to.id, "sam");
       await confirmDuty(db, to.id, { id: "tom", role: "member" }, { holders: [{ userId: "tom", count: 3 }, { userId: "sam", count: 1 }] });
+      await claim(db, from.id, "tom");
+      await claim(db, from.id, "sam");
 
       expect(await confirmDuty(db, from.id, { id: "tom", role: "member" })).toEqual({ ok: true });
 
@@ -400,6 +485,8 @@ describe("Duties", () => {
       await claim(db, to.id, "tom");
       await claim(db, to.id, "sam");
       await confirmDuty(db, to.id, { id: "tom", role: "member" }, { holders: [{ userId: "tom", count: 2 }, { userId: "sam", count: 2 }] });
+      await claim(db, from.id, "tom");
+      await claim(db, from.id, "sam");
       await setDestination(db, from.id, { type: "holder" });
 
       expect(
@@ -601,8 +688,9 @@ describe("listUpcomingDutiesForUser", () => {
     const cancelled = await futureEvent(db, shed.id, "Cancelled", 30);
     const done = await futureEvent(db, shed.id, "Done", 10);
     for (const e of [later, sooner, cancelled, done]) {
-      const [to] = (await ensureDuties(db, e.id, [equipment.id])).filter((d) => d.direction === "to");
+      const [to, from] = await ensureDuties(db, e.id, [equipment.id]);
       await claim(db, to.id, "tom");
+      await claim(db, from.id, "tom");
       if (e === done) await confirmDuty(db, to.id, { id: "tom", role: "member" });
     }
     const [samsFrom] = (await ensureDuties(db, sooner.id, [equipment.id])).filter((d) => d.direction === "from");
@@ -720,6 +808,7 @@ describe("Clashes and heads-ups", () => {
     await db.update(user).set({ name: "Tom Reed" }).where(eq(user.id, "tom"));
     await recordMove(db, equipment.id, "sam", { type: "holder", holderId: "sam" });
     await assign(db, duties.find((d) => d.direction === "to")!.id, ["tom"]);
+    await assign(db, duties.find((d) => d.direction === "from")!.id, ["tom"]);
 
     expect((await listPlanWarnings(db)).headsUps.map((h) => h.message)).toEqual([
       "Sam Okafor needs to pass Balls to Tom Reed before Training @ Harlington.",
@@ -974,6 +1063,7 @@ describe("Query efficiency", () => {
       ]);
       await claim(db, to.id, "tom");
       await confirmDuty(db, to.id, { id: "tom", role: "member" });
+      await claim(db, from.id, "tom");
       await confirmDuty(db, from.id, { id: "tom", role: "member" });
     }
 
@@ -1152,6 +1242,7 @@ describe("Equipment integrity", () => {
       const { db, equipment, to, from } = await setup();
       await claim(db, to.id, "sam");
       await confirmDuty(db, to.id, member("sam"));
+      await claim(db, from.id, "sam");
       await handOn(db, from.id, "sam", "tom");
 
       const result = await confirmDuty(db, from.id, member("tom"));
@@ -1165,6 +1256,7 @@ describe("Equipment integrity", () => {
       const { db, equipment, to, from } = await setup();
       await claim(db, to.id, "sam");
       await confirmDuty(db, to.id, member("sam"));
+      await claim(db, from.id, "sam");
       await handOn(db, from.id, "sam", "tom");
 
       const result = await confirmDuty(db, from.id, member("tom"), { from: [{ place: { type: "holder", holderId: "sam" }, count: 1 }] });

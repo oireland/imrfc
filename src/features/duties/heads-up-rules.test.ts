@@ -38,6 +38,34 @@ describe("findHeadsUps", () => {
     expect(findHeadsUps({ now, equipment: [equipment()], events: [event()], personName })).toEqual([]);
   });
 
+  it("says only some are being taken when a Duty near the Event covers part of the count", () => {
+    const soon = event({
+      ...tomorrow,
+      items: [{ equipmentUnitId: "shields", count: 4 }],
+      duties: [
+        { equipmentUnitId: "shields", direction: "to", userIds: ["tom"], shares: [2] },
+        { equipmentUnitId: "shields", direction: "from", userIds: ["tom", "sam"], shares: [2, 2] },
+      ],
+    });
+
+    expect(messages([equipment({ quantity: 4, portions: [{ storeId: "s", holderId: null, count: 4 }] })], [soon])).toEqual([
+      "Only 2 of 4 Tackle Shields are being taken to Alumni Day, and it starts within 48 hours.",
+    ]);
+  });
+
+  it("counts someone with no number as taking all of it", () => {
+    const soon = event({
+      ...tomorrow,
+      items: [{ equipmentUnitId: "shields", count: 4 }],
+      duties: [
+        { equipmentUnitId: "shields", direction: "to", userIds: ["tom", "sam"], shares: [2, null] },
+        { equipmentUnitId: "shields", direction: "from", userIds: ["tom"], shares: [null] },
+      ],
+    });
+
+    expect(messages([equipment({ quantity: 4, portions: [{ storeId: "s", holderId: null, count: 4 }] })], [soon])).toEqual([]);
+  });
+
   it("says nobody is taking the equipment to the Event when it starts within 48 hours", () => {
     const soon = event({ ...tomorrow, duties: [{ equipmentUnitId: "shields", direction: "from", userIds: ["tom"] }] });
 

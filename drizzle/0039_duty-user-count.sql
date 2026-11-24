@@ -1,0 +1,1 @@
+ALTER TABLE "duty_user" ADD COLUMN "count" integer;

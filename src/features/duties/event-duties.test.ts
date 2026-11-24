@@ -69,7 +69,7 @@ describe("listEventDuties", () => {
 
     expect(duties).toHaveLength(4);
     const forBalls = duties.filter((d) => d.equipmentUnitId === balls.id);
-    expect(forBalls.every((d) => d.userIds.includes("tom"))).toBe(true);
+    expect(forBalls.map((d) => d.userIds)).toEqual([["tom"], []]);
     expect(duties.filter((d) => d.equipmentUnitId === cones.id).every((d) => d.userIds.length === 0)).toBe(true);
   });
 
@@ -87,15 +87,15 @@ describe("listEventDuties", () => {
 });
 
 describe("actOnEventDuty", () => {
-  it("creates the To and From Duties when it acts on a missing one, and From follows To", async () => {
+  it("creates only the Duty it acts on when it is missing", async () => {
     const { db, ev, balls, stored } = await setup();
 
     const result = await actOnEventDuty(db, ev.id, balls.id, "to", member("tom"), { action: "claim" });
 
     expect(result).toEqual({ ok: true });
-    expect(await stored()).toHaveLength(2);
+    expect(await stored()).toHaveLength(1);
     const duties = await listEventDuties(db, ev.id, [balls.id], { cancelled: false });
-    expect(duties.map((d) => d.userIds)).toEqual([["tom"], ["tom"]]);
+    expect(duties.map((d) => d.userIds)).toEqual([["tom"], []]);
   });
 
   it("refuses to act on a missing Duty of a Cancelled Event, and creates nothing", async () => {

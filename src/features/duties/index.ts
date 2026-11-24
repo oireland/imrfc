@@ -21,6 +21,7 @@ import { dutyActions, type DutyAction } from "./duty-actions-rules";
 import { lastDuties, seasonCount } from "./duty-record-rules";
 import { findHeadsUps, type HeadsUp } from "./heads-up-rules";
 import type { PlanEvent, PlanEquipment } from "./plan";
+import { countToMove, holdersFromShares, pendingShares, unclaimed, validateShare, validateShares, type Share } from "./shares-rules";
 import { duty, dutyUser } from "./schema";
 import type { Result } from "@/lib/result";
 
@@ -33,6 +34,7 @@ export type { DutyAction } from "./duty-actions-rules";
 export { seasonStart } from "./duty-record-rules";
 export { gatherConfirmSources, handedOnSources, needsSourceChoice } from "./confirm-source-rules";
 export type { HolderPart, SourcePart } from "./confirm-source-rules";
+export { countToMove, holdersFromShares, pendingShares, unclaimed } from "./shares-rules";
 
 
 export type DutyDestination = { type: "home" } | { type: "store"; storeId: string } | { type: "holder" };
@@ -40,9 +42,13 @@ export type Duty = Omit<typeof duty.$inferSelect, "destinationType" | "destinati
   destination: DutyDestination;
   /** Everyone currently on this Duty (Shared Duties: zero or more). */
   userIds: string[];
+  /** How many each Person is taking; null means all of it. */
+  shares: Record<string, number | null>;
+  /** People who have already marked their own part done (only when everyone gave a number). */
+  confirmedUserIds: string[];
 };
 
-function toDuty(row: typeof duty.$inferSelect, userIds: string[]): Duty {
+function toDuty(row: typeof duty.$inferSelect, shares: Share[]): Duty {
   const { destinationType, destinationStoreId, ...rest } = row;
   const destination: DutyDestination =
     destinationType === "store" && destinationStoreId
@@ -50,7 +56,13 @@ function toDuty(row: typeof duty.$inferSelect, userIds: string[]): Duty {
       : destinationType === "holder"
         ? { type: "holder" }
         : { type: "home" };
-  return { ...rest, destination, userIds };
+  return {
+    ...rest,
+    destination,
+    userIds: shares.map((s) => s.userId),
+    shares: Object.fromEntries(shares.map((s) => [s.userId, s.count])),
+    confirmedUserIds: shares.filter((s) => s.confirmed).map((s) => s.userId),
+  };
 }
 
 async function getDuty(db: Db, id: string): Promise<typeof duty.$inferSelect | undefined> {
@@ -58,58 +70,34 @@ async function getDuty(db: Db, id: string): Promise<typeof duty.$inferSelect | u
   return row;
 }
 
-/** Everyone currently on a Duty. */
-async function userIdsOf(db: Db, dutyId: string): Promise<string[]> {
-  const rows = await db.select({ userId: dutyUser.userId }).from(dutyUser).where(eq(dutyUser.dutyId, dutyId));
-  return rows.map((r) => r.userId);
+const toShare = (r: typeof dutyUser.$inferSelect): Share => ({ userId: r.userId, count: r.count, confirmed: r.confirmedAt !== null });
+
+/** Everyone currently on a Duty, and how many each is taking. */
+async function sharesOf(db: Db, dutyId: string): Promise<Share[]> {
+  const rows = await db.select().from(dutyUser).where(eq(dutyUser.dutyId, dutyId));
+  return rows.map(toShare);
 }
 
 /** Everyone currently on several Duties, in one query. */
-async function loadUserIdsFor(db: Db, dutyIds: string[]): Promise<Map<string, string[]>> {
+async function loadSharesFor(db: Db, dutyIds: string[]): Promise<Map<string, Share[]>> {
   if (dutyIds.length === 0) return new Map();
   const rows = await db.select().from(dutyUser).where(inArray(dutyUser.dutyId, dutyIds));
-  return new Map([...Map.groupBy(rows, (r) => r.dutyId)].map(([dutyId, group]) => [dutyId, group.map((r) => r.userId)]));
+  return new Map([...Map.groupBy(rows, (r) => r.dutyId)].map(([dutyId, group]) => [dutyId, group.map(toShare)]));
 }
 
-const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
-
-/** The sibling From Duty for a To Duty (same Event, same Equipment Unit), if any. */
-async function siblingFromDuty(db: Db, toRow: typeof duty.$inferSelect): Promise<typeof duty.$inferSelect | undefined> {
-  if (toRow.direction !== "to") return undefined;
-  const [row] = await db
-    .select()
-    .from(duty)
-    .where(and(eq(duty.eventId, toRow.eventId), eq(duty.equipmentUnitId, toRow.equipmentUnitId), eq(duty.direction, "from")));
-  return row;
+async function loadUserIdsFor(db: Db, dutyIds: string[]): Promise<Map<string, string[]>> {
+  return new Map([...(await loadSharesFor(db, dutyIds))].map(([dutyId, shares]) => [dutyId, shares.map((s) => s.userId)]));
 }
 
-/**
- * From follows To: while the From Duty's People are exactly the To Duty's People (true
- * for two Duties freshly created together, and for as long as nobody has changed the
- * From Duty separately), a change to the To Duty's People carries across to the From
- * Duty too. Once Committee (or anyone handing/leaving on the From Duty alone) makes the
- * two sets differ, the From Duty stops following.
- */
-async function isFollowing(db: Db, toRow: typeof duty.$inferSelect): Promise<typeof duty.$inferSelect | undefined> {
-  const from = await siblingFromDuty(db, toRow);
-  if (!from) return undefined;
-  const [toIds, fromIds] = await Promise.all([userIdsOf(db, toRow.id), userIdsOf(db, from.id)]);
-  return sameSet(toIds, fromIds) ? from : undefined;
-}
-
-async function addUser(db: Db, row: typeof duty.$inferSelect, userId: string) {
-  const following = await isFollowing(db, row);
-  await db.insert(dutyUser).values({ id: crypto.randomUUID(), dutyId: row.id, userId }).onConflictDoNothing();
-  if (following) await db.insert(dutyUser).values({ id: crypto.randomUUID(), dutyId: following.id, userId }).onConflictDoNothing();
+async function addUser(db: Db, row: typeof duty.$inferSelect, userId: string, count: number | null = null) {
+  await db.insert(dutyUser).values({ id: crypto.randomUUID(), dutyId: row.id, userId, count }).onConflictDoNothing();
 }
 
 async function removeUser(db: Db, row: typeof duty.$inferSelect, userId: string) {
-  const following = await isFollowing(db, row);
   await db.delete(dutyUser).where(and(eq(dutyUser.dutyId, row.id), eq(dutyUser.userId, userId)));
-  if (following) await db.delete(dutyUser).where(and(eq(dutyUser.dutyId, following.id), eq(dutyUser.userId, userId)));
 }
 
-/** An Event's Duty for one Equipment Unit and direction. Creates the To and From pair first if they don't exist yet (usually they do, so this stays read-only). */
+/** An Event's Duty for one Equipment Unit and direction. Creates it first if it doesn't exist yet (usually it does, so this stays read-only). */
 async function ensureDuty(
   db: Db,
   eventId: string,
@@ -127,7 +115,7 @@ async function ensureDuty(
   if (existing) return existing;
   await db
     .insert(duty)
-    .values((["to", "from"] as const).map((d) => ({ id: crypto.randomUUID(), eventId, equipmentUnitId, direction: d })))
+    .values({ id: crypto.randomUUID(), eventId, equipmentUnitId, direction })
     .onConflictDoNothing();
   return load();
 }
@@ -152,11 +140,11 @@ export async function listEventDuties(
     .select()
     .from(duty)
     .where(and(eq(duty.eventId, eventId), inArray(duty.equipmentUnitId, equipmentUnitIds)));
-  const userIdsByDuty = await loadUserIdsFor(db, rows.map((r) => r.id));
+  const sharesByDuty = await loadSharesFor(db, rows.map((r) => r.id));
   return equipmentUnitIds.flatMap((equipmentUnitId) =>
     (["to", "from"] as const).map((direction): EventDuty => {
       const row = rows.find((r) => r.equipmentUnitId === equipmentUnitId && r.direction === direction);
-      if (row) return toDuty(row, userIdsByDuty.get(row.id) ?? []);
+      if (row) return toDuty(row, sharesByDuty.get(row.id) ?? []);
       return {
         id: null,
         eventId,
@@ -166,6 +154,8 @@ export async function listEventDuties(
         confirmedAt: null,
         voidedAt: cancelled ? new Date() : null,
         userIds: [],
+        shares: {},
+        confirmedUserIds: [],
       };
     }),
   );
@@ -173,8 +163,7 @@ export async function listEventDuties(
 
 /**
  * Does what the viewer asked on an Event's Duty, named by Equipment Unit and direction.
- * Creates the Equipment Unit's To and From Duties first if they don't exist yet (so
- * "From follows To" still works). A Cancelled Event gets no new Duties.
+ * Creates the Duty first if it doesn't exist yet. A Cancelled Event gets no new Duties.
  */
 export async function actOnEventDuty(
   db: Db,
@@ -190,14 +179,7 @@ export async function actOnEventDuty(
   if (!checklist.items.some((i) => i.equipmentUnitId === equipmentUnitId)) {
     return { ok: false, error: "That equipment isn't on this event's list." };
   }
-  if (found.cancelled) {
-    const [existing] = await db
-      .select({ id: duty.id })
-      .from(duty)
-      .where(and(eq(duty.eventId, eventId), eq(duty.equipmentUnitId, equipmentUnitId), eq(duty.direction, direction)));
-    if (!existing) return { ok: false, error: "That event was cancelled, so there's nothing to do." };
-    return actOnDuty(db, existing.id, viewer, request);
-  }
+  if (found.cancelled) return { ok: false, error: "That event was cancelled, so there's nothing to do." };
   const target = await ensureDuty(db, eventId, equipmentUnitId, direction);
   if (!target) return { ok: false, error: "That duty no longer exists." };
   return applyDutyRequest(db, target, viewer, request);
@@ -205,24 +187,59 @@ export async function actOnEventDuty(
 
 type DutyRow = typeof duty.$inferSelect;
 
-/** Committee sets a Duty's whole membership (a multi-select): adds and removes anyone. */
-async function assignDuty(db: Db, row: DutyRow, current: string[], userIds: string[]): Promise<Result> {
-  const added = userIds.filter((id) => !current.includes(id));
+/**
+ * Committee sets a Duty's whole membership (a multi-select): adds and removes anyone, and says
+ * how many each is taking (`counts`; anyone not named keeps their number, or has all of it).
+ * Anyone who has already marked their part done stays exactly as they are.
+ */
+async function assignDuty(
+  db: Db,
+  row: DutyRow,
+  current: Share[],
+  userIds: string[],
+  counts: Record<string, number> = {},
+): Promise<Result> {
+  const currentIds = current.map((s) => s.userId);
+  const added = userIds.filter((id) => !currentIds.includes(id));
   const approved = await filterApprovedUserIds(db, added);
   if (added.some((id) => !approved.has(id))) return { ok: false, error: "That person isn't a member of the club." };
-  for (const id of current.filter((id) => !userIds.includes(id))) await removeUser(db, row, id);
-  for (const id of added) await addUser(db, row, id);
+
+  const result = userIds.map((userId): Share => {
+    const before = current.find((s) => s.userId === userId);
+    return { userId, count: userId in counts ? counts[userId] : (before?.count ?? null), confirmed: before?.confirmed };
+  });
+  const doneStays = current.filter((s) => s.confirmed).every((s) => result.some((r) => r.userId === s.userId && r.count === s.count));
+  if (!doneStays) return { ok: false, error: "Someone on it has already marked their part as done." };
+  if (current.some((s) => s.confirmed) && result.some((r) => r.count === null)) return { ok: false, error: "Say how many each person is taking." };
+  const valid = validateShares(await checklistCountFor(db, row, 1), result);
+  if (!valid.ok) return valid;
+
+  for (const id of currentIds.filter((id) => !userIds.includes(id))) await removeUser(db, row, id);
+  for (const r of result) {
+    if (!currentIds.includes(r.userId)) await addUser(db, row, r.userId, r.count);
+    else if (r.count !== current.find((s) => s.userId === r.userId)!.count) {
+      await db.update(dutyUser).set({ count: r.count }).where(and(eq(dutyUser.dutyId, row.id), eq(dutyUser.userId, r.userId)));
+    }
+  }
+  return { ok: true };
+}
+
+/** A Person changes how many they're taking, within what's left after everyone else. */
+async function setShare(db: Db, row: DutyRow, current: Share[], userId: string, count: number): Promise<Result> {
+  const valid = validateShare(await checklistCountFor(db, row, 1), current.filter((s) => s.userId !== userId), count);
+  if (!valid.ok) return valid;
+  await db.update(dutyUser).set({ count }).where(and(eq(dutyUser.dutyId, row.id), eq(dutyUser.userId, userId)));
   return { ok: true };
 }
 
 /** A User hands their own place on a Duty to someone else. */
-async function handOnDuty(db: Db, row: DutyRow, current: string[], actorId: string, toUserId: string): Promise<Result> {
-  if (current.includes(toUserId)) return { ok: false, error: "They're already on it." };
+async function handOnDuty(db: Db, row: DutyRow, current: Share[], actorId: string, toUserId: string): Promise<Result> {
+  if (current.some((s) => s.userId === toUserId)) return { ok: false, error: "They're already on it." };
   if (!(await filterApprovedUserIds(db, [toUserId])).has(toUserId)) {
     return { ok: false, error: "That person isn't a member of the club." };
   }
   await removeUser(db, row, actorId);
-  await addUser(db, row, toUserId);
+  await addUser(db, row, toUserId, current.find((s) => s.userId === actorId)?.count ?? null);
   return { ok: true };
 }
 
@@ -295,30 +312,46 @@ export async function confirmDuty(
   const row = await getDuty(db, dutyId);
   if (!row) return { ok: false, error: "That duty no longer exists." };
   if (row.voidedAt) return { ok: false, error: "That event was cancelled, so there's nothing to do." };
-  const userIds = await userIdsOf(db, dutyId);
+  const shares = await sharesOf(db, dutyId);
+  const userIds = shares.map((s) => s.userId);
   if (userIds.length === 0) return { ok: false, error: "Nobody is doing that yet." };
-  if (row.confirmedAt) return { ok: false, error: "That's already confirmed." };
+  if (row.confirmedAt || pendingShares(shares).length === 0) return { ok: false, error: "That's already confirmed." };
   if (!userIds.includes(actor.id) && !isCommitteeOrAbove(actor.role)) {
     return { ok: false, error: "Only the person doing it or the committee can confirm it." };
   }
 
   // Under the Equipment Unit's lock, so the sources are picked from its Portions as they are now.
-  // The Duty is claimed as confirmed first: if someone else's Confirm got there, this one stops.
+  // The Duty (or, when everyone gave a number, each Person still to do) is claimed as confirmed
+  // first: if someone else's Confirm got there, this one stops.
   // The Move and "confirmed" go together: if the Move fails, both roll back and the Duty stays
   // open to retry.
   try {
     return await withUnitLock(db, row.equipmentUnitId, async (tx): Promise<Result> => {
-      const claimed = await tx
-        .update(duty)
-        .set({ confirmedAt: new Date() })
-        .where(and(eq(duty.id, dutyId), isNull(duty.confirmedAt)))
-        .returning({ id: duty.id });
-      if (claimed.length === 0) return { ok: false, error: "That's already confirmed." };
+      // Read again under the lock: a Confirm or a claim may have just landed.
+      const now = await sharesOf(tx, dutyId);
+      const sharedByNumber = holdersFromShares(now) !== undefined;
+      const pending = pendingShares(now);
+      const claimed = sharedByNumber
+        ? await tx
+            .update(dutyUser)
+            .set({ confirmedAt: new Date() })
+            .where(and(eq(dutyUser.dutyId, dutyId), inArray(dutyUser.userId, pending.map((p) => p.userId)), isNull(dutyUser.confirmedAt)))
+            .returning({ id: dutyUser.id })
+        : await tx
+            .update(duty)
+            .set({ confirmedAt: new Date() })
+            .where(and(eq(duty.id, dutyId), isNull(duty.confirmedAt)))
+            .returning({ id: duty.id });
+      if (claimed.length === 0 || pending.length === 0) return { ok: false, error: "That's already confirmed." };
 
       const equipment = await getEquipmentUnit(tx, row.equipmentUnitId);
       if (!equipment) throw new Rollback({ ok: false, error: "That equipment no longer exists." });
-      const moved = await recordConfirmMove(tx, row, equipment, userIds, actor, options);
+      const moved = await recordConfirmMove(tx, row, equipment, pending, actor, options);
       if (!moved.ok) throw new Rollback(moved);
+      // Done once all of the line is claimed and every claim is done; until then the rest can still be taken.
+      if (sharedByNumber && unclaimed(await checklistCountFor(tx, row, equipment.quantity), now) === 0) {
+        await tx.update(duty).set({ confirmedAt: new Date() }).where(and(eq(duty.id, dutyId), isNull(duty.confirmedAt)));
+      }
       return moved;
     });
   } catch (error) {
@@ -336,15 +369,16 @@ async function recordConfirmMove(
   db: Db,
   row: typeof duty.$inferSelect,
   equipment: { id: string; homeId: string; quantity: number },
-  userIds: string[],
+  shares: Share[],
   actor: { id: string; role: Role },
   options?: { from?: SourcePart[]; holders?: HolderPart[] },
 ): Promise<Result> {
-  const count = await checklistCountFor(db, row, equipment.quantity);
+  const userIds = shares.map((s) => s.userId);
+  const count = countToMove(await checklistCountFor(db, row, equipment.quantity), shares);
   const portions = await loadPortions(db, row.equipmentUnitId);
 
   const toHolders = () => {
-    const holderSplit = resolveHolderSplit(userIds, count, actor.id, options?.holders);
+    const holderSplit = resolveHolderSplit(userIds, count, actor.id, options?.holders ?? holdersFromShares(shares));
     return holderSplit.ok
       ? { ok: true as const, targets: holderSplit.parts.map((p) => ({ to: { type: "holder", holderId: p.userId } as const, count: p.count })) }
       : holderSplit;
@@ -371,13 +405,13 @@ function toSources(parts: SourcePart[]) {
   return parts.map((p) => ({ from: p.place, count: p.count }));
 }
 
-/** Cancelling an Event voids all its Duties. */
 export type DutyRequest =
-  | { action: "claim" }
+  | { action: "claim"; count?: number }
   | { action: "confirm"; from?: SourcePart[]; holders?: HolderPart[] }
   | { action: "handOn"; userId: string }
   | { action: "leave" }
-  | { action: "assign"; userIds: string[] }
+  | { action: "setShare"; count: number }
+  | { action: "assign"; userIds: string[]; counts?: Record<string, number> }
   | { action: "setDestination"; destination: DutyDestination };
 
 /** Does what the viewer asked on one Duty, if `dutyActions` allows it. */
@@ -398,16 +432,29 @@ async function applyDutyRequest(
   viewer: { id: string; role: Role },
   request: DutyRequest,
 ): Promise<Result> {
-  const userIds = await userIdsOf(db, row.id);
+  const shares = await sharesOf(db, row.id);
+  const userIds = shares.map((s) => s.userId);
   const allowed: DutyAction[] = dutyActions(
-    { direction: row.direction, userIds, confirmed: !!row.confirmedAt, voided: !!row.voidedAt },
+    {
+      direction: row.direction,
+      userIds,
+      doneUserIds: shares.filter((s) => s.confirmed).map((s) => s.userId),
+      confirmed: !!row.confirmedAt,
+      voided: !!row.voidedAt,
+    },
     { viewerId: viewer.id, committee: isCommitteeOrAbove(viewer.role) },
   );
   if (!allowed.includes(request.action)) return { ok: false, error: "You can't do that on this duty." };
   switch (request.action) {
-    case "claim":
-      await addUser(db, row, viewer.id);
+    case "claim": {
+      if (request.count === undefined && shares.some((s) => s.confirmed)) return { ok: false, error: "Say how many you're taking." };
+      if (request.count !== undefined) {
+        const valid = validateShare(await checklistCountFor(db, row, 1), shares, request.count);
+        if (!valid.ok) return valid;
+      }
+      await addUser(db, row, viewer.id, request.count ?? null);
       return { ok: true };
+    }
     case "leave":
       await removeUser(db, row, viewer.id);
       return { ok: true };
@@ -417,9 +464,11 @@ async function applyDutyRequest(
       return result;
     }
     case "handOn":
-      return handOnDuty(db, row, userIds, viewer.id, request.userId);
+      return handOnDuty(db, row, shares, viewer.id, request.userId);
     case "assign":
-      return assignDuty(db, row, userIds, request.userIds);
+      return assignDuty(db, row, shares, request.userIds, request.counts);
+    case "setShare":
+      return setShare(db, row, shares, viewer.id, request.count);
     case "setDestination":
       return setDestination(db, row, request.destination);
   }
@@ -542,10 +591,10 @@ export async function releaseUpcomingDuties(db: Db, userId: string) {
     .select()
     .from(duty)
     .where(and(inArray(duty.eventId, upcoming), isNull(duty.confirmedAt)));
-  const userIdsByDuty = await loadUserIdsFor(db, rows.map((r) => r.id));
+  const sharesByDuty = await loadSharesFor(db, rows.map((r) => r.id));
   await Promise.all(
     rows
-      .filter((row) => (userIdsByDuty.get(row.id) ?? []).includes(userId))
+      .filter((row) => (sharesByDuty.get(row.id) ?? []).some((s) => s.userId === userId && !s.confirmed))
       .map((row) => removeUser(db, row, userId)),
   );
 }
@@ -564,13 +613,13 @@ export async function listUpcomingDutiesForUser(db: Db, userId: string) {
       destinationStoreId: duty.destinationStoreId,
       confirmedAt: duty.confirmedAt,
       voidedAt: duty.voidedAt,
-      userId: dutyUser.userId,
     })
     .from(duty)
     .innerJoin(dutyUser, eq(dutyUser.dutyId, duty.id))
     .where(
       and(
         eq(dutyUser.userId, userId),
+        isNull(dutyUser.confirmedAt),
         inArray(
           duty.eventId,
           events.map((e) => e.id),
@@ -580,8 +629,8 @@ export async function listUpcomingDutiesForUser(db: Db, userId: string) {
       ),
     );
   const eventIdsWithDuties = new Set(rows.map((r) => r.eventId));
-  const [userIdsByDuty, checklistsByEvent, equipmentUnits] = await Promise.all([
-    loadUserIdsFor(db, rows.map((r) => r.id)),
+  const [sharesByDuty, checklistsByEvent, equipmentUnits] = await Promise.all([
+    loadSharesFor(db, rows.map((r) => r.id)),
     resolveEventChecklists(db, events.filter((e) => eventIdsWithDuties.has(e.id))),
     listEquipmentUnitsByIds(db, rows.map((r) => r.equipmentUnitId)),
   ]);
@@ -590,7 +639,7 @@ export async function listUpcomingDutiesForUser(db: Db, userId: string) {
     rows
       .filter((r) => r.eventId === event.id)
       .map((r) => ({
-        duty: toDuty(r, userIdsByDuty.get(r.id) ?? []),
+        duty: toDuty(r, sharesByDuty.get(r.id) ?? []),
         event,
         count: countFromResolved(checklistsByEvent.get(event.id), r.equipmentUnitId, equipmentUnitById.get(r.equipmentUnitId)?.quantity ?? 1),
       })),
@@ -639,6 +688,7 @@ export async function listDutyRecordForUser(
       equipmentUnitId: duty.equipmentUnitId,
       direction: duty.direction,
       confirmedAt: duty.confirmedAt,
+      personConfirmedAt: dutyUser.confirmedAt,
       eventId: event.id,
       eventTitle: event.title,
       eventEnd: event.end,
@@ -650,7 +700,7 @@ export async function listDutyRecordForUser(
   const records: PastDutyRecord[] = rows.map((r) => ({
     dutyId: r.id,
     direction: r.direction,
-    confirmedAt: r.confirmedAt,
+    confirmedAt: r.personConfirmedAt ?? r.confirmedAt,
     equipmentUnitId: r.equipmentUnitId,
     event: { id: r.eventId, title: r.eventTitle, end: r.eventEnd },
   }));
@@ -694,8 +744,8 @@ async function loadPlan(db: Db, scope?: PlanScope): Promise<{ equipment: PlanEqu
       ? new Set([scope.equipmentUnitId])
       : new Set(itemsOf(scope.eventId).map((i) => i.equipmentUnitId));
   const wanted = inScope ? equipment.filter((k) => inScope.has(k.id)) : equipment;
-  const [userIdsByDuty, portions] = await Promise.all([
-    loadUserIdsFor(db, dutyRows.filter((d) => !inScope || inScope.has(d.equipmentUnitId)).map((r) => r.id)),
+  const [sharesByDuty, portions] = await Promise.all([
+    loadSharesFor(db, dutyRows.filter((d) => !inScope || inScope.has(d.equipmentUnitId)).map((r) => r.id)),
     listPortionsFor(db, wanted.map((k) => k.id)),
   ]);
   const planEvents: PlanEvent[] = events
@@ -708,7 +758,10 @@ async function loadPlan(db: Db, scope?: PlanScope): Promise<{ equipment: PlanEqu
     items: itemsOf(e.id).filter((i) => !inScope || inScope.has(i.equipmentUnitId)),
     duties: dutyRows
       .filter((d) => d.eventId === e.id && (!inScope || inScope.has(d.equipmentUnitId)))
-      .map((d) => ({ equipmentUnitId: d.equipmentUnitId, direction: d.direction, userIds: userIdsByDuty.get(d.id) ?? [] })),
+      .map((d) => {
+        const shares = sharesByDuty.get(d.id) ?? [];
+        return { equipmentUnitId: d.equipmentUnitId, direction: d.direction, userIds: shares.map((s) => s.userId), shares: shares.map((s) => s.count) };
+      }),
     }))
     .filter((e) => !inScope || e.items.length > 0);
   const portionsByUnit = Map.groupBy(portions, (p) => p.equipmentUnitId);

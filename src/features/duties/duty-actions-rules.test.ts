@@ -19,6 +19,7 @@ describe("dutyActions", () => {
       "confirm",
       "leave",
       "handOn",
+      "setShare",
     ]);
   });
 
@@ -31,6 +32,7 @@ describe("dutyActions", () => {
       "confirm",
       "leave",
       "handOn",
+      "setShare",
     ]);
   });
 
@@ -40,6 +42,7 @@ describe("dutyActions", () => {
     expect(dutyActions(duty({ direction: "from", userIds: ["sam"] }), { viewerId: "sam", committee: true })).toEqual([
       "confirm",
       "leave",
+      "setShare",
       "assign",
       "setDestination",
     ]);
@@ -48,5 +51,16 @@ describe("dutyActions", () => {
   it("leaves nothing to do once a Duty is Confirmed or voided", () => {
     expect(dutyActions(duty({ userIds: ["sam"], confirmed: true }), { viewerId: "sam", committee: true })).toEqual([]);
     expect(dutyActions(duty({ voided: true }), { viewerId: "sam", committee: true })).toEqual([]);
+  });
+
+  it("once your own part is done, you can't leave, hand on or change it", () => {
+    const state = duty({ userIds: ["sam", "tom"], doneUserIds: ["sam"] });
+    expect(dutyActions(state, { viewerId: "sam", committee: false })).toEqual(["confirm"]);
+    expect(dutyActions(state, { viewerId: "tom", committee: false })).toEqual(["confirm", "leave", "handOn", "setShare"]);
+  });
+
+  it("lets the person doing it change how many they're taking", () => {
+    expect(dutyActions(duty({ userIds: ["sam"] }), { viewerId: "sam", committee: false })).toContain("setShare");
+    expect(dutyActions(duty({ userIds: ["sam"] }), { viewerId: "tom", committee: false })).not.toContain("setShare");
   });
 });
