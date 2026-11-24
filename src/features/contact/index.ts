@@ -5,7 +5,7 @@ import { parseMobileNumber } from "./rules";
 import { mobileNumber } from "./schema";
 import type { Result } from "@/lib/result";
 
-export { parseMobileNumber, whatsappLink } from "./rules";
+export { parseMobileNumber, whatsappLink, whatsappShareLink } from "./rules";
 export type { ParsedMobileNumber } from "./rules";
 // Other features' schema.ts files may reference this table.
 export { mobileNumber } from "./schema";

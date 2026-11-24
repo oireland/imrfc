@@ -16,6 +16,7 @@ import { AvailabilitySlot } from "@/components/availability-slot";
 import { TeamCard } from "@/components/team-card";
 import { EventTabs, type EventTab } from "@/components/event-tabs";
 import { ShareButton } from "@/components/share-button";
+import { WhatsAppAnnounceSlot } from "@/components/whatsapp-announce-slot";
 import { buttonVariants } from "@/components/ui/button";
 import { formatDay, formatWhen } from "@/lib/time/format-time";
 import { joinList } from "@/lib/text/join-names";
@@ -466,6 +467,9 @@ export default async function EventDetailPage({ params }: PageProps<"/events/[id
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <ShareButton title={eventDetails.title} size="lg" />
+              {committee && (eventDetails.eventType === "match" || eventDetails.eventType === "training") && (
+                <WhatsAppAnnounceSlot eventId={id} viewer={user} />
+              )}
               {committee && eventDetails.eventType === "match" && (
                 <Link href={`/events/${id}/selection`} className={buttonVariants({ size: "lg" })}>
                   Pick the team

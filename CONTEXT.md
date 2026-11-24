@@ -104,7 +104,7 @@ An optional deadline set when Announcing. Replies after it are marked late; noth
 _Avoid_: Deadline, cut-off
 
 **Announce**:
-Committee emailing every Player with No reply to ask whether they can make an Event. Done once per Event (once per day for Matches).
+Committee asking whether Players can make an Event: by emailing everyone with No reply, or by posting in the club's WhatsApp group and tapping Sent ✓ (nobody is emailed). Done once per Event (once per day for Matches), whichever way.
 _Avoid_: Publish, invite
 
 **Nudge**:
