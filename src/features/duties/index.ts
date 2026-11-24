@@ -327,6 +327,8 @@ export async function confirmDuty(
       const now = await sharesOf(tx, dutyId);
       const sharedByNumber = holdersFromShares(now) !== undefined;
       const pending = pendingShares(now);
+      // Checked before claiming: claiming with nobody left would mark the Duty done with no Move.
+      if (pending.length === 0) return { ok: false, error: "That's already confirmed." };
       const claimed = sharedByNumber
         ? await tx
             .update(dutyUser)
@@ -338,7 +340,7 @@ export async function confirmDuty(
             .set({ confirmedAt: new Date() })
             .where(and(eq(duty.id, dutyId), isNull(duty.confirmedAt)))
             .returning({ id: duty.id });
-      if (claimed.length === 0 || pending.length === 0) return { ok: false, error: "That's already confirmed." };
+      if (claimed.length === 0) return { ok: false, error: "That's already confirmed." };
 
       const equipment = await getEquipmentUnit(tx, row.equipmentUnitId);
       if (!equipment) throw new Rollback({ ok: false, error: "That equipment no longer exists." });
@@ -428,6 +430,20 @@ async function applyDutyRequest(
   viewer: { id: string; role: Role },
   request: DutyRequest,
 ): Promise<Result> {
+  // Under the Equipment Unit's lock, so two People claiming at once can't both see the same count left,
+  // and a Committee assign lands whole or not at all.
+  const result = await withUnitLock(db, row.equipmentUnitId, (tx) => applyLocked(tx, row, viewer, request));
+  // After the lock: this can move other Equipment Units.
+  if (request.action === "confirm" && result.ok) await markUnconfirmed(db);
+  return result;
+}
+
+async function applyLocked(
+  db: Db,
+  row: DutyRow,
+  viewer: { id: string; role: Role },
+  request: DutyRequest,
+): Promise<Result> {
   const shares = await sharesOf(db, row.id);
   const userIds = shares.map((s) => s.userId);
   const allowed: DutyAction[] = dutyActions(
@@ -454,11 +470,8 @@ async function applyDutyRequest(
     case "leave":
       await removeUser(db, row, viewer.id);
       return { ok: true };
-    case "confirm": {
-      const result = await confirmDuty(db, row.id, viewer, { from: request.from, holders: request.holders });
-      if (result.ok) await markUnconfirmed(db);
-      return result;
-    }
+    case "confirm":
+      return confirmDuty(db, row.id, viewer, { from: request.from, holders: request.holders });
     case "handOn":
       return handOnDuty(db, row, shares, viewer.id, request.userId);
     case "assign":
