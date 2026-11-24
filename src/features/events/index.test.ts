@@ -16,6 +16,7 @@ import {
   listEventTitles,
   listMatchDay,
   listNextEvents,
+  listPastEvents,
   listTeams,
   type NewEvent,
 } from "./index";
@@ -651,5 +652,44 @@ describe("getEvents", () => {
     expect(loaded.team?.name).toBe("2nd XV");
     expect(events.find((e) => e.id === training.event.id)).toMatchObject({ matchDetails: null, team: null });
     expect(await getEvents(db, [])).toEqual([]);
+  });
+});
+
+describe("listPastEvents", () => {
+  async function seed(n: number) {
+    const db = await createTestDb();
+    for (let i = 1; i <= n; i++) {
+      await createEvent(db, {
+        title: `Past ${i}`,
+        eventType: "social",
+        start: new Date(Date.UTC(2020, 0, i, 19)),
+        end: new Date(Date.UTC(2020, 0, i, 21)),
+        venue: "Harlington",
+      });
+    }
+    return db;
+  }
+
+  it("pages newest first and says whether there are older ones", async () => {
+    const db = await seed(5);
+    const first = await listPastEvents(db, { page: 1, pageSize: 2 });
+    expect(first.events.map((e) => e.title)).toEqual(["Past 5", "Past 4"]);
+    expect(first.hasOlder).toBe(true);
+    const last = await listPastEvents(db, { page: 3, pageSize: 2 });
+    expect(last.events.map((e) => e.title)).toEqual(["Past 1"]);
+    expect(last.hasOlder).toBe(false);
+  });
+
+  it("returns nothing past the end", async () => {
+    const db = await seed(3);
+    expect(await listPastEvents(db, { page: 9, pageSize: 2 })).toEqual({ events: [], hasOlder: false });
+  });
+
+  it("treats a bad page as page 1", async () => {
+    const db = await seed(3);
+    for (const page of [Number.NaN, 0, -2, 1.5]) {
+      const r = await listPastEvents(db, { page, pageSize: 2 });
+      expect(r.events.map((e) => e.title)).toEqual(["Past 3", "Past 2"]);
+    }
   });
 });

@@ -154,6 +154,25 @@ export async function listEvents(
   return db.select().from(event).where(where).orderBy(when === "upcoming" ? asc(event.start) : desc(event.start));
 }
 
+export const PAST_EVENTS_PAGE_SIZE = 20;
+
+/** One page of past Events, newest first, cancelled included. A bad `page` counts as 1. */
+export async function listPastEvents(
+  db: Db,
+  { page, pageSize = PAST_EVENTS_PAGE_SIZE }: { page: number; pageSize?: number },
+): Promise<{ events: Event[]; hasOlder: boolean }> {
+  const p = Number.isInteger(page) && page >= 1 ? page : 1;
+  // One extra row tells us whether an older page exists, without a count query.
+  const rows = await db
+    .select()
+    .from(event)
+    .where(lt(event.end, new Date()))
+    .orderBy(desc(event.start))
+    .limit(pageSize + 1)
+    .offset((p - 1) * pageSize);
+  return { events: rows.slice(0, pageSize), hasOlder: rows.length > pageSize };
+}
+
 /** Events (cancelled included) starting in [from, to), soonest first — for the month calendar. */
 export async function listEventsBetween(db: Db, from: Date, to: Date): Promise<Event[]> {
   return db
