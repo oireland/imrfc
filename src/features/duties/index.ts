@@ -554,7 +554,7 @@ export async function releaseUpcomingDuties(db: Db, userId: string) {
 
 /** The User's Duties still to do on upcoming, uncancelled Events, soonest Event first. */
 export async function listUpcomingDutiesForUser(db: Db, userId: string) {
-  const events = (await listEvents(db, { when: "upcoming" })).filter((e) => !e.cancelled);
+  const events = (await listEvents(db, { when: "upcoming", cancelled: false }));
   if (events.length === 0) return [];
   const rows = await db
     .select({
@@ -635,28 +635,27 @@ export async function listDutyRecordForUser(
   last: PastDutyRecord[];
 }> {
   const upcoming = await listUpcomingDutiesForUser(db, userId);
-  const pastEvents = (await listEvents(db, { when: "past" })).filter((e) => !e.cancelled);
-  if (pastEvents.length === 0) return { upcoming, season: { done: 0, neverConfirmed: 0 }, last: [] };
-  const eventById = new Map(pastEvents.map((e) => [e.id, e]));
   const rows = await db
-    .select({ id: duty.id, eventId: duty.eventId, equipmentUnitId: duty.equipmentUnitId, direction: duty.direction, confirmedAt: duty.confirmedAt })
+    .select({
+      id: duty.id,
+      equipmentUnitId: duty.equipmentUnitId,
+      direction: duty.direction,
+      confirmedAt: duty.confirmedAt,
+      eventId: event.id,
+      eventTitle: event.title,
+      eventEnd: event.end,
+    })
     .from(duty)
     .innerJoin(dutyUser, eq(dutyUser.dutyId, duty.id))
-    .where(and(eq(dutyUser.userId, userId), inArray(duty.eventId, pastEvents.map((e) => e.id)), isNull(duty.voidedAt)));
-  const records: PastDutyRecord[] = rows
-    .map((r) => {
-      const event = eventById.get(r.eventId);
-      return event
-        ? {
-            dutyId: r.id,
-            direction: r.direction,
-            confirmedAt: r.confirmedAt,
-            equipmentUnitId: r.equipmentUnitId,
-            event: { id: event.id, title: event.title, end: event.end },
-          }
-        : undefined;
-    })
-    .filter((r): r is PastDutyRecord => !!r);
+    .innerJoin(event, eq(event.id, duty.eventId))
+    .where(and(eq(dutyUser.userId, userId), lt(event.end, now), eq(event.cancelled, false), isNull(duty.voidedAt)));
+  const records: PastDutyRecord[] = rows.map((r) => ({
+    dutyId: r.id,
+    direction: r.direction,
+    confirmedAt: r.confirmedAt,
+    equipmentUnitId: r.equipmentUnitId,
+    event: { id: r.eventId, title: r.eventTitle, end: r.eventEnd },
+  }));
   return {
     upcoming,
     season: seasonCount(records.map((r) => ({ eventEnd: r.event.end, confirmedAt: r.confirmedAt })), now),
@@ -672,7 +671,7 @@ export type PlanScope = { equipmentUnitId: string } | { eventId: string };
 
 /** The equipment plan for every upcoming, uncancelled Event. Read-only: it never creates Duties. */
 async function loadPlan(db: Db, scope?: PlanScope): Promise<{ equipment: PlanEquipment[]; events: PlanEvent[] }> {
-  const events = (await listEvents(db, { when: "upcoming" })).filter((e) => !e.cancelled);
+  const events = (await listEvents(db, { when: "upcoming", cancelled: false }));
   if (events.length === 0) return { equipment: [], events: [] };
   const [equipment, dutyRows] = await Promise.all([
     listEquipmentUnits(db, { includeRetired: true }),

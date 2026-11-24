@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatWhen } from "@/lib/time/format-time";
-import { listEvents, type Event } from "@/features/events";
+import { listPastEvents, type Event } from "@/features/events";
 import { isCommitteeOrAbove } from "@/features/users";
 import { requireApprovedUser } from "@/lib/auth/session";
 import { quickAddEvent, saveMyReply } from "../actions";
@@ -16,11 +16,13 @@ import { loadComingUp } from "../coming-up-data";
 
 export default async function EventsPage({ searchParams }: PageProps<"/events">) {
   const user = await requireApprovedUser();
-  const { tab } = await searchParams;
+  const { tab, page: pageParam } = await searchParams;
   const committee = isCommitteeOrAbove(user.role);
 
   if (tab === "past") {
-    const past = await listEvents(db, { when: "past" });
+    const { events: past, hasOlder, page } = await listPastEvents(db, {
+      page: Number(Array.isArray(pageParam) ? pageParam[0] : pageParam),
+    });
     return (
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
@@ -44,6 +46,22 @@ export default async function EventsPage({ searchParams }: PageProps<"/events">)
             ))}
           </CardContent>
         </Card>
+        {(page > 1 || hasOlder) && (
+          <div className="flex items-center justify-between gap-3">
+            {page > 1 ? (
+              <Link href={`/events?tab=past&page=${page - 1}`} className={buttonVariants({ variant: "outline" })}>
+                Newer events
+              </Link>
+            ) : (
+              <span />
+            )}
+            {hasOlder && (
+              <Link href={`/events?tab=past&page=${page + 1}`} className={buttonVariants({ variant: "outline" })}>
+                Older events
+              </Link>
+            )}
+          </div>
+        )}
       </div>
     );
   }

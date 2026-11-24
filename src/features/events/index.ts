@@ -1,5 +1,5 @@
 import type { Db } from "@/db/types";
-import { and, asc, desc, eq, gte, inArray, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { event, matchDetails, team } from "./schema";
 import { eventTitle, validateEvent, type NewEvent } from "./rules";
 
@@ -24,7 +24,7 @@ export {
   readEventsCsv,
   type EventCsvResult,
 } from "./csv-import";
-import { londonParts, londonToUtc } from "@/lib/time/london";
+import { addDays, londonParts, londonToUtc } from "@/lib/time/london";
 import type { Result } from "@/lib/result";
 export type { EventType, HomeAway, Competition, NewEvent, NewMatchDetails } from "./rules";
 
@@ -68,17 +68,32 @@ export async function createEvents(
   db: Db,
   inputs: NewEvent[],
 ): Promise<Result<{ count: number }>> {
-  const titles: string[] = [];
   for (const input of inputs) {
     const result = validateEvent(input);
     if (!result.ok) return { ok: false, error: `"${eventTitle(input)}": ${result.error}` };
-    const title = await titleFor(db, input);
-    if (!title.ok) return title;
-    titles.push(title.title);
   }
+  const teamIds = [...new Set(inputs.flatMap((i) => (i.eventType === "match" ? [i.matchDetails.teamId] : [])))];
+  const teams = new Map(
+    teamIds.length ? (await db.select().from(team).where(inArray(team.id, teamIds))).map((t) => [t.id, t.name]) : [],
+  );
+  const rows: { input: NewEvent; row: ReturnType<typeof eventRow> }[] = [];
+  for (const input of inputs) {
+    let title = eventTitle(input);
+    if (input.eventType === "match") {
+      const name = teams.get(input.matchDetails.teamId);
+      if (name === undefined) return { ok: false, error: "That team doesn't exist." };
+      title = eventTitle(input, name);
+    }
+    rows.push({ input, row: eventRow(input, title, crypto.randomUUID()) });
+  }
+  if (rows.length === 0) return { ok: true, count: 0 };
   try {
     await db.transaction(async (tx) => {
-      for (const [i, input] of inputs.entries()) await insertEvent(tx, input, titles[i]);
+      await tx.insert(event).values(rows.map((r) => r.row));
+      const matches = rows.flatMap(({ input, row }) =>
+        input.eventType === "match" ? [{ eventId: row.id, ...matchRow(input.matchDetails) }] : [],
+      );
+      if (matches.length) await tx.insert(matchDetails).values(matches);
     });
   } catch {
     return { ok: false, error: "Couldn't save the events, so none were added." };
@@ -102,19 +117,23 @@ function matchRow(details: Extract<NewEvent, { eventType: "match" }>["matchDetai
   };
 }
 
+function eventRow(input: NewEvent, title: string, id: string) {
+  return {
+    id,
+    title,
+    eventType: input.eventType,
+    start: input.start,
+    end: input.end,
+    startTbc: !!input.startTbc,
+    venue: input.venue.trim(),
+    notes: input.notes ?? "",
+  };
+}
+
 async function insertEvent(db: Db, input: NewEvent, title: string): Promise<Event> {
   const [row] = await db
     .insert(event)
-    .values({
-      id: crypto.randomUUID(),
-      title,
-      eventType: input.eventType,
-      start: input.start,
-      end: input.end,
-      startTbc: !!input.startTbc,
-      venue: input.venue.trim(),
-      notes: input.notes ?? "",
-    })
+    .values(eventRow(input, title, crypto.randomUUID()))
     .returning();
 
   if (input.eventType === "match") {
@@ -124,11 +143,34 @@ async function insertEvent(db: Db, input: NewEvent, title: string): Promise<Even
   return row;
 }
 
-export async function listEvents(db: Db, { when }: { when: "upcoming" | "past" }): Promise<Event[]> {
+/** Every upcoming or past Event, cancelled included unless `cancelled: false` is passed. */
+export async function listEvents(
+  db: Db,
+  { when, cancelled }: { when: "upcoming" | "past"; cancelled?: false },
+): Promise<Event[]> {
   const now = new Date();
-  return when === "upcoming"
-    ? db.select().from(event).where(gte(event.end, now)).orderBy(asc(event.start))
-    : db.select().from(event).where(lt(event.end, now)).orderBy(desc(event.start));
+  const timing = when === "upcoming" ? gte(event.end, now) : lt(event.end, now);
+  const where = cancelled === false ? and(timing, eq(event.cancelled, false)) : timing;
+  return db.select().from(event).where(where).orderBy(when === "upcoming" ? asc(event.start) : desc(event.start));
+}
+
+export const PAST_EVENTS_PAGE_SIZE = 20;
+
+/** One page of past Events, newest first, cancelled included. A bad `page` counts as 1; `page` is the one shown. */
+export async function listPastEvents(
+  db: Db,
+  { page, pageSize = PAST_EVENTS_PAGE_SIZE }: { page: number; pageSize?: number },
+): Promise<{ events: Event[]; hasOlder: boolean; page: number }> {
+  const p = Number.isInteger(page) && page >= 1 ? page : 1;
+  // One extra row tells us whether an older page exists, without a count query.
+  const rows = await db
+    .select()
+    .from(event)
+    .where(lt(event.end, new Date()))
+    .orderBy(desc(event.start))
+    .limit(pageSize + 1)
+    .offset((p - 1) * pageSize);
+  return { events: rows.slice(0, pageSize), hasOlder: rows.length > pageSize, page: p };
 }
 
 /** Events (cancelled included) starting in [from, to), soonest first — for the month calendar. */
@@ -140,21 +182,32 @@ export async function listEventsBetween(db: Db, from: Date, to: Date): Promise<E
     .orderBy(asc(event.start));
 }
 
-/** Longer than the longest London day (25 hours when the clocks go back), so one window covers any day. */
-const LONGEST_DAY_MS = 26 * 3_600_000;
-
-/** Every Match on the London day of `event` (itself included when it is one), soonest first. */
-export async function listMatchDay(db: Db, event: Pick<Event, "start">): Promise<Event[]> {
-  const date = londonParts(event.start).date;
-  const dayStart = londonToUtc(date, "00:00");
-  const sameDay = await listEventsBetween(db, dayStart, new Date(dayStart.getTime() + LONGEST_DAY_MS));
-  return sameDay.filter((e) => e.eventType === "match" && londonParts(e.start).date === date);
+/** Every Match on the London day of `day` (itself included when it is one), soonest first. */
+export async function listMatchDay(db: Db, day: Pick<Event, "start">): Promise<Event[]> {
+  const date = londonParts(day.start).date;
+  return db
+    .select()
+    .from(event)
+    .where(
+      and(
+        eq(event.eventType, "match"),
+        gte(event.start, londonToUtc(date, "00:00")),
+        lt(event.start, londonToUtc(addDays(date, 1), "00:00")),
+      ),
+    )
+    .orderBy(asc(event.start));
 }
 
 /** Venues already used, each once, most recently used first — suggestions for typing a new one. */
 export async function listVenues(db: Db): Promise<string[]> {
-  const rows = await db.select({ venue: event.venue }).from(event).orderBy(desc(event.start));
-  return [...new Set(rows.map((r) => r.venue.trim()).filter(Boolean))];
+  const venue = sql<string>`trim(${event.venue})`;
+  const rows = await db
+    .select({ venue })
+    .from(event)
+    .where(sql`${venue} <> ''`)
+    .groupBy(venue)
+    .orderBy(desc(sql`max(${event.start})`));
+  return rows.map((r) => r.venue);
 }
 
 /** The next few upcoming Events that are still happening, soonest first. */
@@ -182,18 +235,16 @@ export async function getEvent(db: Db, id: string): Promise<EventWithDetails | u
   return (await getEvents(db, [id]))[0];
 }
 
-/** Several Events with their match details and Teams, in three queries however many there are. Ids with no Event are left out. */
+/** Several Events with their match details and Teams, in one query however many there are. Ids with no Event are left out. */
 export async function getEvents(db: Db, ids: string[]): Promise<EventWithDetails[]> {
   if (ids.length === 0) return [];
-  const rows = await db.select().from(event).where(inArray(event.id, [...new Set(ids)]));
-  const matchIds = rows.filter((r) => r.eventType === "match").map((r) => r.id);
-  const details: MatchDetails[] = matchIds.length ? await db.select().from(matchDetails).where(inArray(matchDetails.eventId, matchIds)) : [];
-  const teamIds = [...new Set(details.map((d) => d.teamId))];
-  const teams: Team[] = teamIds.length ? await db.select().from(team).where(inArray(team.id, teamIds)) : [];
-  return rows.map((row) => {
-    const mine = details.find((d) => d.eventId === row.id) ?? null;
-    return { ...row, matchDetails: mine, team: (mine && teams.find((t) => t.id === mine.teamId)) || null };
-  });
+  const rows = await db
+    .select()
+    .from(event)
+    .leftJoin(matchDetails, eq(matchDetails.eventId, event.id))
+    .leftJoin(team, eq(team.id, matchDetails.teamId))
+    .where(inArray(event.id, [...new Set(ids)]));
+  return rows.map((row) => ({ ...row.event, matchDetails: row.match_details, team: row.team }));
 }
 
 /**
@@ -243,7 +294,9 @@ export async function cancelEvent(db: Db, id: string) {
  * (Duties, Availability, selection…) go through their own `deleteFor…` functions.
  */
 export async function deleteEvent(db: Db, id: string) {
-  await db.delete(matchDetails).where(eq(matchDetails.eventId, id));
-  await db.delete(event).where(eq(event.id, id));
+  await db.transaction(async (tx) => {
+    await tx.delete(matchDetails).where(eq(matchDetails.eventId, id));
+    await tx.delete(event).where(eq(event.id, id));
+  });
 }
 
